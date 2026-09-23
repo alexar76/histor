@@ -53,7 +53,7 @@ jobs:
         with:
           path: docs/landing
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
       - name: fail the run when the tests failed (after the red badge is live)
         if: steps.measure.outputs.status != '0'
         run: exit 1
