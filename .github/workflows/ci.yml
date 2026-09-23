@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: unit + integration (SQLite and Postgres, Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is what the production image runs (Debian bookworm); 3.12 is the dev default.
+        python: ["3.11", "3.12"]
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: histor
+          POSTGRES_USER: histor
+          POSTGRES_PASSWORD: histor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U histor -d histor"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      HISTOR_TEST_DATABASE_URL: postgresql://histor:histor@127.0.0.1:5432/histor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: npm ci --prefix scanner --no-audit --no-fund
+      - run: uv sync --extra dev --project .
+      - run: uv run --project . ruff check .
+      - name: unit tests (both backends)
+        run: uv run --project . pytest --cov=histor --cov-branch --cov-report=term -m "not integration"
+      - name: integration tests (real sockets, real WARDEN sidecar)
+        run: uv run --project . pytest -m integration
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t histor:ci .
+      - name: container answers /health
+        run: |
+          docker run -d --name h -p 9490:9490 -e HISTOR_CRAWL_INTERVAL_S=0 histor:ci
+          for i in $(seq 1 30); do curl -fsS localhost:9490/health && exit 0; sleep 1; done
+          docker logs h; exit 1

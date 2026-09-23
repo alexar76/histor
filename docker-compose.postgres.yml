@@ -1,0 +1,31 @@
+# Production store: a dedicated Postgres, unpublished, on the compose network only.
+# HISTOR_PROFILE=prod refuses to start without it.
+#
+#   HISTOR_POSTGRES_PASSWORD=… HISTOR_OPERATOR_TOKEN=… \
+#     docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+services:
+  histor-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: histor
+      POSTGRES_USER: histor
+      POSTGRES_PASSWORD: "${HISTOR_POSTGRES_PASSWORD:?set HISTOR_POSTGRES_PASSWORD}"
+    volumes:
+      - histor-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U histor -d histor"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    restart: unless-stopped
+  histor:
+    depends_on:
+      histor-postgres:
+        condition: service_healthy
+    environment:
+      HISTOR_PROFILE: prod
+      HISTOR_DATABASE_URL: "postgresql://histor:${HISTOR_POSTGRES_PASSWORD}@histor-postgres:5432/histor"
+
+volumes:
+  histor-pg:

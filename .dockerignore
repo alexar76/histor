@@ -1,0 +1,18 @@
+.venv
+.git
+.github
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+coverage.xml
+.coverage
+dist
+.env
+data
+tests
+scanner/node_modules
+# Docs stay out of the image except the landing, which the service serves at /.
+docs/**
+!docs/landing/
+!docs/landing/**

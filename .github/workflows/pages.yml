@@ -1,0 +1,59 @@
+name: Pages — landing and live badges
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-histor
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - name: Ensure Pages source is GitHub Actions
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "/repos/${{ github.repository }}/pages" -f build_type=workflow
+      # The tests and coverage badges in the README read these two files through
+      # shields.io/endpoint, so they show what this commit's run measured, not a number
+      # somebody typed into the README.
+      - run: npm ci --prefix scanner --no-audit --no-fund
+      - run: uv sync --extra dev --project .
+      - name: measure tests and coverage for the badges
+        id: measure
+        run: |
+          set +e
+          uv run --project . pytest --cov=histor --cov-branch --cov-report=json:coverage.json \
+            --junitxml=junit.xml -m "not integration" -p no:warnings -q
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          # Written whatever happened above: a red badge is published, not skipped.
+          uv run --project . python scripts/badge_json.py junit.xml coverage.json docs/landing/badges
+      - run: touch docs/landing/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/landing
+      - id: deployment
+        uses: actions/deploy-pages@v4
+      - name: fail the run when the tests failed (after the red badge is live)
+        if: steps.measure.outputs.status != '0'
+        run: exit 1

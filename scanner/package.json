@@ -1,0 +1,14 @@
+{
+  "name": "histor-scanner",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HISTOR's pattern-scan and name-threat sidecar: runs the published @aimarket/warden gates over tool sets HISTOR has already digested.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@aimarket/warden": "0.5.0"
+  }
+}

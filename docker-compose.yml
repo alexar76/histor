@@ -1,0 +1,44 @@
+# Development: one container, SQLite under the volume. Production adds Postgres:
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+services:
+  histor:
+    build: .
+    ports:
+      - "127.0.0.1:9490:9490"
+    environment:
+      HISTOR_PROFILE: "${HISTOR_PROFILE:-dev}"
+      HISTOR_PUBLIC_BASE: "${HISTOR_PUBLIC_BASE:-http://127.0.0.1:9490}"
+      HISTOR_OPERATOR_TOKEN: "${HISTOR_OPERATOR_TOKEN:-}"
+      HISTOR_DATABASE_URL: "${HISTOR_DATABASE_URL:-}"
+      HISTOR_CRAWL_INTERVAL_S: "${HISTOR_CRAWL_INTERVAL_S:-86400}"
+      HISTOR_CRAWL_ON_START: "${HISTOR_CRAWL_ON_START:-1}"
+      HISTOR_CRAWL_WORKERS: "${HISTOR_CRAWL_WORKERS:-12}"
+      HISTOR_CRAWL_PER_HOST: "${HISTOR_CRAWL_PER_HOST:-2}"
+      HISTOR_CRAWL_LIMIT: "${HISTOR_CRAWL_LIMIT:-0}"
+      HISTOR_CRAWL_BATCH: "${HISTOR_CRAWL_BATCH:-400}"
+      HISTOR_CRAWL_TIMEOUT_S: "${HISTOR_CRAWL_TIMEOUT_S:-20}"
+      HISTOR_REGISTRY_URL: "${HISTOR_REGISTRY_URL:-https://registry.modelcontextprotocol.io}"
+      HISTOR_CHECK_RATE_PER_MIN: "${HISTOR_CHECK_RATE_PER_MIN:-30}"
+      HISTOR_CHECK_SCAN_RATE_PER_HOUR: "${HISTOR_CHECK_SCAN_RATE_PER_HOUR:-20}"
+      HISTOR_OPT_OUT: "${HISTOR_OPT_OUT:-}"
+      # Docker's userland proxy dials the container from the network gateway, so the peer the
+      # app sees is 172.x.0.1, not 127.0.0.1. Trust the bridge range, or every visitor shares
+      # one rate-limit bucket.
+      HISTOR_TRUSTED_PROXIES: "${HISTOR_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}"
+      HISTOR_PQC: "${HISTOR_PQC:-1}"
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: "${HISTOR_MEM_LIMIT:-768m}"
+    pids_limit: 256
+    volumes:
+      - histor-data:/data
+    restart: unless-stopped
+
+volumes:
+  histor-data:
