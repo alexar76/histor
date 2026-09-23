@@ -62,6 +62,7 @@ jobs:
       - run: docker build -t histor:ci .
       - name: container answers /health
         run: |
-          docker run -d --name h -p 9490:9490 -e HISTOR_CRAWL_INTERVAL_S=0 histor:ci
+          # Docker wants container names of two characters or more.
+          docker run -d --name histor-ci -p 9490:9490 -e HISTOR_CRAWL_INTERVAL_S=0 histor:ci
           for i in $(seq 1 30); do curl -fsS localhost:9490/health && exit 0; sleep 1; done
-          docker logs h; exit 1
+          docker logs histor-ci; exit 1
