@@ -210,10 +210,30 @@ MIGRATION_002: tuple[str, ...] = (
     "CREATE INDEX client_reports_day ON client_reports(day)",
 )
 
+# The optional meaning-based classifier's advisory verdicts. NOT part of the signed log: a model's
+# answer is not reproducible, so it is never a Merkle-tree label. Kept beside the log, keyed by the
+# tool-set digest and the model that judged it, so re-running the same model over an unchanged tool
+# set is a no-op and switching models re-judges. `classifier_model` on targets records which model
+# last judged the current subject (NULL = never), `classifier_flags` the count of flagged tools.
+MIGRATION_003: tuple[str, ...] = (
+    "ALTER TABLE targets ADD COLUMN classifier_model TEXT",
+    "ALTER TABLE targets ADD COLUMN classifier_flags INTEGER",
+    """
+    CREATE TABLE classifications (
+        toolset TEXT NOT NULL,
+        model TEXT NOT NULL,
+        verdict TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (toolset, model)
+    )
+    """,
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
     (2, "002_scan_sets", MIGRATION_002),
+    (3, "003_classifier", MIGRATION_003),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates
@@ -225,6 +245,7 @@ TARGET_COLUMNS: tuple[str, ...] = (
     "current_toolset", "current_count", "first_pinned", "unchanged_since", "observations",
     "ok_observations", "changes", "block_matches", "advise_matches", "record_matches",
     "chain_label", "last_continuity_at", "failure_reported", "scan_sets",
+    "classifier_model", "classifier_flags",
 )
 
 

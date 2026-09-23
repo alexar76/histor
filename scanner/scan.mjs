@@ -54,8 +54,11 @@ function patternSetDocument() {
       "the same function the gate calls to stamp its verdicts. A `block` rule can refuse a " +
       "connection in WARDEN; an `advise` rule is reported and never blocks. `severity` is the " +
       "gate's own label and MTL/1 attaches no safety meaning to it. Guards are part of the " +
-      "ruleset: two rules with the same regex and different guards are different scans.",
+      "ruleset: two rules with the same regex and different guards are different scans. `fold` names " +
+      "the text normalisation applied before a non-`raw` rule is matched, and each rule carries its " +
+      "`raw` flag; the digest preimage is {version, fold, rules}.",
     version: ruleset.version,
+    fold: ruleset.fold,
     digest: ruleset.digest,
     scannedFields: surfaces.filter((s) => scanned.has(s)),
     ruleCount: ruleset.rules.length,

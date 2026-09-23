@@ -26,6 +26,14 @@ services:
       # one rate-limit bucket.
       HISTOR_TRUSTED_PROXIES: "${HISTOR_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}"
       HISTOR_PQC: "${HISTOR_PQC:-1}"
+      # Optional meaning-based classifier (OpenAI-compatible; DeepSeek's own API by default). Off
+      # unless a model, a key and a budget are all set. The key stays in the host .env.
+      HISTOR_CLASSIFIER_MODEL: "${HISTOR_CLASSIFIER_MODEL:-}"
+      HISTOR_CLASSIFIER_BASE_URL: "${HISTOR_CLASSIFIER_BASE_URL:-https://api.deepseek.com}"
+      HISTOR_CLASSIFIER_MAX_PER_CRAWL: "${HISTOR_CLASSIFIER_MAX_PER_CRAWL:-0}"
+      HISTOR_CLASSIFIER_TIMEOUT_S: "${HISTOR_CLASSIFIER_TIMEOUT_S:-30}"
+      HISTOR_CLASSIFIER_MAX_TOOLS: "${HISTOR_CLASSIFIER_MAX_TOOLS:-60}"
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
     user: "65532:65532"
     read_only: true
     tmpfs:

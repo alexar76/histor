@@ -35,6 +35,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from histor import diffing
+from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
@@ -93,12 +94,14 @@ class Crawler:
     def __init__(self, settings: Settings, store: Store, issuer: LabelIssuer, logbook: Logbook,
                  scanner: Scanner, *, reader: McpReader | None = None,
                  harvest_fn: Callable[[str], list[Target]] | None = None,
+                 classifier: Classifier | None = None,
                  clock: Callable[[], str] = utcnow) -> None:
         self.settings = settings
         self.store = store
         self.issuer = issuer
         self.logbook = logbook
         self.scanner = scanner
+        self.classifier = classifier
         self.reader = reader or McpReader(timeout=settings.crawl_timeout_s,
                                           allow_private=settings.allow_private_targets)
         self.harvest_fn = harvest_fn or (
@@ -149,12 +152,15 @@ class Crawler:
             statuses: Counter[str] = Counter()
             issued: Counter[str] = Counter()
             changes = 0
+            classified = 0
+            classify_budget = self.settings.classifier_max_per_crawl if self.classifier else 0
             step = self.settings.crawl_batch
             internal: Counter[str] = Counter()
             for start in range(0, len(dialable), step):
                 prepared = self._observe(dialable[start : start + step])
                 statuses.update(p.obs.status for p in prepared)
                 scans, scan_failed = self._scan(prepared, sets)
+                classifications, classify_budget = self._classify(prepared, classify_budget)
                 for item in prepared:
                     # One target must never take the crawl down: whatever a stranger's server made
                     # us do, it is recorded against that target and the crawl moves on.
@@ -163,7 +169,7 @@ class Crawler:
                         self._commit_internal(item, run_id, "the WARDEN sidecar failed on this tool set")
                         continue
                     try:
-                        result = self._commit(item, run_id, rulesets, scans, sets)
+                        result = self._commit(item, run_id, rulesets, scans, sets, classifications)
                     except Exception as exc:  # noqa: BLE001
                         log.exception("commit failed for target %s", item.target.id)
                         internal[type(exc).__name__] += 1
@@ -171,12 +177,16 @@ class Crawler:
                         continue
                     issued.update(result["labels"])
                     changes += result["changed"]
+                    classified += result.get("classified", 0)
                 self.progress = {"done": start + len(prepared), "of": len(dialable)}
             if internal:
                 stats["internal_errors"] = dict(internal)
             stats["statuses"] = dict(statuses)
             stats["labels_issued"] = dict(issued)
             stats["changes"] = changes
+            if self.classifier:
+                stats["classified"] = classified
+                stats["classifier_model"] = self.classifier.model
             sth = self.logbook.publish_sth()
             cutoff = (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
             stats["client_reports_pruned"] = self.store.prune_client_reports(cutoff)
@@ -278,6 +288,57 @@ class Crawler:
                     pass
         return scans, {job["id"] for job in jobs if job["id"] not in scans}
 
+    def _classify(self, prepared: list[Prepared], budget: int) -> tuple[dict[str, dict[str, Any]], int]:
+        """Advisory classifier verdicts by target id, and the budget left.
+
+        Runs OUTSIDE the write transaction (a network call must never hold the DB open) and only on a
+        new/changed subject this model has not judged. A verdict already stored for the exact tool set
+        and model — from another target sharing it, or an earlier crawl — is reused without a call, so
+        the budget buys distinct tool sets, not duplicate work. Any failure skips that target.
+        """
+        # Note: an exhausted budget does NOT stop the pass — reuse of an already-stored verdict is
+        # free and must keep working, or targets sharing a judged tool set would render "not
+        # classified" forever. Only the paid classify() call below is gated on the budget.
+        if not self.classifier:
+            return {}, budget
+        model = self.classifier.model
+        out: dict[str, dict[str, Any]] = {}
+        # Tool sets already judged in THIS pass: commits happen after the whole batch, so a fresh
+        # verdict's stored row is not visible yet. A same-batch reuse carries no `stored` flag — its
+        # row only exists once the holder commits, so the sibling waits for the next crawl to claim
+        # the badge rather than pointing at a row that a failed commit never wrote.
+        seen: dict[str, int] = {}
+        for p in prepared:
+            if p.subject is None or p.subject.tool_set_digest is None or p.subject.entries is None:
+                continue
+            state = self.store.target(p.target.id) or {}
+            new_subject = p.subject.digest != state.get("current_subject")
+            if not new_subject and state.get("classifier_model") == model:
+                continue
+            digest = p.subject.tool_set_digest
+            existing = self.store.classification(digest, model)
+            if existing is not None:
+                out[p.target.id] = {"flags": len(existing.get("findings", []))}
+                continue
+            if digest in seen:
+                out[p.target.id] = {"flags": seen[digest]}  # same-batch reuse; row committed by the holder
+                continue
+            if budget <= 0:
+                continue
+            try:
+                verdict = self.classifier.classify(p.subject.entries)
+            except ClassifierError as exc:
+                log.warning("classifier skipped target %s: %s", p.target.id, exc)
+                continue
+            except Exception:  # noqa: BLE001 — belt and braces: nothing a model answers may end the crawl
+                log.exception("classifier failed unexpectedly on target %s; skipped", p.target.id)
+                continue
+            budget -= 1
+            flags = len(verdict.get("findings", []))
+            seen[digest] = flags
+            out[p.target.id] = {"verdict": verdict, "flags": flags}
+        return out, budget
+
     def _commit_internal(self, p: Prepared, run_id: int, why: str) -> None:
         """Record an observation OUR side could not process, without touching the target's chain."""
         try:
@@ -293,10 +354,11 @@ class Crawler:
     # -- per-target commit -----------------------------------------------------------
 
     def _commit(self, p: Prepared, run_id: int, rulesets: RuleSets, scans: dict[str, dict[str, Any]],
-                sets: str) -> dict[str, Any]:
+                sets: str, classifications: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
         issued_at = self.clock()
         labels: list[str] = []
         changed = 0
+        classified = 0
         t = p.target
         with self.store.db.transaction() as tx:
             state = tx.one("SELECT * FROM targets WHERE id=?", (t.id,)) or {}
@@ -374,7 +436,7 @@ class Crawler:
                         scan_sets=None,
                     )
                 self._update_target(tx, t.id, update)
-                return {"labels": labels, "changed": changed}
+                return {"labels": labels, "changed": changed, "classified": 0}
 
             assert subject is not None
             new_subject = subject.digest != state.get("current_subject")
@@ -408,6 +470,22 @@ class Crawler:
                     advise_matches=sum(1 for m in matches if m["tier"] == "advise"),
                     record_matches=len(scan["recordMatches"]),
                 )
+
+            # Advisory classifier verdict — stored beside the log, never a label in it.
+            cls = (classifications or {}).get(t.id)
+            if cls is not None and self.classifier is not None and subject.tool_set_digest:
+                model = self.classifier.model
+                if "verdict" in cls:
+                    Store.put_classification(tx, subject.tool_set_digest, model, cls["verdict"], p.observed_at)
+                    classified = 1
+                    update.update(classifier_model=model, classifier_flags=cls.get("flags", 0))
+                # A reuse points the target at an existing verdict row. Set the columns only when the
+                # row is really there — a prior crawl's, or this batch's holder, which commits earlier
+                # in the loop. If the holder's commit failed, the row is absent and this target waits
+                # for the next crawl rather than claiming a verdict that was never written.
+                elif tx.one("SELECT 1 AS x FROM classifications WHERE toolset=? AND model=?",
+                            (subject.tool_set_digest, model)) is not None:
+                    update.update(classifier_model=model, classifier_flags=cls.get("flags", 0))
 
             prior_id = state.get("chain_label")
             if prior_id and (new_subject or self._continuity_due(state.get("last_continuity_at"), p.observed_at)):
@@ -445,7 +523,7 @@ class Crawler:
             if new_subject:
                 update["unchanged_since"] = p.observed_at
             self._update_target(tx, t.id, update)
-        return {"labels": labels, "changed": changed}
+        return {"labels": labels, "changed": changed, "classified": classified}
 
     @staticmethod
     def _continuity_due(last: str | None, now: str) -> bool:

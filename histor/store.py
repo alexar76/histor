@@ -76,6 +76,44 @@ class Store:
             return None
         return json.loads(row["body"])
 
+    # -- classifier verdicts (advisory, NOT in the signed log) ---------------------
+
+    @staticmethod
+    def put_classification(tx: Tx, toolset: str, model: str, verdict: Any, updated_at: str) -> None:
+        tx.execute(
+            "INSERT INTO classifications(toolset, model, verdict, updated_at) VALUES(?, ?, ?, ?) "
+            "ON CONFLICT(toolset, model) DO UPDATE SET verdict=excluded.verdict, updated_at=excluded.updated_at",
+            (toolset, model, dumps(verdict), updated_at),
+        )
+
+    def classification(self, toolset: str, model: str) -> dict[str, Any] | None:
+        """The advisory verdict for a tool set from one model, or None. Not a log entry."""
+        with self.db.read() as tx:
+            row = tx.one(
+                "SELECT verdict, updated_at FROM classifications WHERE toolset=? AND model=?",
+                (toolset, model),
+            )
+        if row is None:
+            return None
+        out = json.loads(row["verdict"])
+        out["updatedAt"] = row["updated_at"]
+        return out
+
+    def latest_classification(self, toolset: str) -> dict[str, Any] | None:
+        """The most recent advisory verdict for a tool set from ANY model (the verdict names its
+        model), or None. Used by /check, which reads stored verdicts and never calls a model."""
+        with self.db.read() as tx:
+            row = tx.one(
+                "SELECT verdict, updated_at FROM classifications WHERE toolset=? "
+                "ORDER BY updated_at DESC, model LIMIT 1",
+                (toolset,),
+            )
+        if row is None:
+            return None
+        out = json.loads(row["verdict"])
+        out["updatedAt"] = row["updated_at"]
+        return out
+
     # -- targets ------------------------------------------------------------------
 
     def target(self, target_id: str) -> dict[str, Any] | None:

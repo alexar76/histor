@@ -317,6 +317,12 @@ function serversView(done) {
 
 function renderDiff(summary) {
   const box = el("div", {});
+  if (summary.newAddresses?.length) {
+    box.append(el("p", {}, el("b", { class: "bad-t", text: `⚠ ${t("js_new_addresses")}: ` }),
+      ...visible(summary.newAddresses.join(", ")).nodes,
+      (summary.newAddressesTotal || 0) > summary.newAddresses.length ? ` … +${summary.newAddressesTotal - summary.newAddresses.length}` : ""));
+    box.append(el("p", { class: "faint", text: t("js_new_addresses_hint") }));
+  }
   if (summary.added?.length) box.append(el("p", {}, el("b", { class: "ok-t", text: `+ ${t("js_added")}: ` }), ...visible(summary.added.join(", ")).nodes));
   if (summary.removed?.length) box.append(el("p", {}, el("b", { class: "bad-t", text: `− ${t("js_removed")}: ` }), ...visible(summary.removed.join(", ")).nodes));
   for (const m of summary.modified || []) {
@@ -422,18 +428,40 @@ async function serverView(id, done) {
     root.append(el("h3", { class: "block-h", text: t("js_h_changes") }));
     for (const c of data.changes) root.append(el("div", { class: "result" }, el("p", { class: "warn-t mono", text: `${fmt(c.observed_at)} · ${t("js_changed")}` }), renderDiff(c.summary)));
   }
+  const clsByIndex = new Map();
+  if (data.classifier?.findings) for (const f of data.classifier.findings) {
+    if (!clsByIndex.has(f.i)) clsByIndex.set(f.i, []);
+    clsByIndex.get(f.i).push(f);
+  }
+  const clsChecked = data.classifier ? (data.classifier.checkedTools ?? 0) : 0;
+  if (data.classifier) {
+    const c = data.classifier;
+    const partial = (c.checkedTools ?? 0) < (c.toolCount ?? 0);
+    root.append(el("h3", { class: "block-h", text: t("js_h_classifier") }));
+    root.append(el("p", { class: "faint", text: t("js_classifier_note", { model: c.model }) }));
+    if (partial) root.append(el("p", { class: "warn-t", text: t("js_classifier_partial", { checked: c.checkedTools ?? 0, total: c.toolCount ?? 0 }) }));
+    // "flagged nothing" can only be said about what was actually examined.
+    if (!c.findings?.length && !partial) root.append(el("p", { class: "ok-t", text: t("js_classifier_clean") }));
+  }
   if (data.tools?.length) {
     root.append(el("h3", { class: "block-h", text: t("js_h_tools", { n: data.tools.length }) }));
-    for (const tool of data.tools) {
+    for (let ti = 0; ti < data.tools.length; ti++) {
+      const tool = data.tools[ti];
       const ms = matchesFor(tool.name);
+      const cf = clsByIndex.get(ti) || [];
       const name = visible(tool.name), desc = visible(tool.description || "");
       const schemaText = JSON.stringify(tool.inputSchema, null, 2);
       const hidden = name.count + desc.count + ((schemaText || "").match(INVISIBLE) || []).length;
+      const notChecked = data.classifier && ti >= clsChecked;
       const box = el("div", { class: "tool" }, el("div", { class: "tn" }, ...name.nodes,
-        ...ms.map((m) => el("span", { class: `pill ${m.tier}`, text: `${m.code} · ${m.tier}` }))),
+        ...ms.map((m) => el("span", { class: `pill ${m.tier}`, text: `${m.code} · ${m.tier}` })),
+        ...cf.map((f) => el("span", { class: "pill block", text: `AI · ${f.severity}` })),
+        notChecked ? el("span", { class: "pill", text: t("js_classifier_notchecked") }) : ""),
       tool.description ? el("p", { class: "td" }, ...desc.nodes) : "",
       hidden ? el("p", { class: "warn-t", text: t("js_invisible", { n: hidden }) }) : "");
       for (const m of ms) box.append(el("div", { class: "match" }, el("b", { text: m.where }), " · ", m.severity, " · ", el("mark", { text: m.span || "" })));
+      for (const f of cf) box.append(el("div", { class: "match" }, el("b", { class: "bad-t", text: (Array.isArray(f.categories) ? f.categories : []).join(", ") }), " · ", f.severity || "", " · ",
+        ...visible(f.reason || "").nodes, f.quote ? el("mark", {}, ...visible(f.quote).nodes) : ""));
       box.append(el("details", {}, el("summary", { text: "inputSchema" }), el("pre", { text: escapeInvisible(schemaText) })));
       if (tool.outputSchema) box.append(el("details", {}, el("summary", { text: "outputSchema" }), el("pre", { text: escapeInvisible(JSON.stringify(tool.outputSchema, null, 2)) })));
       root.append(box);
@@ -479,6 +507,7 @@ async function changesView(done) {
         el("div", { class: "ep", text: c.endpoint })),
       el("span", { class: "state changed", text: `${fmt(c.observed_at)}` }));
     const counts = el("p", { class: "mono faint", text: `+${s.added.length} −${s.removed.length} ~${s.modified.length}` });
+    if (s.newAddresses?.length) counts.append(" ", el("b", { class: "bad-t", text: `⚠ ${t("js_new_addresses")}: ${s.newAddressesTotal || s.newAddresses.length}` }));
     root.append(el("details", { class: "result" }, el("summary", {}, head, counts), renderDiff(s)));
   }
   done(root);
@@ -585,6 +614,25 @@ async function checkView(done) {
         box.append(el("p", {}, el("b", { text: t("js_scan") }), ` · ${t("js_block_n", { n: res.patternScan.block })} · ${t("js_advise_n", { n: res.patternScan.advise })}`));
         for (const m of res.patternScan.matches) box.append(el("div", { class: "match" }, el("b", { text: m.tool }), ` · ${m.code} · ${m.tier} · ${m.where} · `, el("mark", { text: m.span || "" })));
         box.append(el("p", { class: "faint", text: res.patternScan.note }));
+      }
+      if (res.classifier) {
+        const c = res.classifier;
+        if (c.status === "classified") {
+          box.append(el("p", {}, el("b", { text: t("js_h_classifier") }), ` · ${c.model || ""} · ${t("js_classifier_flagged_n", { n: c.flagged ?? 0 })}`));
+          for (const f of (Array.isArray(c.findings) ? c.findings : [])) {
+            box.append(el("div", { class: "match" }, el("b", {}, ...visible(f.tool ?? `#${f.i}`).nodes),
+              ` · ${(Array.isArray(f.categories) ? f.categories : []).join(", ")} · ${f.severity || ""} · `, ...visible(f.reason || "").nodes,
+              f.quote ? el("mark", {}, ...visible(f.quote).nodes) : ""));
+          }
+          const shownN = Array.isArray(c.findings) ? c.findings.length : 0;
+          if ((c.flagged ?? 0) > shownN) box.append(el("p", { class: "faint", text: t("js_classifier_more", { n: (c.flagged ?? 0) - shownN }) }));
+          if ((c.checkedTools ?? 0) < (c.toolCount ?? 0)) {
+            box.append(el("p", { class: "warn-t", text: t("js_classifier_partial", { checked: c.checkedTools ?? 0, total: c.toolCount ?? 0 }) }));
+          }
+        } else {
+          box.append(el("p", {}, el("b", { text: t("js_h_classifier") }), ` · ${t("js_classifier_none")}`));
+        }
+        box.append(el("p", { class: "faint", text: c.note || "" }));
       }
       box.append(el("p", {}, verdictLine(sig, "js_check_sig_ok", "js_check_sig_bad")), el("details", {}, el("summary", { text: "JSON" }), el("pre", { text: JSON.stringify(res, null, 2) })));
       out.replaceChildren(box);

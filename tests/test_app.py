@@ -335,6 +335,7 @@ def test_check_says_undigestible_and_never_scans_another_set(api):
     assert answer["match"] == "undigestible" and answer["query"]["digestError"]["code"] == "MTL-SUBJ-003"
     assert "No tool set was sent" not in answer["note"]
     assert "patternScan" not in answer
+    assert "classifier" not in answer  # never another set's verdict presented as theirs
 
 
 def test_check_tells_a_delisted_endpoint_apart(api):
@@ -425,3 +426,107 @@ def test_each_buyer_a_hub_names_gets_its_own_bucket_under_one_ceiling(world):
         # the shared ceiling for this hub is 10x: 4 used so far, 16 more fit across buyers
         codes = [call(f"b-{i}") for i in range(20)]
         assert codes.count(200) == 16 and codes[-1] == 429, codes
+
+
+def test_rotating_the_hub_header_cannot_escape_the_per_address_ceiling(world):
+    """Both hub headers are forgeable: a fresh hub id per request must still land in one bucket."""
+    from dataclasses import replace
+
+    world["services"].settings = replace(world["services"].settings, check_rate_per_min=2)
+    body = {"capability_id": "histor.changes@v1", "input": {"limit": 1}}
+    with TestClient(create_app(world["services"])) as client:
+        codes = [client.post("/ai-market/v2/invoke", json=body,
+                             headers={"X-AIMarket-Routing-Hub": f"https://hub-{i}.example"}).status_code
+                 for i in range(30)]
+    assert codes.count(200) == 20 and codes[-1] == 429, codes  # the 10x per-address ceiling, not unlimited
+
+
+def test_contribute_counts_one_report_per_address_whatever_the_buyer_header_says(api):
+    client, world = api
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    other = [tool("get_weather", "Return the weather, a variant.")]
+    for i in range(5):
+        client.post("/api/v1/check", json={"endpoint": endpoint, "tools": other, "contribute": True},
+                    headers={"X-AIMarket-Routing-Hub": "https://hub.example", "X-AIMarket-Buyer": f"b-{i}"})
+    t = next(x for x in world["services"].store.all_targets() if x["endpoint"] == endpoint)
+    reports = world["services"].store.client_reports(t["id"], "2000-01-01")
+    assert sum(r["reports"] for r in reports) == 1
+
+
+# ── /check carries the stored classifier verdict (advisory, never a model call) ──
+
+def _store_verdict(world, digest, findings, model="deepseek-flash", checked=2, total=2):
+    from histor.store import Store
+    verdict = {"model": model, "checkedTools": checked, "toolCount": total, "findings": findings}
+    with world["services"].store.db.transaction() as tx:
+        Store.put_classification(tx, digest, model, verdict, "2026-09-23T12:00:00Z")
+
+
+def test_check_reports_the_stored_classifier_verdict_for_the_set_the_client_holds(api):
+    client, world = api
+    from histor.classifier import Classifier
+
+    # If /check ever called a model this would raise: it must only read what the crawl stored.
+    def boom(*a, **k):
+        raise AssertionError("/check must never call the classifier")
+    world["services"].crawler.classifier = Classifier(model="m", api_key="k", post=boom)
+
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    digest = tool_set_digest(TOOLS)[0]
+    _store_verdict(world, digest, [{"i": 0, "tool": "get_weather", "categories": ["exfiltration"],
+                                    "severity": "high", "reason": "sends data out", "quote": "somewhere"}])
+    answer = check(client, endpoint=endpoint, tools=TOOLS).json()
+    c = answer["classifier"]
+    assert c["status"] == "classified" and c["advisory"] is True
+    assert c["model"] == "deepseek-flash" and c["toolSetDigest"] == digest and c["flagged"] == 1
+    assert c["findings"][0]["tool"] == "get_weather" and c["findings"][0]["categories"] == ["exfiltration"]
+    assert c["truncated"] is False
+    assert "not reproducible" in c["note"]
+    # Still one signed document: the signature covers the classifier block too.
+    assert verify_document(answer, world["services"].key.did, CHECK_TYPE)
+
+
+def test_check_says_not_classified_only_when_a_classifier_is_on(api):
+    client, world = api
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    other = [tool("get_weather", "Return the weather, but different.")]
+    # Off (the default): no block at all — never a promise of a verdict that will not come.
+    assert "classifier" not in check(client, endpoint=endpoint, tools=other).json()
+
+    world["services"].checker.classifier_enabled = True
+    world["services"].checker.classifier_model = "deepseek-flash"
+    answer = check(client, endpoint=endpoint, tools=other).json()
+    assert answer["classifier"]["status"] == "not-classified"
+    assert answer["classifier"]["toolSetDigest"] == tool_set_digest(other)[0]
+    assert "never calls a model" in answer["classifier"]["note"]
+
+
+def test_check_reports_the_configured_models_verdict_not_a_newer_one(api):
+    client, world = api
+    digest = tool_set_digest(TOOLS)[0]
+    from histor.store import Store
+    with world["services"].store.db.transaction() as tx:
+        Store.put_classification(tx, digest, "model-a", {"model": "model-a", "findings": []}, "2026-09-01T00:00:00Z")
+        Store.put_classification(tx, digest, "model-b", {"model": "model-b", "findings": [
+            {"i": 0, "tool": "get_weather", "categories": ["exfiltration"], "severity": "high"}]}, "2026-09-20T00:00:00Z")
+    world["services"].checker.classifier_enabled = True
+    world["services"].checker.classifier_model = "model-a"  # rolled back to model-a
+    c = check(client, name="io.example/weather").json()["classifier"]
+    assert c["model"] == "model-a" and c["flagged"] == 0
+
+
+def test_check_marks_a_truncated_findings_list(api):
+    client, world = api
+    digest = tool_set_digest(TOOLS)[0]
+    many = [{"i": 0, "tool": "get_weather", "categories": ["exfiltration"], "severity": "low"}] * 60
+    _store_verdict(world, digest, many)
+    c = check(client, name="io.example/weather").json()["classifier"]
+    assert c["flagged"] == 60 and len(c["findings"]) == 50 and c["truncated"] is True
+
+
+def test_check_uses_the_observed_set_when_no_tools_are_sent(api):
+    client, world = api
+    digest = tool_set_digest(TOOLS)[0]
+    _store_verdict(world, digest, [], checked=2, total=2)
+    answer = check(client, name="io.example/weather").json()
+    assert answer["classifier"]["status"] == "classified" and answer["classifier"]["flagged"] == 0

@@ -47,6 +47,10 @@ de seguridad») y, si había un rastreo en curso al empezar, lo reinicia; con lo
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | el archivo compose añade `172.16.0.0/12`: el proxy de Docker se conecta desde la puerta de enlace del bridge |
 | `HISTOR_PQC` | `0` | `1`: firmas de federación híbridas Ed25519 + ML-DSA-65 |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | solo para pruebas; se rechaza con `prod` |
+| `HISTOR_CLASSIFIER_MODEL` | vacío | id del modelo OpenRouter (p. ej. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Desactivado salvo que se fijen modelo, clave y presupuesto |
+| `HISTOR_OPENROUTER_API_KEY` | vacío | clave de OpenRouter (o `OPENROUTER_API_KEY`); permanece en el `.env` del host, no en la imagen |
+| `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | tope de llamadas de pago por rastreo. `0` lo desactiva; solo cuentan conjuntos distintos (uno compartido o ya evaluado se reutiliza gratis) |
+| `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | el clasificador semántico e independiente del idioma; su veredicto es informativo y nunca entra en el registro firmado |
 
 ## Migraciones
 
@@ -64,7 +68,7 @@ flowchart LR
 ```
 
 ```bash
-docker compose exec histor python -m histor migrate status   # backend=postgresql applied=[1, 2] pending=[]
+docker compose exec histor python -m histor migrate status   # backend=postgresql applied=[1, 2, 3] pending=[]
 docker compose exec histor python -m histor migrate up
 ```
 

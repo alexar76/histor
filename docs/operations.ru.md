@@ -47,6 +47,10 @@ flowchart LR
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | compose-файл добавляет `172.16.0.0/12`: прокси Docker подключается со шлюза моста |
 | `HISTOR_PQC` | `0` | `1`: гибридные подписи федерации Ed25519 + ML-DSA-65 |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | только для тестов; при `prod` отклоняется |
+| `HISTOR_CLASSIFIER_MODEL` | пусто | id модели OpenRouter (напр. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Выключен, пока не заданы модель, ключ и бюджет |
+| `HISTOR_OPENROUTER_API_KEY` | пусто | ключ OpenRouter (или `OPENROUTER_API_KEY`); остаётся в `.env` хоста, не в образе |
+| `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | потолок платных вызовов за обход. `0` — выключено; считаются только различные наборы (общий или уже оценённый переиспользуется бесплатно) |
+| `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | смысловой языконезависимый классификатор; вердикт справочный и не попадает в подписанный лог |
 
 ## Миграции
 
@@ -64,7 +68,7 @@ flowchart LR
 ```
 
 ```bash
-docker compose exec histor python -m histor migrate status   # backend=postgresql applied=[1, 2] pending=[]
+docker compose exec histor python -m histor migrate status   # backend=postgresql applied=[1, 2, 3] pending=[]
 docker compose exec histor python -m histor migrate up
 ```
 

@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from awr import SigningKey
 
 from histor.check import Checker
+from histor.classifier import Classifier
 from histor.config import Settings
 from histor.crawler import Crawler, CrawlInProgress
 from histor.db import Backend, open_backend
@@ -60,8 +61,17 @@ def build(settings: Settings, *, crawler_kwargs: dict | None = None, backend: Ba
     issuer = LabelIssuer(key)
     logbook = Logbook(store, key, settings.head_marker_path)
     scanner = Scanner(settings.scanner_dir, settings.node_bin)
-    crawler = Crawler(settings, store, issuer, logbook, scanner, **(crawler_kwargs or {}))
-    checker = Checker(store, key, scanner, settings.public_base)
+    kwargs = dict(crawler_kwargs or {})
+    if settings.classifier_enabled and "classifier" not in kwargs:
+        kwargs["classifier"] = Classifier(
+            model=settings.classifier_model, api_key=settings.classifier_api_key,
+            base_url=settings.classifier_base_url, timeout_s=settings.classifier_timeout_s,
+            max_tools=settings.classifier_max_tools,
+        )
+    crawler = Crawler(settings, store, issuer, logbook, scanner, **kwargs)
+    checker = Checker(store, key, scanner, settings.public_base,
+                      classifier_model=settings.classifier_model if settings.classifier_enabled else "",
+                      classifier_enabled=settings.classifier_enabled)
     provider = ProviderSigner(settings.provider_key_path, pqc=settings.pqc)
     return Services(settings, backend, store, key, issuer, logbook, scanner, crawler, checker, provider)
 

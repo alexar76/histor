@@ -60,7 +60,7 @@ def test_002_backfills_scan_sets_so_an_upgrade_reissues_nothing(backend, monkeyp
     import histor.migrations as m
 
     monkeypatch.setattr(m, "MIGRATIONS", m.MIGRATIONS[:1])
-    monkeypatch.setattr(m, "TARGET_COLUMNS", m.TARGET_COLUMNS[:-1])
+    monkeypatch.setattr(m, "TARGET_COLUMNS", m.TARGET_COLUMNS[:-3])  # v1 set: migration 2 added scan_sets, migration 3 the two classifier columns
     apply_migrations(backend)
     with backend.transaction() as tx:
         tx.execute("INSERT INTO meta(key, value) VALUES('pattern_set', 'sha256-P'), ('record_set', 'sha256-R')")

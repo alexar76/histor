@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +34,7 @@ class Settings:
     data_dir: Path
     database_url: str
     profile: str
-    operator_token: str
+    operator_token: str = field(repr=False)
     registry_url: str
     crawl_interval_s: int
     crawl_on_start: bool
@@ -52,6 +52,18 @@ class Settings:
     check_rate_per_min: int
     check_scan_rate_per_hour: int
     allow_private_targets: bool
+    classifier_model: str
+    classifier_api_key: str = field(repr=False)
+    classifier_base_url: str
+    classifier_timeout_s: int
+    classifier_max_per_crawl: int
+    classifier_max_tools: int
+
+    @property
+    def classifier_enabled(self) -> bool:
+        # Off unless a model, a key and a per-crawl budget are all set — a paid API is never
+        # called by accident, and a misconfigured instance runs exactly as it did before.
+        return bool(self.classifier_model and self.classifier_api_key and self.classifier_max_per_crawl > 0)
 
     @property
     def is_prod(self) -> bool:
@@ -110,6 +122,22 @@ def load_settings() -> Settings:
         check_rate_per_min=_int("HISTOR_CHECK_RATE_PER_MIN", 30, minimum=1),
         check_scan_rate_per_hour=_int("HISTOR_CHECK_SCAN_RATE_PER_HOUR", 20, minimum=0),
         allow_private_targets=_truthy("HISTOR_ALLOW_PRIVATE_TARGETS", "0"),
+        # Optional meaning-based classifier (OpenRouter). Off by default; a Chinese model reads
+        # the tool text in any language and says whether it instructs the model or exfiltrates.
+        classifier_model=os.environ.get("HISTOR_CLASSIFIER_MODEL", "").strip(),
+        # Provider-agnostic (all are OpenAI-compatible /chat/completions): DeepSeek's own key, an
+        # OpenRouter key, or a generic one, whichever is set. The base URL picks the provider.
+        classifier_api_key=(
+            os.environ.get("HISTOR_CLASSIFIER_API_KEY")
+            or os.environ.get("DEEPSEEK_API_KEY")
+            or os.environ.get("HISTOR_OPENROUTER_API_KEY")
+            or os.environ.get("OPENROUTER_API_KEY")
+            or ""
+        ).strip(),
+        classifier_base_url=os.environ.get("HISTOR_CLASSIFIER_BASE_URL", "https://api.deepseek.com").strip().rstrip("/"),
+        classifier_timeout_s=_int("HISTOR_CLASSIFIER_TIMEOUT_S", 30, minimum=1),
+        classifier_max_per_crawl=_int("HISTOR_CLASSIFIER_MAX_PER_CRAWL", 0, minimum=0),
+        classifier_max_tools=_int("HISTOR_CLASSIFIER_MAX_TOOLS", 60, minimum=1),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

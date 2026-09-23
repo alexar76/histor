@@ -54,6 +54,18 @@ NOTES = {
         "with HISTOR's record. HISTOR's own observations are reported."
     ),
 }
+MAX_CLASSIFIER_FINDINGS = 50
+NOTE_CLASSIFIER = (
+    "One model's advisory opinion, read over the tool text in any language. It is not a log label and is "
+    "not reproducible: this signature attests only that HISTOR holds this verdict for this tool set, not "
+    "that the verdict is right. Treat it as a lead to check, not proof. Coverage: if checkedTools is below "
+    "toolCount, only the first checkedTools tools were examined; truncatedTools counts tools with a field "
+    "longer than the model was shown, of which it read the start and the end."
+)
+NOTE_CLASSIFIER_NONE = (
+    "HISTOR holds no classifier verdict for this tool set. The classifier runs during HISTOR's daily crawl, "
+    "over sets HISTOR observed itself; /check reads stored verdicts and never calls a model."
+)
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
 NOTE_LAST_FAILED = (
     " HISTOR's latest attempt at this endpoint produced no tool set ({status}); the comparison is with its "
@@ -66,11 +78,14 @@ class CheckError(ValueError):
 
 
 class Checker:
-    def __init__(self, store: Store, key: SigningKey, scanner: Scanner, public_base: str) -> None:
+    def __init__(self, store: Store, key: SigningKey, scanner: Scanner, public_base: str,
+                 *, classifier_model: str = "", classifier_enabled: bool = False) -> None:
         self.store = store
         self.key = key
         self.scanner = scanner
         self.public_base = public_base
+        self.classifier_model = classifier_model
+        self.classifier_enabled = classifier_enabled
 
     def check(self, body: dict[str, Any], *, allow_scan: bool | Callable[[], bool],
               may_contribute: Callable[[str], bool] | None = None) -> dict[str, Any]:
@@ -170,10 +185,56 @@ class Checker:
         scan = self._scan(client_digest, client_entries, target, digest_error is not None, allow_scan)
         if scan is not None:
             result["patternScan"] = scan
+        classifier = self._classifier(client_digest, target, digest_error is not None)
+        if classifier is not None:
+            result["classifier"] = classifier
         sth = self.store.latest_sth()
         if sth:
             result["log"] = {"treeSize": sth["treeSize"], "rootHash": sth["rootHash"], "timestamp": sth["timestamp"]}
         return sign_document(self.key, result)
+
+    def _classifier(self, client_digest: str | None, target: dict[str, Any] | None,
+                    sent_undigestible: bool) -> dict[str, Any] | None:
+        """The stored advisory classifier verdict for the set the client holds, or a statement that
+        there is none.
+
+        Same honesty rules as the pattern scan: never another set's verdict presented as theirs (an
+        undigestible set gets nothing), and never a model call here — /check is public and rate
+        limited per address, and a paid call per anonymous request would be a way to spend HISTOR's
+        money. Only verdicts the crawl already stored are reported.
+        """
+        if sent_undigestible:
+            return None
+        digest = client_digest or (target or {}).get("current_toolset")
+        if not digest:
+            return None
+        # The model the crawl runs now, like the server page; with the classifier off, whatever a
+        # model judged before is still a fact HISTOR holds, so the newest stored verdict is used.
+        if self.classifier_model:
+            verdict = self.store.classification(digest, self.classifier_model)
+        else:
+            verdict = self.store.latest_classification(digest)
+        if verdict is None:
+            if not self.classifier_enabled:
+                return None  # no classifier on this instance: say nothing rather than promise one
+            return {"status": "not-classified", "toolSetDigest": digest, "advisory": True, "note": NOTE_CLASSIFIER_NONE}
+        findings = [f for f in verdict.get("findings", []) if isinstance(f, dict)]
+        return {
+            "status": "classified",
+            "toolSetDigest": digest,
+            "model": verdict.get("model"),
+            "classifiedAt": verdict.get("updatedAt"),
+            "checkedTools": verdict.get("checkedTools"),
+            "toolCount": verdict.get("toolCount"),
+            "truncatedTools": verdict.get("truncatedTools"),
+            "flagged": len(findings),
+            # Names are stored with each finding at classification time: no multi-megabyte tool set
+            # is loaded per /check request just to say which tool was flagged.
+            "findings": findings[:MAX_CLASSIFIER_FINDINGS],
+            "truncated": len(findings) > MAX_CLASSIFIER_FINDINGS,
+            "advisory": True,
+            "note": NOTE_CLASSIFIER,
+        }
 
     def _pattern_set(self) -> str | None:
         """The pattern set a fresh scan would use now: the running sidecar's, not the last crawl's."""

@@ -43,7 +43,8 @@ CAPS = (
         "name": "Recent MCP tool-definition changes",
         "description": (
             "The newest tool-definition changes HISTOR observed at remote MCP endpoints in the official registry: "
-            "which tools were added, removed or modified, with a link to each full diff."
+            "which tools were added, removed or modified, any outside address (host, e-mail, IP) that newly appeared, "
+            "and a link to each full diff."
         ),
         "price_per_call_usd": 0.0,
         "input_schema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}}},
@@ -53,8 +54,10 @@ CAPS = (
         "name": "Check an MCP tool set against the log",
         "description": (
             "Send an MCP endpoint (or registry name) and the tools/list you received, or its MTL/1 digest. "
-            "Returns, signed: whether HISTOR observed the same set there, since when, earlier sets, and the "
-            "WARDEN pattern matches for it. Says what was advertised, never that a server is safe."
+            "Returns, signed: whether HISTOR observed the same set there, since when, earlier sets, the "
+            "WARDEN pattern matches for it, and the stored advisory classifier verdict if HISTOR has one "
+            "(any language; one model's opinion, not a log label). Says what was advertised, never that a "
+            "server is safe."
         ),
         "price_per_call_usd": 0.0,
         "input_schema": {
@@ -342,6 +345,7 @@ def create_app(services: Services) -> FastAPI:
             "attempts": t["observations"], "changes": t["changes"],
             "blockMatches": t["block_matches"], "adviseMatches": t["advise_matches"],
             "recordMatches": t["record_matches"], "state": state, "badgeText": message,
+            "classifierModel": t["classifier_model"], "classifierFlags": t["classifier_flags"],
         }
 
     @app.get("/api/v1/servers")
@@ -377,11 +381,15 @@ def create_app(services: Services) -> FastAPI:
                 row = tx.one("SELECT matches FROM scans WHERE toolset=? AND pattern_set=?", (t["current_toolset"], pattern_set))
             matches = json.loads(row["matches"])[:MAX_MATCHES] if row else None
         descriptor = store.get_blob(t["current_subject"], "descriptor") if t["current_subject"] else None
+        classifier = None
+        if t["current_toolset"] and t["classifier_model"]:
+            classifier = store.classification(t["current_toolset"], t["classifier_model"])
         page = {
             "server": target_summary(t),
             "description": t["description"],
             "descriptor": descriptor,
             "patternMatches": matches,
+            "classifier": classifier,
             "labels": [{**lbl, "methodShort": SHORT.get(lbl["method"], lbl["method"])} for lbl in store.labels_for(target_id)],
             "timeline": list(reversed(runs))[:100],
             "changes": store.changes(limit=20, target_id=target_id),
@@ -452,6 +460,10 @@ def create_app(services: Services) -> FastAPI:
         for c in items:
             s = c["summary"]
             parts = []
+            if s.get("newAddresses"):
+                total = s.get("newAddressesTotal", len(s["newAddresses"]))
+                more = f" (+{total - 10} more)" if total > 10 else ""
+                parts.append(f"NEW OUTSIDE ADDRESSES: {', '.join(s['newAddresses'][:10])}{more}")
             if s["added"]:
                 parts.append(f"added: {', '.join(s['added'][:10])}")
             if s["removed"]:
@@ -538,15 +550,19 @@ def create_app(services: Services) -> FastAPI:
 
         A hub routes every buyer's call from one address. Since the hubs name the buyer with an
         opaque ``X-AIMarket-Buyer`` id, each buyer gets the normal per-caller bucket, and all of
-        one hub's traffic from one address shares a ceiling of ten of those. Both headers can be
-        forged; a forger gains nothing beyond that ceiling, which is still per address.
+        one hub's traffic from one address shares a ceiling of ten of those.
+
+        Both headers can be forged, so the FIRST bucket is always the bare address and is charged
+        whatever the headers say. Rotating the hub or buyer value on every request mints a fresh
+        sub-bucket each time — that used to mean no limit at all — but every one of those requests
+        still lands in the same per-address bucket, capped at the hub ceiling.
         """
         ip = client_ip(request)
         hub = request.headers.get("x-aimarket-routing-hub", "").strip()[:200]
         if not hub:
             return [(ip, settings.check_rate_per_min)]
         buyer = "".join(c for c in request.headers.get("x-aimarket-buyer", "") if c.isalnum() or c == "-")[:64]
-        buckets = [(f"{ip}|{hub}", settings.check_rate_per_min * 10)]
+        buckets = [(ip, settings.check_rate_per_min * 10), (f"{ip}|{hub}", settings.check_rate_per_min * 10)]
         if buyer:
             buckets.append((f"{ip}|{hub}|{buyer}", settings.check_rate_per_min))
         return buckets
@@ -560,14 +576,24 @@ def create_app(services: Services) -> FastAPI:
         """Synchronous on purpose: callers run it in the threadpool, never on the event loop."""
         if not allow_all("check", who):
             raise HTTPException(status_code=429, detail="too many checks; slow down")
+        addr = who[0][0]  # the bare address — always first, and not forgeable by a header
         key = who[-1][0]  # the narrowest identity: the buyer when a hub names one
+        scan_rate = settings.check_scan_rate_per_hour
 
         def may_scan() -> bool:  # asked only when a fresh scan would actually run (audit F45)
-            return settings.check_scan_rate_per_hour > 0 and limiter.allow(
-                f"scan:{key}", settings.check_scan_rate_per_hour, 3600)
+            # The per-buyer budget, AND a per-address ceiling a rotated buyer id cannot escape: fresh
+            # scans hold the site's only scan slot, so an unbounded caller would starve everyone.
+            if scan_rate <= 0:
+                return False
+            if len(who) > 1 and not limiter.allow(f"scan:{key}", scan_rate, 3600):
+                return False
+            return limiter.allow(f"scan:{addr}", scan_rate * (10 if len(who) > 1 else 1), 3600)
 
-        def may_contribute(target_id: str) -> bool:  # one report per caller, target and day
-            return limiter.allow(f"report:{key}:{target_id}", 1, 86400)
+        def may_contribute(target_id: str) -> bool:
+            # One report per ADDRESS, target and day. The public count is a cross-client signal
+            # ("some clients see a different set"); keyed on a forgeable buyer id, one caller could
+            # mint any number of "clients" and fake or bury that signal for any server.
+            return limiter.allow(f"report:{addr}:{target_id}", 1, 86400)
 
         try:
             return services.checker.check(body, allow_scan=may_scan, may_contribute=may_contribute)
@@ -729,6 +755,8 @@ def create_app(services: Services) -> FastAPI:
             "id": c["id"], "server": c["name"], "endpoint": c["endpoint"], "observedAt": c["observed_at"],
             "added": s["added"][:20], "removed": s["removed"][:20],
             "modified": [m["tool"] for m in s["modified"][:20]],
+            "newAddresses": s.get("newAddresses", [])[:20],
+            "newAddressesTotal": s.get("newAddressesTotal", len(s.get("newAddresses", []))),
             "detail": s.get("detail"), "label": c.get("label_id"),
             "page": f"{settings.public_base}/s/{c['target_id']}",
         }

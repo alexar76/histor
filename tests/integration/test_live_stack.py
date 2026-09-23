@@ -189,4 +189,4 @@ def test_the_migration_cli_reports_the_head(settings):
     assert up.returncode == 0, up.stderr
     status = subprocess.run([sys.executable, "-m", "histor", "migrate", "status"], env=env, capture_output=True,
                             text=True, timeout=60)
-    assert "applied=[1, 2]" in status.stdout and "pending=[]" in status.stdout
+    assert "applied=[1, 2, 3]" in status.stdout and "pending=[]" in status.stdout
