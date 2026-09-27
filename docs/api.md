@@ -60,6 +60,26 @@ flowchart LR
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | RFC 9162 inclusion proof, hex |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | RFC 9162 consistency proof, hex |
 
+## Receipts log
+
+A second, independent log: anchors of market work receipts (AWR/2), submitted by the hubs that
+issued them. An anchor carries four facts — the receipt's digest, the issuer's `did:key`, the
+issue time, and the issuer's signature over them — and never the receipt itself. Its heads are
+`histor.receipts-sth/v1`, signed by the same key as the label log's, over a separate tree.
+
+| Method | Path | Returns |
+|---|---|---|
+| POST | `/api/v1/receipts/anchors` | `{"anchors": [...]}` (1–100) → one result per anchor: `logged`, `duplicate` or `refused` with a reason |
+| GET | `/api/v1/receipts/sth` | latest signed head of the receipts log |
+| GET | `/api/v1/receipts/sth/<size>` | the head signed at that size |
+| GET | `/api/v1/receipts/proof?digest=&tree_size=` | the anchor, its leaf index and an RFC 9162 inclusion proof against a signed head |
+| GET | `/api/v1/receipts/proof/consistency?first=&second=` | RFC 9162 consistency proof, hex |
+
+Submissions are accepted only from the issuers listed in `HISTOR_RECEIPT_ISSUERS`
+(comma-separated `did:key`s; empty = closed, the default) and only over the issuer's own
+Ed25519 signature on the RFC 8785 bytes of `type`, `issuer`, `receiptDigest` and `issuedAt`.
+`issuedAt` may lag by up to 30 days (a backlog after an outage) and lead by at most 5 minutes.
+
 ## /check
 
 ```http

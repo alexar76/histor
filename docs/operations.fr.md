@@ -46,6 +46,7 @@ satellite), émet le certificat avec certbot s’il n’existe pas, installe le 
 | `HISTOR_CHECK_RATE_PER_MIN` / `_SCAN_RATE_PER_HOUR` | `30` / `20` | par adresse client |
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | le fichier compose ajoute `172.16.0.0/12` : le proxy de Docker se connecte depuis la passerelle du bridge |
 | `HISTOR_PQC` | `0` | `1` : signatures de fédération hybrides Ed25519 + ML-DSA-65 |
+| `HISTOR_RECEIPT_ISSUERS` | vide (fermé) | `did:key` séparés par des virgules dont le journal des reçus accepte les ancrages de reçus de travail (`/api/v1/receipts/*`). Le DID d'un hub se lit dans l'`issuer` de l'un de ses reçus réels. Un émetteur pas encore listé reçoit un refus réessayable : son hub garde l'ancrage en file jusqu'à ce que vous l'ajoutiez. `docker-compose.yml` doit la transmettre, comme chaque variable qu'il nomme |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | tests uniquement ; refusé sous `prod` |
 | `HISTOR_CLASSIFIER_MODEL` | vide | id du modèle OpenRouter (p. ex. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Désactivé tant que modèle, clé et budget ne sont pas tous définis |
 | `HISTOR_OPENROUTER_API_KEY` | vide | clé OpenRouter (ou `OPENROUTER_API_KEY`) ; reste dans le `.env` de l'hôte, jamais dans l'image |

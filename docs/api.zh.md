@@ -60,6 +60,20 @@ flowchart LR
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | RFC 9162 包含证明，十六进制 |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | RFC 9162 一致性证明，十六进制 |
 
+## 收据日志
+
+第二个彼此独立的日志：市场工作收据（AWR/2）的锚点，由签发收据的中心节点提交。一个锚点只携带四项事实——收据的摘要、签发方的 `did:key`、签发时间，以及签发方对这些事实的签名——绝不包含收据本身。它的树头是 `histor.receipts-sth/v1`，与标签日志使用同一把密钥签名，但覆盖的是另一棵树。
+
+| 方法 | 路径 | 返回 |
+|---|---|---|
+| POST | `/api/v1/receipts/anchors` | `{"anchors": [...]}`（1–100 个）→ 每个锚点一个结果：`logged`、`duplicate` 或附带原因的 `refused` |
+| GET | `/api/v1/receipts/sth` | 收据日志最新的已签名树头 |
+| GET | `/api/v1/receipts/sth/<size>` | 在该大小时签名的树头 |
+| GET | `/api/v1/receipts/proof?digest=&tree_size=` | 锚点、其叶子索引，以及相对某个已签名树头的 RFC 9162 包含证明 |
+| GET | `/api/v1/receipts/proof/consistency?first=&second=` | RFC 9162 一致性证明，十六进制 |
+
+只接受 `HISTOR_RECEIPT_ISSUERS` 中列出的签发方（以逗号分隔的 `did:key`；为空即关闭，这是默认值）提交，且必须带有签发方本人对 `type`、`issuer`、`receiptDigest` 和 `issuedAt` 的 RFC 8785 字节所做的 Ed25519 签名。`issuedAt` 最多可滞后 30 天（故障后的积压），最多只能超前 5 分钟。
+
 ## /check
 
 ```http

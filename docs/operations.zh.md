@@ -44,6 +44,7 @@ flowchart LR
 | `HISTOR_CHECK_RATE_PER_MIN` / `_SCAN_RATE_PER_HOUR` | `30` / `20` | 按客户端地址计算 |
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | compose 文件追加了 `172.16.0.0/12`：Docker 的代理从网桥网关发起连接 |
 | `HISTOR_PQC` | `0` | `1`：联邦签名使用 Ed25519 + ML-DSA-65 混合签名 |
+| `HISTOR_RECEIPT_ISSUERS` | 空（关闭） | 逗号分隔的 `did:key` 列表，收据日志（`/api/v1/receipts/*`）只接受这些签发方的工作收据锚点。枢纽的 DID 取自其任一真实收据的 `issuer` 字段。尚未列入的签发方会收到可重试的拒绝，其枢纽会把锚点留在队列中，直到你把它加入。`docker-compose.yml` 必须转发该变量，与其中列出的其他变量一样 |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | 仅供测试；在 `prod` 下被拒绝 |
 | `HISTOR_CLASSIFIER_MODEL` | 空 | OpenRouter 模型 id（如 `deepseek/deepseek-chat`、`minimax/minimax-m1`）。除非同时设置模型、密钥和预算，否则关闭 |
 | `HISTOR_OPENROUTER_API_KEY` | 空 | OpenRouter 密钥（或 `OPENROUTER_API_KEY`）；留在主机 `.env`，不进镜像 |

@@ -21,6 +21,9 @@ services:
       HISTOR_CHECK_RATE_PER_MIN: "${HISTOR_CHECK_RATE_PER_MIN:-30}"
       HISTOR_CHECK_SCAN_RATE_PER_HOUR: "${HISTOR_CHECK_SCAN_RATE_PER_HOUR:-20}"
       HISTOR_OPT_OUT: "${HISTOR_OPT_OUT:-}"
+      # did:key issuers whose receipt anchors the receipts log accepts (histor/receipts.py).
+      # Empty = the receipts log is closed to submissions.
+      HISTOR_RECEIPT_ISSUERS: "${HISTOR_RECEIPT_ISSUERS:-}"
       # Docker's userland proxy dials the container from the network gateway, so the peer the
       # app sees is 172.x.0.1, not 127.0.0.1. Trust the bridge range, or every visitor shares
       # one rate-limit bucket.

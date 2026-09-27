@@ -46,6 +46,7 @@ flowchart LR
 | `HISTOR_CHECK_RATE_PER_MIN` / `_SCAN_RATE_PER_HOUR` | `30` / `20` | на адрес клиента |
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | compose-файл добавляет `172.16.0.0/12`: прокси Docker подключается со шлюза моста |
 | `HISTOR_PQC` | `0` | `1`: гибридные подписи федерации Ed25519 + ML-DSA-65 |
+| `HISTOR_RECEIPT_ISSUERS` | пусто (закрыто) | через запятую — `did:key`, чьи якоря рабочих квитанций принимает журнал квитанций (`/api/v1/receipts/*`). DID хаба берётся из поля `issuer` любой его живой квитанции. Ещё не внесённый издатель получает отказ, который можно повторить, поэтому хаб держит якорь в очереди, пока вы его не добавите. `docker-compose.yml` должен пробрасывать переменную, как и любую из перечисленных в нём |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | только для тестов; при `prod` отклоняется |
 | `HISTOR_CLASSIFIER_MODEL` | пусто | id модели OpenRouter (напр. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Выключен, пока не заданы модель, ключ и бюджет |
 | `HISTOR_OPENROUTER_API_KEY` | пусто | ключ OpenRouter (или `OPENROUTER_API_KEY`); остаётся в `.env` хоста, не в образе |

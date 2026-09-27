@@ -60,6 +60,27 @@ flowchart LR
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | prueba de inclusión RFC 9162, en hex |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | prueba de consistencia RFC 9162, en hex |
 
+## Registro de recibos
+
+Un segundo registro, independiente: anclas de recibos de trabajo del mercado (AWR/2), enviadas
+por los hubs que los emitieron. Un ancla lleva cuatro hechos — el digest del recibo, el `did:key`
+del emisor, la hora de emisión y la firma del emisor sobre ellos — y nunca el recibo en sí. Sus
+encabezados son `histor.receipts-sth/v1`, firmados con la misma clave que los del registro de
+etiquetas, sobre un árbol aparte.
+
+| Método | Ruta | Devuelve |
+|---|---|---|
+| POST | `/api/v1/receipts/anchors` | `{"anchors": [...]}` (1–100) → un resultado por ancla: `logged`, `duplicate` o `refused` con el motivo |
+| GET | `/api/v1/receipts/sth` | el último encabezado firmado del registro de recibos |
+| GET | `/api/v1/receipts/sth/<size>` | el encabezado firmado con ese tamaño |
+| GET | `/api/v1/receipts/proof?digest=&tree_size=` | el ancla, su índice de hoja y una prueba de inclusión RFC 9162 frente a un encabezado firmado |
+| GET | `/api/v1/receipts/proof/consistency?first=&second=` | prueba de consistencia RFC 9162, en hex |
+
+Solo se aceptan envíos de los emisores listados en `HISTOR_RECEIPT_ISSUERS` (`did:key` separados
+por comas; vacío = cerrado, que es el valor por defecto) y solo con la firma Ed25519 del propio
+emisor sobre los bytes RFC 8785 de `type`, `issuer`, `receiptDigest` e `issuedAt`. `issuedAt`
+puede ir hasta 30 días por detrás (un atraso tras una caída) y como mucho 5 minutos por delante.
+
 ## /check
 
 ```http

@@ -61,6 +61,28 @@ stable, un par entrée distante.
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | preuve d’inclusion RFC 9162, en hexadécimal |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | preuve de cohérence RFC 9162, en hexadécimal |
 
+## Journal des reçus
+
+Un second journal, indépendant : les ancres des reçus de travail du marché (AWR/2), soumises par
+les hubs qui les ont émis. Une ancre porte quatre faits — l'empreinte du reçu, le `did:key` de
+l'émetteur, l'heure d'émission et la signature de l'émetteur sur ces faits — et jamais le reçu
+lui-même. Ses têtes sont des `histor.receipts-sth/v1`, signées par la même clé que celles du
+journal des étiquettes, sur un arbre distinct.
+
+| Méthode | Chemin | Renvoie |
+|---|---|---|
+| POST | `/api/v1/receipts/anchors` | `{"anchors": [...]}` (1–100) → un résultat par ancre : `logged`, `duplicate` ou `refused` avec la raison |
+| GET | `/api/v1/receipts/sth` | la dernière tête signée du journal des reçus |
+| GET | `/api/v1/receipts/sth/<size>` | la tête signée à cette taille |
+| GET | `/api/v1/receipts/proof?digest=&tree_size=` | l'ancre, son indice de feuille et une preuve d'inclusion RFC 9162 par rapport à une tête signée |
+| GET | `/api/v1/receipts/proof/consistency?first=&second=` | preuve de cohérence RFC 9162, en hex |
+
+Les soumissions ne sont acceptées que des émetteurs listés dans `HISTOR_RECEIPT_ISSUERS`
+(`did:key` séparés par des virgules ; vide = fermé, la valeur par défaut) et seulement sous la
+signature Ed25519 de l'émetteur lui-même sur les octets RFC 8785 de `type`, `issuer`,
+`receiptDigest` et `issuedAt`. `issuedAt` peut avoir jusqu'à 30 jours de retard (un arriéré après
+une panne) et au plus 5 minutes d'avance.
+
 ## /check
 
 ```http

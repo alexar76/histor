@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 from histor import __version__, badge
 from histor.check import MAX_MATCHES, CheckError
 from histor.labels import SHORT
+from histor.receipts import AnchorRefused
 from histor.service import Services, crawl_in_background, scheduler
 from histor.untrusted import TooDeep, loads_limited
 
@@ -604,6 +605,67 @@ def create_app(services: Services) -> FastAPI:
     async def check(request: Request) -> dict[str, Any]:
         body = await read_json(request)
         return await run_in_threadpool(run_check, body, limit_key(request))
+
+    # -- the receipts log (histor.receipts) --------------------------------------------
+    # Submissions authenticate themselves: every anchor is signed by its issuer, and only the
+    # issuers the operator listed are accepted. Reads are public, like the label log's.
+    receipts_log = services.receipts
+
+    def require_receipts() -> Any:
+        if receipts_log is None:
+            raise HTTPException(status_code=404, detail="this instance has no receipts log")
+        return receipts_log
+
+    @app.post("/api/v1/receipts/anchors")
+    async def receipt_anchors(request: Request) -> dict[str, Any]:
+        log = require_receipts()
+        if not log.open:
+            raise HTTPException(status_code=503, detail="the receipts log accepts no issuers on this instance")
+        if not limiter.allow(f"anchors:{client_ip(request)}", 120, 60):
+            raise HTTPException(status_code=429, detail="too many anchor submissions")
+        body = await read_json(request)
+        try:
+            results = await run_in_threadpool(log.submit, body.get("anchors"))
+        except AnchorRefused as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"results": results, "sth": log.latest_sth()}
+
+    @app.get("/api/v1/receipts/sth")
+    def receipts_latest_sth() -> dict[str, Any]:
+        sth = require_receipts().latest_sth()
+        if sth is None:
+            raise HTTPException(status_code=404, detail="the receipts log is empty")
+        return sth
+
+    @app.get("/api/v1/receipts/sth/{tree_size}")
+    def receipts_sth_at(tree_size: int) -> dict[str, Any]:
+        sth = require_receipts().sth(tree_size)
+        if sth is None:
+            raise HTTPException(status_code=404, detail="no signed tree head at that size")
+        return sth
+
+    @app.get("/api/v1/receipts/proof")
+    def receipt_proof(digest: str = Query(..., min_length=51, max_length=51),
+                      tree_size: int | None = Query(None, ge=1)) -> dict[str, Any]:
+        # A digest is base64: links that forgot to percent-encode it arrive with '+' read as
+        # a space. A space is never part of a digest, so reading it back as '+' is lossless.
+        digest = digest.replace(" ", "+")
+        try:
+            proof = require_receipts().proof(digest, tree_size)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if proof is None:
+            raise HTTPException(status_code=404, detail="no anchor for that receipt digest")
+        return proof
+
+    @app.get("/api/v1/receipts/proof/consistency")
+    def receipts_consistency(first: int = Query(..., ge=1), second: int = Query(..., ge=1)) -> dict[str, Any]:
+        if first > second:
+            raise HTTPException(status_code=400, detail="first must not exceed second")
+        try:
+            return {"first": first, "second": second, "proof": require_receipts().consistency(first, second)}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # -- badge ----------------------------------------------------------------------
 

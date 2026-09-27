@@ -58,6 +58,9 @@ class Settings:
     classifier_timeout_s: int
     classifier_max_per_crawl: int
     classifier_max_tools: int
+    # did:key issuers whose receipt anchors the receipts log accepts (histor.receipts). Empty =
+    # the log is closed to submissions, which is the default: an open log is a free write.
+    receipt_issuers: tuple[str, ...] = ()
 
     @property
     def classifier_enabled(self) -> bool:
@@ -138,6 +141,9 @@ def load_settings() -> Settings:
         classifier_timeout_s=_int("HISTOR_CLASSIFIER_TIMEOUT_S", 30, minimum=1),
         classifier_max_per_crawl=_int("HISTOR_CLASSIFIER_MAX_PER_CRAWL", 0, minimum=0),
         classifier_max_tools=_int("HISTOR_CLASSIFIER_MAX_TOOLS", 60, minimum=1),
+        receipt_issuers=tuple(
+            d.strip() for d in os.environ.get("HISTOR_RECEIPT_ISSUERS", "").split(",") if d.strip()
+        ),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

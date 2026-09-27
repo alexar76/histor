@@ -47,6 +47,7 @@ loses at most one batch.
 | `HISTOR_CHECK_RATE_PER_MIN` / `_SCAN_RATE_PER_HOUR` | `30` / `20` | per client address |
 | `HISTOR_TRUSTED_PROXIES` | `127.0.0.1,::1` | the compose file adds `172.16.0.0/12`: Docker's proxy dials from the bridge gateway |
 | `HISTOR_PQC` | `0` | `1`: hybrid Ed25519 + ML-DSA-65 federation signatures |
+| `HISTOR_RECEIPT_ISSUERS` | empty (closed) | comma-separated `did:key`s whose work-receipt anchors the receipts log accepts (`/api/v1/receipts/*`). Take a hub's DID from the `issuer` of one of its live receipts. An issuer not listed yet gets a retryable refusal, so its hub keeps the anchor queued until you add it. `docker-compose.yml` must forward it, like every variable it names |
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | tests only; refused under `prod` |
 | `HISTOR_CLASSIFIER_MODEL` | empty | OpenRouter model id (e.g. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Off unless this, a key and a budget are all set |
 | `HISTOR_OPENROUTER_API_KEY` | empty | OpenRouter key (or `OPENROUTER_API_KEY`); stays in the host `.env`, never in the image |

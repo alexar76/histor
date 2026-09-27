@@ -229,11 +229,48 @@ MIGRATION_003: tuple[str, ...] = (
     """,
 )
 
+# The receipts log (histor.receipts): a second, independent Merkle tree whose leaves are
+# receipt ANCHORS — a work receipt's digest, the issuer that signed it, when, and the issuer's
+# signature over those three facts. Never the receipt itself: what a buyer paid for and what
+# they got stay private, while anyone holding a receipt can prove it was logged, and the
+# issuer cannot later deny, backdate or quietly replace it. Its own node and head tables, so
+# the label log's heads keep meaning exactly "the first N labels" and nothing else.
+MIGRATION_004: tuple[str, ...] = (
+    """
+    CREATE TABLE receipt_log_nodes (
+        level INTEGER NOT NULL,
+        idx BIGINT NOT NULL,
+        hash TEXT NOT NULL,
+        PRIMARY KEY (level, idx)
+    )
+    """,
+    """
+    CREATE TABLE receipt_sths (
+        tree_size BIGINT PRIMARY KEY,
+        root TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        body TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE receipt_anchors (
+        receipt_digest TEXT PRIMARY KEY,
+        issuer TEXT NOT NULL,
+        issued_at TEXT NOT NULL,
+        logged_at TEXT NOT NULL,
+        leaf_index BIGINT NOT NULL UNIQUE,
+        body TEXT NOT NULL
+    )
+    """,
+    "CREATE INDEX receipt_anchors_issuer ON receipt_anchors(issuer, leaf_index)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
     (2, "002_scan_sets", MIGRATION_002),
     (3, "003_classifier", MIGRATION_003),
+    (4, "004_receipts_log", MIGRATION_004),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

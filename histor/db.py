@@ -24,6 +24,9 @@ from typing import Any, Protocol
 # pointed at the same database still append leaves one at a time. The value is arbitrary;
 # it only has to be the same everywhere.
 LOG_APPEND_LOCK = 0x4849_5354  # "HIST"
+# The receipts log (histor.receipts) is a second, independent tree. It takes its own lock so
+# an anchoring burst never queues behind a crawl's label appends, and vice versa.
+RECEIPT_LOG_LOCK = 0x4849_5243  # "HIRC"
 
 
 class Tx(Protocol):
@@ -35,7 +38,7 @@ class Tx(Protocol):
 
     def one(self, sql: str, params: Sequence[Any] = ()) -> dict[str, Any] | None: ...
 
-    def lock_log(self) -> None: ...
+    def lock_log(self, key: int = LOG_APPEND_LOCK) -> None: ...
 
 
 def is_postgres_url(url: str) -> bool:
@@ -62,7 +65,7 @@ class _SQLiteTx:
         rows = self.execute(sql, params)
         return rows[0] if rows else None
 
-    def lock_log(self) -> None:
+    def lock_log(self, key: int = LOG_APPEND_LOCK) -> None:
         """BEGIN IMMEDIATE already holds SQLite's single writer lock."""
 
 
@@ -140,8 +143,8 @@ class _PostgresTx:
         rows = self.execute(sql, params)
         return rows[0] if rows else None
 
-    def lock_log(self) -> None:
-        self._conn.execute("SELECT pg_advisory_xact_lock(%s)", (LOG_APPEND_LOCK,))
+    def lock_log(self, key: int = LOG_APPEND_LOCK) -> None:
+        self._conn.execute("SELECT pg_advisory_xact_lock(%s)", (key,))
 
 
 class PostgresBackend:

@@ -18,6 +18,7 @@ from histor.keys import bind_key_to_log, issuer_key
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook
 from histor.migrations import apply_migrations
+from histor.receipts import ReceiptLog
 from histor.scanner import Scanner
 from histor.signing import ProviderSigner
 from histor.store import Store
@@ -37,6 +38,7 @@ class Services:
     crawler: Crawler
     checker: Checker
     provider: ProviderSigner
+    receipts: ReceiptLog | None = None
     stop: threading.Event = field(default_factory=threading.Event)
     last_error: str | None = None
 
@@ -73,7 +75,9 @@ def build(settings: Settings, *, crawler_kwargs: dict | None = None, backend: Ba
                       classifier_model=settings.classifier_model if settings.classifier_enabled else "",
                       classifier_enabled=settings.classifier_enabled)
     provider = ProviderSigner(settings.provider_key_path, pqc=settings.pqc)
-    return Services(settings, backend, store, key, issuer, logbook, scanner, crawler, checker, provider)
+    receipts = ReceiptLog(store, key, set(settings.receipt_issuers))
+    return Services(settings, backend, store, key, issuer, logbook, scanner, crawler, checker, provider,
+                    receipts=receipts)
 
 
 def crawl_in_background(services: Services) -> bool:

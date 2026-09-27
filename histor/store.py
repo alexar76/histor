@@ -200,21 +200,33 @@ class Store:
                 (target_id, limit),
             )
 
-    @staticmethod
-    def log_size(tx: Tx) -> int:
+    # The trees this store holds: the label log and the receipts log (histor.receipts). A table
+    # name reaches SQL only through this set, never from a caller's string.
+    NODE_TABLES = frozenset({"log_nodes", "receipt_log_nodes"})
+
+    @classmethod
+    def _nodes(cls, table: str) -> str:
+        if table not in cls.NODE_TABLES:
+            raise ValueError(f"unknown log table {table!r}")
+        return table
+
+    @classmethod
+    def log_size(cls, tx: Tx, table: str = "log_nodes") -> int:
         # MAX over the (level, idx) primary key is an index lookup on both engines; COUNT(*) would
         # scan every leaf on every append once the log holds millions of labels.
-        row = tx.one("SELECT MAX(idx) AS last FROM log_nodes WHERE level=0")
+        row = tx.one(f"SELECT MAX(idx) AS last FROM {cls._nodes(table)} WHERE level=0")
         return 0 if row is None or row["last"] is None else int(row["last"]) + 1
 
     def tree_size(self) -> int:
         with self.db.read() as tx:
             return self.log_size(tx)
 
-    @staticmethod
-    def reader(tx: Tx) -> merkle.NodeReader:
+    @classmethod
+    def reader(cls, tx: Tx, table: str = "log_nodes") -> merkle.NodeReader:
+        nodes = cls._nodes(table)
+
         def read(level: int, idx: int) -> bytes:
-            row = tx.one("SELECT hash FROM log_nodes WHERE level=? AND idx=?", (level, idx))
+            row = tx.one(f"SELECT hash FROM {nodes} WHERE level=? AND idx=?", (level, idx))
             if row is None:
                 raise KeyError((level, idx))
             return bytes.fromhex(row["hash"])
@@ -222,11 +234,12 @@ class Store:
         return read
 
     @classmethod
-    def append_leaf(cls, tx: Tx, leaf: bytes) -> int:
-        """Append one leaf inside *tx*. The caller must already hold ``tx.lock_log()``."""
-        index = cls.log_size(tx)
-        for level, idx, digest in merkle.appended_nodes(index, leaf, cls.reader(tx)):
-            tx.execute("INSERT INTO log_nodes(level, idx, hash) VALUES(?, ?, ?)", (level, idx, digest.hex()))
+    def append_leaf(cls, tx: Tx, leaf: bytes, table: str = "log_nodes") -> int:
+        """Append one leaf inside *tx*. The caller must already hold that log's lock."""
+        nodes = cls._nodes(table)
+        index = cls.log_size(tx, table)
+        for level, idx, digest in merkle.appended_nodes(index, leaf, cls.reader(tx, table)):
+            tx.execute(f"INSERT INTO {nodes}(level, idx, hash) VALUES(?, ?, ?)", (level, idx, digest.hex()))
         return index
 
     def latest_sth(self) -> dict[str, Any] | None:
