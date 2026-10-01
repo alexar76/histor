@@ -9,6 +9,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@aimarket/warden": "0.5.0"
+    "@aimarket/warden": "0.8.1"
   }
 }
