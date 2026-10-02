@@ -23,7 +23,7 @@ flowchart TB
         LOG["logbook<br/>feuilles RFC 9162 + STH (tête d’arbre signée)"]
         API["FastAPI<br/>interface web · API · badge · flux · /check"]
     end
-    SIDE["sidecar WARDEN<br/>node scanner/scan.mjs<br/>@aimarket/warden@0.5.0"]
+    SIDE["sidecar WARDEN<br/>node scanner/scan.mjs<br/>@aimarket/warden<br/>(version figée dans scanner/package.json)"]
     DB[("Postgres (prod)<br/>SQLite (dev)")]
     KEY[["/data/issuer.key<br/>/data/provider.key"]]
 

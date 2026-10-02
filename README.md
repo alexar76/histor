@@ -137,6 +137,15 @@ make integration   # real sockets: a loopback registry and MCP servers, uvicorn,
 The tests and coverage badges above are measured by CI on every Pages deploy and read through
 shields.io, and the log badges read the live service, so every number there is current.
 
+## ERC-8004 identity
+
+HISTOR is ERC-8004 agent [`96683` on Base](https://8004scan.io/agents/base/96683), registered on
+2026-10-01 in the canonical IdentityRegistry `0x8004A169…a432` and owned by the AIMarket operator
+wallet `0x1218ff36…Ad0a`. Its [registration file](https://modelmarket.dev/.well-known/erc-8004/histor.json)
+lists the web page, the hosted `histor-check` endpoint and the `did:key` that signs every label, so a
+label's signature can be tied back to the registered agent. Transactions and how to check them:
+[ERC-8004 identities](https://github.com/alexar76/aicom/blob/main/docs/erc-8004-identities.md).
+
 ## Where it sits
 
 | Component | Role |

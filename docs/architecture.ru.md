@@ -23,7 +23,7 @@ flowchart TB
         LOG["logbook<br/>листья RFC 9162 + STH"]
         API["FastAPI<br/>веб-интерфейс · API · бейдж · лента · /check"]
     end
-    SIDE["сайдкар WARDEN<br/>node scanner/scan.mjs<br/>@aimarket/warden@0.5.0"]
+    SIDE["сайдкар WARDEN<br/>node scanner/scan.mjs<br/>@aimarket/warden<br/>(версия закреплена в scanner/package.json)"]
     DB[("Postgres (prod)<br/>SQLite (dev)")]
     KEY[["/data/issuer.key<br/>/data/provider.key"]]
 

@@ -132,6 +132,16 @@ make integration   # real sockets: a loopback registry and MCP servers, uvicorn,
 Бейджи тестов и покрытия выше измеряет CI при каждом деплое Pages, а читаются они через
 shields.io; бейджи журнала читают работающий сервис, так что все цифры там актуальны.
 
+## Идентичность ERC-8004
+
+HISTOR — агент ERC-8004 [`96683` в сети Base](https://8004scan.io/agents/base/96683),
+зарегистрированный 2026-10-01 в каноническом IdentityRegistry `0x8004A169…a432`; владелец —
+кошелёк оператора AIMarket `0x1218ff36…Ad0a`. Его
+[файл регистрации](https://modelmarket.dev/.well-known/erc-8004/histor.json) перечисляет
+веб-страницу, размещённый эндпоинт `histor-check` и `did:key`, которым подписывается каждая метка,
+так что подпись метки можно связать с зарегистрированным агентом. Транзакции и как их проверить:
+[Идентичности ERC-8004](https://github.com/alexar76/aicom/blob/main/docs/erc-8004-identities.ru.md).
+
 ## Место в экосистеме
 
 | Компонент | Роль |

@@ -121,6 +121,10 @@ make integration   # real sockets: a loopback registry and MCP servers, uvicorn,
 上方的测试与覆盖率徽章由 CI 在每次 Pages 部署时测得，经 shields.io 读取；日志徽章读取的是在线
 服务，因此那里的每个数字都是最新的。
 
+## ERC-8004 身份
+
+HISTOR 是 [Base 上的 `96683` 号](https://8004scan.io/agents/base/96683) ERC-8004 智能体，于 2026-10-01 在官方 IdentityRegistry `0x8004A169…a432` 中注册，归 AIMarket 运营者钱包 `0x1218ff36…Ad0a` 所有。它的[注册文件](https://modelmarket.dev/.well-known/erc-8004/histor.json)列出了网页、在线的 `histor-check` 端点，以及为每个标签签名的 `did:key`，因此标签的签名可以追溯到这个已注册的智能体。交易及其核对方法：[ERC-8004 身份](https://github.com/alexar76/aicom/blob/main/docs/erc-8004-identities.zh.md)。
+
 ## 所处位置
 
 | 组件 | 角色 |

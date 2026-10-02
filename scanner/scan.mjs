@@ -37,11 +37,14 @@ const WHERE = [
   ["name ", "name"],
   ["description ", "description"],
   ["input schema ", "inputSchema"],
+  ["output schema ", "outputSchema"],
 ];
 
 function patternSetDocument() {
   const ruleset = staticScanRuleset();
-  const surfaces = ["name", "description", "inputSchema"];
+  // The members an MTL/1 entry carries (PROFILE §5.2), so the scan covers exactly the digested text
+  // (§7.3). Rulesets v6+ also declare title/annotations/metadata, which §5.2 drops.
+  const surfaces = ["name", "description", "inputSchema", "outputSchema"];
   const scanned = new Set();
   for (const rule of ruleset.rules) for (const s of rule.surfaces ?? []) scanned.add(s);
   const tierCounts = {};
@@ -134,6 +137,9 @@ async function scanOne(line) {
     name: String(t.name ?? ""),
     description: typeof t.description === "string" ? t.description : "",
     inputSchema: t.inputSchema && typeof t.inputSchema === "object" ? t.inputSchema : {},
+    // Digested whenever present (§5.2), so scanned whenever present: a label that signed "pass"
+    // over an output schema it never read would claim more than the scan did.
+    ...(t.outputSchema && typeof t.outputSchema === "object" && !Array.isArray(t.outputSchema) ? { outputSchema: t.outputSchema } : {}),
   }));
   const server = {
     id: String(job.server?.id ?? ""),

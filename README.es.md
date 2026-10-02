@@ -132,6 +132,15 @@ Las insignias de pruebas y de cobertura de arriba las mide la CI en cada desplie
 leen a través de shields.io, y las insignias del registro leen el servicio en vivo, así que todas
 las cifras que muestran están al día.
 
+## Identidad ERC-8004
+
+HISTOR es el agente ERC-8004 [`96683` en Base](https://8004scan.io/agents/base/96683), registrado el
+2026-10-01 en el IdentityRegistry canónico `0x8004A169…a432` y propiedad de la cartera del operador
+de AIMarket `0x1218ff36…Ad0a`. Su [archivo de registro](https://modelmarket.dev/.well-known/erc-8004/histor.json)
+enumera la página web, el endpoint `histor-check` alojado y el `did:key` que firma cada etiqueta, de
+modo que la firma de una etiqueta puede vincularse con el agente registrado. Transacciones y cómo
+comprobarlas: [Identidades ERC-8004](https://github.com/alexar76/aicom/blob/main/docs/erc-8004-identities.es.md).
+
 ## Dónde encaja
 
 | Componente | Función |

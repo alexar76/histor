@@ -22,7 +22,7 @@ flowchart TB
         LOG["日志簿<br/>RFC 9162 叶子 + STH"]
         API["FastAPI<br/>网页端 · API · 徽章 · 订阅源 · /check"]
     end
-    SIDE["WARDEN 边车<br/>node scanner/scan.mjs<br/>@aimarket/warden@0.5.0"]
+    SIDE["WARDEN 边车<br/>node scanner/scan.mjs<br/>@aimarket/warden<br/>（版本固定在 scanner/package.json）"]
     DB[("Postgres（生产）<br/>SQLite（开发）")]
     KEY[["/data/issuer.key<br/>/data/provider.key"]]
 
