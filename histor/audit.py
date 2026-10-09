@@ -19,7 +19,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import stat
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +32,20 @@ from awr import canonicalize, verify_document
 from histor import merkle
 from histor.logbook import STH_TYPE
 from histor.logbook import verify_document as verify_signed
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace ``path`` in one rename, so a crash mid-write leaves the old file, not a torn one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        if path.exists():
+            os.chmod(tmp, stat.S_IMODE(path.stat().st_mode))
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 class AuditFailure(RuntimeError):
@@ -99,8 +116,7 @@ def audit(base: str, *, state: Path | None = None, label_id: str | None = None,
         report["label"] = {"id": label_id, "leafIndex": proof["leafIndex"], "inclusion": "ok"}
 
     if state:
-        state.parent.mkdir(parents=True, exist_ok=True)
-        state.write_text(json.dumps(sth))
+        _write_atomic(state, json.dumps(sth))
     return report
 
 
