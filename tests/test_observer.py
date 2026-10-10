@@ -13,6 +13,27 @@ obs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(obs)
 
 
+@pytest.mark.parametrize('body', [None, {}, {'seed': 'ok', 'index': 72},
+                                  {'seed': '../escape', 'index': 0}, {'seed': 'ok', 'index': True},
+                                  {'seed': 'ok', 'index': 0, 'source': 'arbitrary code'}])
+def test_campaign_endpoint_never_accepts_source_or_unbounded_selectors(body):
+    with pytest.raises(obs.Refused):
+        obs.campaign_case(body)
+
+
+def test_campaign_shares_slot_and_releases_it_on_failure(monkeypatch):
+    import sys
+    released = []
+    monkeypatch.setitem(sys.modules, 'histor_fixtures', SimpleNamespace(
+        generate=lambda seed: [{'id': 'fixture'}] * 72,
+        observe_case=lambda *args: (_ for _ in ()).throw(RuntimeError('unavailable'))))
+    monkeypatch.setitem(sys.modules, obs.__name__, obs)
+    monkeypatch.setattr(obs, 'slot', lambda: SimpleNamespace(close=lambda: released.append(True)))
+    with pytest.raises(RuntimeError):
+        obs.campaign_case({'seed': 'test', 'index': 0})
+    assert released == [True]
+
+
 def test_missing_trace_and_missing_source_are_never_clean(tmp_path, monkeypatch):
     monkeypatch.setattr(obs, "TRACE_ROOT", tmp_path)
     r = obs.read_trace("none", [("startup", 0, 9999999999)], "entry", None)["startup"]

@@ -10,6 +10,7 @@ COPY scanner/package.json scanner/package-lock.json ./scanner/
 COPY scanner/vendor ./scanner/vendor
 RUN npm ci --prefix scanner --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY scanner/scan.mjs ./scanner/
+COPY scanner/quality ./scanner/quality
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY histor ./histor
 COPY docs/landing ./docs/landing

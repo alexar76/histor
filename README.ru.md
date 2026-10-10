@@ -33,6 +33,8 @@
   <a href="README.zh.md">中文</a>
 </p>
 
+> [Цикл контроля качества WARDEN: MOMUS → AI-Factory → SKOPOS → общий нод-агент → деплой](../momus/docs/quality-cycle.ru.md).
+
 **Сервис:** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Лендинг:** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
 **Capabilities:** `histor.check@v1` · `histor.server@v1` · `histor.changes@v1` ·

@@ -40,6 +40,8 @@
   <a href="README.zh.md">中文</a>
 </p>
 
+> [WARDEN quality cycle: MOMUS → AI-Factory → SKOPOS → shared node agent → deployment](../momus/docs/quality-cycle.md).
+
 **Live:** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Landing:** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
 **Capabilities:** `histor.check@v1` · `histor.server@v1` · `histor.changes@v1` ·

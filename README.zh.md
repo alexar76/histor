@@ -33,6 +33,8 @@
   <a href="README.zh.md"><b>中文</b></a>
 </p>
 
+> [WARDEN 质量检查周期：MOMUS → AI-Factory → SKOPOS → 共享节点智能体 → 部署](../momus/docs/quality-cycle.zh.md).
+
 **在线服务：** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **落地页：** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
 **能力：** `histor.check@v1` · `histor.server@v1` · `histor.changes@v1` ·

@@ -33,6 +33,8 @@
   <a href="README.zh.md">中文</a>
 </p>
 
+> [Cycle de contrôle qualité de WARDEN : MOMUS → AI-Factory → SKOPOS → agent de nœud partagé → déploiement](../momus/docs/quality-cycle.fr.md).
+
 **En ligne :** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Page d’accueil :** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
 **Capacités :** `histor.check@v1` · `histor.server@v1` · `histor.changes@v1` ·
