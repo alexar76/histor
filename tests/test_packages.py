@@ -191,6 +191,14 @@ def test_the_channel_sends_nothing_to_a_certificate_it_was_not_pinned_to(tmp_pat
             self.end_headers()
             self.wfile.write(body)
 
+        def do_GET(self):
+            seen.append(self.headers.get("Authorization", ""))
+            body = json.dumps({"observer": "3", "gvisor": True, "path": self.path}).encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
     srv = HTTPServer(("127.0.0.1", 0), H)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert, key)
@@ -203,6 +211,10 @@ def test_the_channel_sends_nothing_to_a_certificate_it_was_not_pinned_to(tmp_pat
         wrong = PackageReader(url, "s" * 40, PIN, timeout=10)
         assert wrong.observe("npm", "x", "1.0.0").status == SANDBOX_ERROR
         assert len(seen) == 1, "the token never reached a server with another certificate"
+        assert good.selftest()["path"] == "/selftest" and len(seen) == 2
+        with pytest.raises(ssl.SSLError):
+            wrong.selftest()
+        assert len(seen) == 2, "nor did the self-test's"
     finally:
         srv.shutdown()
 

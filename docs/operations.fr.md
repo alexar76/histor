@@ -187,3 +187,57 @@ HISTOR_SANDBOX_CERT_SHA256=<affiché par install.sh>
 HISTOR épingle le certificat : il vérifie l’empreinte avant d’envoyer le moindre octet, jeton compris. Deux pièges rencontrés pendant la mise en place : sur un réseau Docker défini par l’utilisateur, gVisor n’atteint pas le DNS intégré de Docker (`127.0.0.11`), donc l’étape d’installation reçoit son propre `resolv.conf` ; et le `--memory-swap` par défaut de Docker double la limite mémoire — une allocation de 900 Mo passait dans un conteneur de 512 Mo jusqu’à ce que le swap soit fixé égal à la mémoire. Journaux : `journalctl -u histor-sandbox`.
 
 **Débit.** `HISTOR_SANDBOX_SLOTS` dans `/etc/histor-sandbox.env` (2 par défaut) est le nombre de paquets que l’hôte du bac à sable exécute à la fois ; chacun prend jusqu’à 1 Go pendant l’installation et 512 Mo pendant l’exécution. Réglez `HISTOR_SANDBOX_CONCURRENCY` d’HISTOR sur le même nombre. `HISTOR_SANDBOX_MAX_PER_CRAWL` plafonne les versions exécutées par exploration. Une observation complète prend 13 à 60 s : trois emplacements traitent environ 500 paquets par heure.
+
+### Plusieurs hôtes de bac à sable
+
+Un HISTOR répartit les paquets sur au plus **8** hôtes de bac à sable. Le premier se règle avec `HISTOR_SANDBOX_URL` / `_TOKEN` / `_CERT_SHA256` et `HISTOR_SANDBOX_CONCURRENCY` ; les autres avec `HISTOR_SANDBOX_2_URL` / `_TOKEN` / `_CERT_SHA256` / `_CONCURRENCY` … jusqu’à `HISTOR_SANDBOX_8_*`. Un paquet va à l’hôte qui a un emplacement libre, à tour de rôle, si bien qu’un hôte plus rapide en prend simplement davantage. Quand un hôte tombe en panne en tant qu’infrastructure — injoignable, mauvais certificat, `busy`, gVisor absent — le paquet est tenté une fois sur un autre hôte et l’hôte défaillant se repose 60 s : il n’est repris plus tôt que si aucun autre n’a d’emplacement libre. Le résultat propre d’un paquet (`exited`, `install-failed`, `timeout`, …) n’est jamais retenté ailleurs : tous les hôtes exécutent le même observateur, un autre dirait la même chose. Ce n’est que si les deux tentatives échouent que la panne est enregistrée comme celle d’HISTOR (`sandbox-error`), jamais comme une étiquette sur le paquet. Les questions aux registres (dernière version, provenance, éditeur) sont posées par HISTOR lui-même, pas par un bac à sable.
+
+**Les limites, et pourquoi.**
+
+| Limite | Valeur | Pourquoi |
+|---|---|---|
+| Hôtes | 8 : `HISTOR_SANDBOX_URL`, puis `_2_` … `_8_` | Chaque hôte exécute le code d’inconnus et garde son propre pare-feu vérifié, son jeton et son certificat, sur la même version de gVisor et de l’observateur ; au-delà de huit, cet entretien coûte plus que le débit n’apporte. `HISTOR_SANDBOX_9_URL` empêche le démarrage. |
+| Emplacements par hôte | 1–8 : `HISTOR_SANDBOX_N_CONCURRENCY`, égal au `HISTOR_SANDBOX_SLOTS` de cet hôte | Un emplacement prend jusqu’à 1 Go pendant l’installation, puis 512 Mo et un CPU pendant l’exécution : huit emplacements demandent déjà une machine de 16 cœurs et 16 Go. Un nombre plus grand est ramené à 8. |
+| En cours, tous hôtes confondus | 12 par défaut : `HISTOR_SANDBOX_MAX_SLOTS`, au plus 32 | Chaque observation occupe l’un des workers d’exploration d’HISTOR (`HISTOR_CRAWL_WORKERS`, 12) jusqu’à `HISTOR_SANDBOX_TIMEOUT_S` et peut mettre en mémoire une réponse de 32 Mio dans le conteneur de 768 Mo d’HISTOR. Douze emplacements à 13–60 s par paquet traitent environ 700 à 3 300 paquets par heure — toute la liste curée d’environ 40 000 en un à deux jours. Dépasser 12 impose de relever aussi `HISTOR_CRAWL_WORKERS` et `HISTOR_MEM_LIMIT`. |
+
+HISTOR refuse aussi de démarrer avec un hôte à moitié configuré (une URL sans son jeton ou son empreinte), avec des hôtes supplémentaires sans le premier, ou avec la même URL deux fois : un hôte écarté en silence ressemblerait à une exploration lente, pas à une faute de frappe.
+
+**Ajouter un hôte de bac à sable, dans l’ordre.**
+
+1. **Vérifier la machine.** Ubuntu 24.04 avec Docker sur x86-64 ; par emplacement, environ 1,5 Go de mémoire libre et un cœur. L’observateur a besoin pour lui seul du sous-réseau `10.231.0.0/24` et des ports 9443, 18025, 18080, 18443 et 18587 — les deux commandes ne doivent rien afficher :
+   ```bash
+   ip route | grep '10\.231\.'
+   ss -ltn | grep -E ':(9443|18025|18080|18443|18587)\b'
+   ```
+2. **Installer gVisor** depuis le dépôt de Google, épinglé à la même version que sur les autres hôtes (voir « Préparer l’hôte du bac à sable » plus haut), puis `runsc install && systemctl reload docker`.
+3. **Copier l’observateur depuis le même commit que les autres hôtes.** Chaque hôte doit exécuter la version de l’observateur qu’attend HISTOR (`HISTOR_SANDBOX_OBSERVER`) : un hôte sur une autre version donnerait d’autres preuves pour ses paquets.
+   ```bash
+   rsync -a histor/sandbox/ <hôte du bac à sable>:/opt/histor-sandbox/
+   ```
+4. **Installer en root**, en n’ouvrant le 9443 qu’à l’hôte d’HISTOR :
+   ```bash
+   sudo HISTOR_CALLER_IP=<IP de l’hôte d’HISTOR> /opt/histor-sandbox/install.sh
+   ```
+   Il affiche le SHA-256 du certificat et se termine par un auto-test qui doit indiquer `"gvisor":true`. Sans ufw, ouvrez le 9443 à la seule IP d’HISTOR dans le pare-feu de l’hôte ou du fournisseur.
+5. **Le dimensionner.** Réglez `HISTOR_SANDBOX_SLOTS` dans `/etc/histor-sandbox.env` selon la machine, puis `systemctl restart histor-sandbox`.
+6. **Confier l’hôte à HISTOR**, dans son `.env`, sous le prochain numéro libre. Chaque hôte a son propre jeton ; déplacez-le sans l’afficher :
+   ```bash
+   ssh <hôte du bac à sable> "sudo sed -n 's/^HISTOR_SANDBOX_TOKEN=/HISTOR_SANDBOX_2_TOKEN=/p' /etc/histor-sandbox.env" \
+     | ssh <hôte d’HISTOR> 'cat >> /opt/histor/.env'
+   ```
+   et ajoutez le reste à la main :
+   ```bash
+   HISTOR_SANDBOX_2_URL=https://<IP de l’hôte du bac à sable>:9443
+   HISTOR_SANDBOX_2_CERT_SHA256=<affiché par install.sh>
+   HISTOR_SANDBOX_2_CONCURRENCY=<HISTOR_SANDBOX_SLOTS de cet hôte>
+   ```
+   Avec plus d’emplacements, relevez aussi `HISTOR_SANDBOX_MAX_PER_CRAWL` — sinon une exploration observe le même nombre de paquets, seulement plus tôt.
+7. **Redémarrer HISTOR avec le nouveau `.env` :** `./scripts/deploy_histor.sh --remote <hôte d’HISTOR>`. Il recrée le conteneur (le `.env` de l’hôte est conservé) et relance l’exploration que le redémarrage a interrompue ; ce qu’elle a déjà validé reste, et les versions pas encore observées passent ensuite.
+8. **Vérifier chaque hôte depuis HISTOR**, par le même canal épinglé que l’exploration :
+   ```bash
+   docker compose -p histor exec -T histor python -m histor sandboxes
+   ```
+   Une ligne par hôte : numéro, adresse, emplacements, observateur, `gvisor`, `trace`, `observeNetwork`, `ok`. Le code de sortie est non nul si un hôte n’est pas prêt — injoignable, mauvaise empreinte ou mauvais jeton, autre version de l’observateur. Les jetons ne sont jamais affichés.
+9. **Suivre la première exploration.** `/api/v1/stats` montre `crawl.sandboxHosts` (hôtes configurés) puis, à la fin de l’exploration, `lastRun.sandboxHosts` : par numéro d’hôte, combien de paquets chacun a observés et combien de fois il a échoué. Sur un hôte du bac à sable : `journalctl -u histor-sandbox`.
+
+**Nouvelle version de l’observateur :** mettez d’abord à jour tous les hôtes (`install.sh` à nouveau depuis le nouveau commit — il est idempotent), vérifiez avec `histor sandboxes`, et seulement ensuite relevez `HISTOR_SANDBOX_OBSERVER` côté HISTOR. **Retirer un hôte :** supprimez ses quatre lignes et redémarrez HISTOR ; les numéros n’ont pas à se suivre.

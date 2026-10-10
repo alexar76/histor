@@ -354,6 +354,7 @@ def create_app(services: Services) -> FastAPI:
                 "progress": services.crawler.progress,
                 "intervalSeconds": settings.crawl_interval_s,
                 "lastError": last_crawl_error(),
+                "sandboxHosts": (1 + len(settings.sandbox_extra)) if settings.sandbox_enabled else 0,
             },
         }
         if run:
@@ -370,6 +371,7 @@ def create_app(services: Services) -> FastAPI:
                 "statuses": s.get("statuses", {}),
                 "labelsIssued": s.get("labels_issued", {}),
                 "changes": s.get("changes"),
+                "sandboxHosts": s.get("sandbox_hosts"),
                 "error": s.get("error"),
             }
         return out

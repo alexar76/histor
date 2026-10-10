@@ -185,3 +185,57 @@ HISTOR_SANDBOX_CERT_SHA256=<impreso por install.sh>
 HISTOR fija el certificado: comprueba la huella antes de enviar un solo byte, token incluido. Dos trampas encontradas al montarlo: en una red de Docker definida por el usuario, gVisor no llega al DNS integrado de Docker (`127.0.0.11`), así que la fase de instalación recibe su propio `resolv.conf`; y el `--memory-swap` por defecto de Docker duplica el límite de memoria: una reserva de 900 MB pasaba en un contenedor de 512 MB hasta que el swap se igualó a la memoria. Registros: `journalctl -u histor-sandbox`.
 
 **Rendimiento.** `HISTOR_SANDBOX_SLOTS` en `/etc/histor-sandbox.env` (2 por defecto) es cuántos paquetes ejecuta a la vez el host del sandbox; cada uno ocupa hasta 1 GB al instalarse y 512 MB al ejecutarse. Pon `HISTOR_SANDBOX_CONCURRENCY` de HISTOR al mismo número. `HISTOR_SANDBOX_MAX_PER_CRAWL` limita las versiones que ejecuta un rastreo. Una observación completa tarda 13–60 s, así que tres huecos procesan unos 500 paquetes por hora.
+
+### Varios hosts de sandbox
+
+Un HISTOR reparte los paquetes entre hasta **8** hosts de sandbox. El primero se define con `HISTOR_SANDBOX_URL` / `_TOKEN` / `_CERT_SHA256` y `HISTOR_SANDBOX_CONCURRENCY`; los demás con `HISTOR_SANDBOX_2_URL` / `_TOKEN` / `_CERT_SHA256` / `_CONCURRENCY` … hasta `HISTOR_SANDBOX_8_*`. Un paquete va al host que tenga un hueco libre, por turnos, así que un host más rápido simplemente toma más. Cuando un host falla como infraestructura —inalcanzable, certificado equivocado, `busy`, sin gVisor— el paquete se intenta una vez en otro host y el que falló descansa 60 s: se vuelve a usar antes solo si ningún otro tiene un hueco libre. El resultado propio de un paquete (`exited`, `install-failed`, `timeout`, …) nunca se repite en otro host: todos ejecutan el mismo observador, y otro host diría lo mismo. Solo si fallan los dos intentos se registra el fallo como propio de HISTOR (`sandbox-error`), nunca como una etiqueta sobre el paquete. Las preguntas a los registros (última versión, procedencia, publicador) las hace el propio HISTOR, no un sandbox.
+
+**Los límites y por qué.**
+
+| Límite | Valor | Por qué |
+|---|---|---|
+| Hosts | 8: `HISTOR_SANDBOX_URL`, luego `_2_` … `_8_` | Cada host ejecuta código ajeno y mantiene su propio cortafuegos verificado, token y certificado con la misma versión de gVisor y del observador; pasado ocho, ese mantenimiento cuesta más de lo que aporta el rendimiento. `HISTOR_SANDBOX_9_URL` detiene el arranque. |
+| Huecos por host | 1–8: `HISTOR_SANDBOX_N_CONCURRENCY`, igual a `HISTOR_SANDBOX_SLOTS` de ese host | Un hueco ocupa hasta 1 GB al instalar y luego 512 MB y una CPU al ejecutar: ocho huecos ya piden una máquina de 16 núcleos y 16 GB. Un número mayor se recorta a 8. |
+| En curso, todos los hosts juntos | 12 por defecto: `HISTOR_SANDBOX_MAX_SLOTS`, como mucho 32 | Cada observación ocupa uno de los trabajadores de rastreo de HISTOR (`HISTOR_CRAWL_WORKERS`, 12) hasta `HISTOR_SANDBOX_TIMEOUT_S` y puede almacenar una respuesta de 32 MiB en el contenedor de 768 MB de HISTOR. Doce huecos a 13–60 s por paquete procesan unos 700–3 300 paquetes por hora: toda la lista curada de ~40 000 en uno o dos días. Pasar de 12 obliga a subir también `HISTOR_CRAWL_WORKERS` y `HISTOR_MEM_LIMIT`. |
+
+HISTOR tampoco arranca con un host a medio configurar (una URL sin su token o su huella), con hosts adicionales sin el primero, o con la misma URL dos veces: un host descartado en silencio parecería un rastreo lento, no una errata.
+
+**Añadir un host de sandbox, en orden.**
+
+1. **Comprobar la máquina.** Ubuntu 24.04 con Docker en x86-64; por hueco, alrededor de 1,5 GB de memoria libre y un núcleo. El observador necesita para sí la subred `10.231.0.0/24` y los puertos 9443, 18025, 18080, 18443 y 18587; ninguna de las dos órdenes debe imprimir nada:
+   ```bash
+   ip route | grep '10\.231\.'
+   ss -ltn | grep -E ':(9443|18025|18080|18443|18587)\b'
+   ```
+2. **Instalar gVisor** desde el repositorio de Google, fijado a la misma versión que en los demás hosts (ver «Preparar el host del sandbox» arriba), y luego `runsc install && systemctl reload docker`.
+3. **Copiar el observador del mismo commit que en los demás hosts.** Todos deben ejecutar la versión del observador que HISTOR espera (`HISTOR_SANDBOX_OBSERVER`): un host con otra versión daría otra evidencia a sus paquetes.
+   ```bash
+   rsync -a histor/sandbox/ <host del sandbox>:/opt/histor-sandbox/
+   ```
+4. **Instalar como root**, abriendo el 9443 solo al host de HISTOR:
+   ```bash
+   sudo HISTOR_CALLER_IP=<IP del host de HISTOR> /opt/histor-sandbox/install.sh
+   ```
+   Imprime el SHA-256 del certificado y termina con una autoprueba que debe decir `"gvisor":true`. Sin ufw, abre el 9443 solo a la IP de HISTOR en el cortafuegos del host o del proveedor.
+5. **Dimensionarlo.** Fija `HISTOR_SANDBOX_SLOTS` en `/etc/histor-sandbox.env` según la máquina y luego `systemctl restart histor-sandbox`.
+6. **Dar el host a HISTOR**, en su `.env`, con el siguiente número libre. Cada host tiene su propio token; muévelo sin mostrarlo:
+   ```bash
+   ssh <host del sandbox> "sudo sed -n 's/^HISTOR_SANDBOX_TOKEN=/HISTOR_SANDBOX_2_TOKEN=/p' /etc/histor-sandbox.env" \
+     | ssh <host de HISTOR> 'cat >> /opt/histor/.env'
+   ```
+   y añade el resto a mano:
+   ```bash
+   HISTOR_SANDBOX_2_URL=https://<IP del host del sandbox>:9443
+   HISTOR_SANDBOX_2_CERT_SHA256=<lo imprimió install.sh>
+   HISTOR_SANDBOX_2_CONCURRENCY=<HISTOR_SANDBOX_SLOTS de ese host>
+   ```
+   Con más huecos, sube también `HISTOR_SANDBOX_MAX_PER_CRAWL`; si no, un rastreo observa el mismo número de paquetes, solo que antes.
+7. **Reiniciar HISTOR con el nuevo `.env`:** `./scripts/deploy_histor.sh --remote <host de HISTOR>`. Recrea el contenedor (se conserva el `.env` del host) y vuelve a lanzar el rastreo que el reinicio interrumpió; lo que ese rastreo ya confirmó se queda, y siguen las versiones aún no observadas.
+8. **Comprobar cada host desde HISTOR**, por el mismo canal fijado que usa el rastreo:
+   ```bash
+   docker compose -p histor exec -T histor python -m histor sandboxes
+   ```
+   Una línea por host: número, dirección, huecos, observador, `gvisor`, `trace`, `observeNetwork`, `ok`. Sale con código distinto de cero si algún host no está listo: inalcanzable, huella o token equivocados, u otra versión del observador. Los tokens nunca se imprimen.
+9. **Vigilar el primer rastreo.** `/api/v1/stats` muestra `crawl.sandboxHosts` (hosts configurados) y, al terminar el rastreo, `lastRun.sandboxHosts`: por número de host, cuántos paquetes observó cada uno y cuántas veces falló. En un host del sandbox: `journalctl -u histor-sandbox`.
+
+**Una versión nueva del observador:** actualiza primero todos los hosts (`install.sh` otra vez desde el nuevo commit; es idempotente), compruébalo con `histor sandboxes` y solo entonces sube `HISTOR_SANDBOX_OBSERVER` en HISTOR. **Quitar un host:** borra sus cuatro líneas y reinicia HISTOR; los números no tienen que ser consecutivos.

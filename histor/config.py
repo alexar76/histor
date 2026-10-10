@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,6 +25,39 @@ def _int(name: str, default: int, *, minimum: int = 0) -> int:
     if value < minimum:
         raise RuntimeError(f"{name} must be >= {minimum}, got {value}")
     return value
+
+
+# Sandbox hosts: the first is HISTOR_SANDBOX_URL, then HISTOR_SANDBOX_2_* … _8_*. A host's own
+# capacity is its HISTOR_SANDBOX_SLOTS (a 4-core machine runs 2-4); more than 8 per host is never useful.
+SANDBOX_HOSTS = 8
+SANDBOX_SLOTS_PER_HOST = 8
+
+
+def _sandbox_extra() -> tuple[tuple[str, str, str, int], ...]:
+    """HISTOR_SANDBOX_2_* … _8_*. A half-configured host, a host past the eighth, a host listed twice
+    or extra hosts without the first one stop the start: a silently dropped host would look like
+    a slow crawl, not like a typo."""
+    get = lambda name: os.environ.get(name, "").strip()  # noqa: E731
+    beyond = sorted(k for k in os.environ if (m := re.fullmatch(r"HISTOR_SANDBOX_(\d+)_URL", k))
+                    and not 2 <= int(m.group(1)) <= SANDBOX_HOSTS and get(k))
+    if beyond:
+        raise RuntimeError(f"at most {SANDBOX_HOSTS} sandbox hosts (HISTOR_SANDBOX_URL, then _2_ … "
+                           f"_{SANDBOX_HOSTS}_); remove {', '.join(beyond)}")
+    out = []
+    for n in range(2, SANDBOX_HOSTS + 1):
+        url, token, pin = (get(f"HISTOR_SANDBOX_{n}_{k}") for k in ("URL", "TOKEN", "CERT_SHA256"))
+        if not (url or token or pin):
+            continue
+        if not (url and token and pin):
+            raise RuntimeError(f"HISTOR_SANDBOX_{n}_URL, _TOKEN and _CERT_SHA256 go together")
+        out.append((url.rstrip("/"), token, pin,
+                    min(_int(f"HISTOR_SANDBOX_{n}_CONCURRENCY", 2, minimum=1), SANDBOX_SLOTS_PER_HOST)))
+    if out and not (get("HISTOR_SANDBOX_URL") and get("HISTOR_SANDBOX_TOKEN") and get("HISTOR_SANDBOX_CERT_SHA256")):
+        raise RuntimeError("HISTOR_SANDBOX_2_* and later need the first host (HISTOR_SANDBOX_URL, _TOKEN, _CERT_SHA256)")
+    urls = [get("HISTOR_SANDBOX_URL").rstrip("/")] + [u for u, *_ in out]
+    if len(set(urls)) != len(urls):
+        raise RuntimeError("a sandbox host is listed twice: each HISTOR_SANDBOX_*_URL must be a different host")
+    return tuple(out)
 
 
 @dataclass(frozen=True)
@@ -73,6 +107,12 @@ class Settings:
     # (histor/sandbox/histor_observe.py VERSION; 2 = behaviour).
     sandbox_observer: str = "3"
     sandbox_timeout_s: int = 420
+    # More sandbox hosts (HISTOR_SANDBOX_2_URL/_TOKEN/_CERT_SHA256/_CONCURRENCY, up to _8_): each is
+    # (url, token, pin, concurrency 1..8). The crawl hands a package to whichever host has a free slot.
+    sandbox_extra: tuple[tuple[str, str, str, int], ...] = field(default=(), repr=False)
+    # Observations in flight across all hosts. Each holds a crawl thread (HISTOR_CRAWL_WORKERS, 12) for
+    # up to sandbox_timeout_s and may buffer a 32 MiB answer in HISTOR's 768 MB container.
+    sandbox_max_slots: int = 12
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -164,9 +204,11 @@ def load_settings() -> Settings:
         sandbox_token=os.environ.get("HISTOR_SANDBOX_TOKEN", "").strip(),
         sandbox_cert_sha256=os.environ.get("HISTOR_SANDBOX_CERT_SHA256", "").strip(),
         sandbox_max_per_crawl=_int("HISTOR_SANDBOX_MAX_PER_CRAWL", 300, minimum=0),
-        sandbox_concurrency=_int("HISTOR_SANDBOX_CONCURRENCY", 2, minimum=1),
+        sandbox_concurrency=min(_int("HISTOR_SANDBOX_CONCURRENCY", 2, minimum=1), SANDBOX_SLOTS_PER_HOST),
+        sandbox_max_slots=min(_int("HISTOR_SANDBOX_MAX_SLOTS", 12, minimum=1), 32),
         sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "3").strip(),
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 420, minimum=30),
+        sandbox_extra=_sandbox_extra(),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

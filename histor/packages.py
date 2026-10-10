@@ -21,6 +21,8 @@ import http.client
 import json
 import re
 import ssl
+import threading
+import time
 import urllib.parse
 from typing import Any
 
@@ -156,7 +158,17 @@ class PackageReader:
                            protocol_version=str(doc.get("protocolVersion") or "")[:40], pages=1,
                            package_version=observed, package_observer=observer, behaviour=behaviour)
 
+    def selftest(self) -> dict[str, Any]:
+        """The host's own self-test (gVisor, tracing runtime, network, observer version)."""
+        code, doc = self._request("GET", "/selftest", None)
+        if code != 200 or not isinstance(doc, dict):
+            raise ValueError(f"the sandbox answered {code}")
+        return doc
+
     def _post(self, path: str, body: dict[str, Any]) -> tuple[int, Any]:
+        return self._request("POST", path, body)
+
+    def _request(self, method: str, path: str, body: dict[str, Any] | None) -> tuple[int, Any]:
         # Pinned, not CA-verified: the sandbox's certificate is self-signed, and the fingerprint
         # is the whole of the trust — checked before a byte of the request (or the token) is sent.
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -169,11 +181,11 @@ class PackageReader:
             der = conn.sock.getpeercert(binary_form=True) if conn.sock else None
             if not der or hashlib.sha256(der).hexdigest() != self.pin:
                 raise ssl.SSLError("the sandbox certificate does not match the pinned fingerprint")
-            payload = json.dumps(body).encode()
-            conn.request("POST", path, body=payload, headers={
-                "Authorization": f"Bearer {self.token}", "Content-Type": "application/json",
-                "Content-Length": str(len(payload)), "User-Agent": USER_AGENT,
-            })
+            payload = json.dumps(body).encode() if body is not None else b""
+            headers = {"Authorization": f"Bearer {self.token}", "User-Agent": USER_AGENT}
+            if body is not None:
+                headers.update({"Content-Type": "application/json", "Content-Length": str(len(payload))})
+            conn.request(method, path, body=payload or None, headers=headers)
             res = conn.getresponse()
             raw = res.read(32 * 1024 * 1024)
             return res.status, json.loads(raw) if raw else {}
@@ -216,4 +228,107 @@ def version_signals(current: dict[str, Any] | None, previous: dict[str, Any] | N
     if current.get("installScripts") and "install-scripts-added" not in flags:
         flags.append("install-scripts")
     out["flags"] = flags
+    return out
+
+
+class SandboxPool:
+    """Several sandbox hosts behind the interface of one PackageReader.
+
+    Registry questions (latest version, version facts) go to the first reader: they are HTTP calls
+    to npm and PyPI, not sandbox work. An observation goes to a host with a free slot, so a faster
+    host simply takes more packages; if the chosen host fails as infrastructure (SANDBOX_ERROR),
+    the package is tried once on another host before the failure is recorded as ours.
+    """
+
+    def __init__(self, members: list[tuple[PackageReader, int]], *, max_slots: int = 12) -> None:
+        if not members:
+            raise ValueError("a sandbox pool needs at least one host")
+        self.members = [(reader, threading.BoundedSemaphore(max(1, slots))) for reader, slots in members]
+        # The crawl admits at most this many observations at once, whatever the hosts could take.
+        self.capacity = min(sum(max(1, slots) for _, slots in members), max_slots)
+        self.lock = threading.Lock()
+        self.next = 0
+        # A host that failed as infrastructure is passed over for a while, so a dead or hung host
+        # does not take every other package's first attempt; it is used again when nothing else is free.
+        self.resting_until = [0.0] * len(self.members)
+        self.counts = [{"observed": 0, "errors": 0} for _ in self.members]
+
+    def close(self) -> None:
+        for reader, _ in self.members:
+            reader.close()
+
+    def latest_version(self, registry: str, name: str) -> str | None:
+        return self.members[0][0].latest_version(registry, name)
+
+    def version_facts(self, registry: str, name: str, version: str) -> dict[str, Any] | None:
+        return self.members[0][0].version_facts(registry, name, version)
+
+    REST_S = 60.0
+
+    def _take(self, skip: int | None = None) -> int:
+        """Index of a host with a free slot, round-robin and resting hosts last; blocks until one frees."""
+        while True:
+            with self.lock:
+                now = time.monotonic()
+                order = [(self.next + i) % len(self.members) for i in range(len(self.members))]
+                order.sort(key=lambda i: self.resting_until[i] > now)  # stable: healthy hosts first
+                for i in order:
+                    if i != skip and self.members[i][1].acquire(blocking=False):
+                        self.next = (i + 1) % len(self.members)
+                        return i
+            time.sleep(0.2)
+
+    def _run(self, i: int, registry: str, name: str, version: str | None) -> Observation:
+        try:
+            obs = self.members[i][0].observe(registry, name, version)
+        finally:
+            self.members[i][1].release()
+        with self.lock:
+            failed = obs.status == SANDBOX_ERROR
+            self.counts[i]["errors" if failed else "observed"] += 1
+            self.resting_until[i] = time.monotonic() + self.REST_S if failed else 0.0
+        return obs
+
+    def observe(self, registry: str, name: str, version: str | None) -> Observation:
+        first = self._take()
+        obs = self._run(first, registry, name, version)
+        if obs.status != SANDBOX_ERROR or len(self.members) == 1:
+            return obs
+        return self._run(self._take(skip=first), registry, name, version)
+
+    def take_counts(self) -> dict[str, dict[str, int]]:
+        """Per host, what it did since the last call; then start counting again. Hosts are named by
+        their number in the configuration (1 = HISTOR_SANDBOX_URL, 2 = HISTOR_SANDBOX_2_URL, …),
+        never by address: the run record should not carry an infrastructure IP."""
+        with self.lock:
+            out = {str(i + 1): dict(c) for i, c in enumerate(self.counts)}
+            self.counts = [{"observed": 0, "errors": 0} for _ in self.members]
+            return out
+
+
+def sandbox_readers(settings: Any) -> list[tuple[PackageReader, int]]:
+    """Every configured sandbox host with its slots, in configuration order (1, 2, …)."""
+    first = PackageReader(settings.sandbox_url, settings.sandbox_token, settings.sandbox_cert_sha256,
+                          timeout=settings.sandbox_timeout_s)
+    return [(first, settings.sandbox_concurrency)] + [
+        (PackageReader(url, token, pin, timeout=settings.sandbox_timeout_s), slots)
+        for url, token, pin, slots in settings.sandbox_extra]
+
+
+def check_sandboxes(settings: Any) -> list[dict[str, Any]]:
+    """``histor sandboxes``: each host's self-test over the pinned channel. Addresses, never tokens."""
+    out = []
+    for n, (reader, slots) in enumerate(sandbox_readers(settings), start=1):
+        row: dict[str, Any] = {"host": n, "address": f"{reader.host}:{reader.port}", "slots": slots}
+        try:
+            doc = reader.selftest()
+            row.update(observer=doc.get("observer"), gvisor=doc.get("gvisor") is True,
+                       trace=doc.get("trace") is True, observeNetwork=doc.get("observeNetwork") is True)
+            row["ok"] = bool(row["gvisor"] and row["trace"] and row["observeNetwork"]
+                             and row["observer"] == settings.sandbox_observer)
+        except (OSError, ssl.SSLError, http.client.HTTPException, ValueError) as exc:
+            row.update(ok=False, error=f"{type(exc).__name__}: {exc}"[:200])
+        finally:
+            reader.close()
+        out.append(row)
     return out

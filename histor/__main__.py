@@ -1,4 +1,4 @@
-"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL``."""
+"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL`` · ``histor sandboxes``."""
 
 from __future__ import annotations
 
@@ -26,6 +26,17 @@ def main(argv: list[str] | None = None) -> int:
     from histor.service import build
 
     settings = load_settings()
+    if command == "sandboxes":
+        # Reaches only the sandbox hosts: no database, no keys, so it runs beside a live service.
+        from histor.packages import check_sandboxes
+
+        if not settings.sandbox_enabled:
+            print("no sandbox configured (HISTOR_SANDBOX_URL, _TOKEN, _CERT_SHA256)", file=sys.stderr)
+            return 1
+        rows = check_sandboxes(settings)
+        for row in rows:
+            print(json.dumps(row))
+        return 0 if all(r["ok"] for r in rows) else 1
     services = build(settings, serving=command == "serve")
     try:
         if command == "serve":
@@ -62,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|crawl|migrate [up|status]|issuer|audit URL]", file=sys.stderr)
+        print("usage: histor [serve|crawl|migrate [up|status]|issuer|audit URL|sandboxes]", file=sys.stderr)
         return 2
     finally:
         services.close()

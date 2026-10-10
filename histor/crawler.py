@@ -40,7 +40,14 @@ from histor.config import Settings
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
-from histor.packages import SANDBOX_ERROR, PackageReader, parse_package, version_signals
+from histor.packages import (
+    SANDBOX_ERROR,
+    PackageReader,
+    SandboxPool,
+    parse_package,
+    sandbox_readers,
+    version_signals,
+)
 from histor.registry import Target, curated_rank, curated_targets, harvest, load_opt_out, with_curated
 from histor.scanner import RuleSets, Scanner, ScannerError
 from histor.store import Store, dumps
@@ -71,7 +78,7 @@ PACKAGE_SANDBOX = "package-sandbox"
 
 def _host_of(endpoint: str) -> str:
     if parse_package(endpoint):
-        # Every package goes through the one sandbox host, bounded by sandbox_concurrency.
+        # Every package goes through the sandbox pool, bounded by its total slots.
         return PACKAGE_SANDBOX
     try:
         return (urlsplit(endpoint).hostname or "").lower()
@@ -118,7 +125,7 @@ class Crawler:
                  scanner: Scanner, *, reader: McpReader | None = None,
                  harvest_fn: Callable[[str], list[Target]] | None = None,
                  classifier: Classifier | None = None,
-                 packages: PackageReader | None = None,
+                 packages: PackageReader | SandboxPool | None = None,
                  clock: Callable[[], str] = utcnow) -> None:
         self.settings = settings
         self.store = store
@@ -129,8 +136,8 @@ class Crawler:
         self.reader = reader or McpReader(timeout=settings.crawl_timeout_s,
                                           allow_private=settings.allow_private_targets)
         if packages is None and settings.sandbox_enabled:
-            packages = PackageReader(settings.sandbox_url, settings.sandbox_token, settings.sandbox_cert_sha256,
-                                     timeout=settings.sandbox_timeout_s)
+            readers = sandbox_readers(settings)
+            packages = SandboxPool(readers, max_slots=settings.sandbox_max_slots) if len(readers) > 1 else readers[0][0]
         self.packages = packages
         self._due_versions: dict[str, str] = {}
         self._seen_versions: dict[str, str] = {}
@@ -199,6 +206,9 @@ class Crawler:
             classify_budget = self.settings.classifier_max_per_crawl if self.classifier else 0
             step = self.settings.crawl_batch
             internal: Counter[str] = Counter()
+            take_counts = getattr(self.packages, "take_counts", None)
+            if take_counts:
+                take_counts()  # count this crawl only
             for start in range(0, len(dialable), step):
                 prepared = self._observe(dialable[start : start + step])
                 statuses.update(p.obs.status for p in prepared)
@@ -229,6 +239,8 @@ class Crawler:
                 self.progress = {"done": start + len(prepared), "of": len(dialable)}
             if internal:
                 stats["internal_errors"] = dict(internal)
+            if take_counts:
+                stats["sandbox_hosts"] = take_counts()
             stats["statuses"] = dict(statuses)
             stats["labels_issued"] = dict(issued)
             stats["changes"] = changes
@@ -363,7 +375,7 @@ class Crawler:
         per_host: dict[str, threading.Semaphore] = defaultdict(
             lambda: threading.Semaphore(self.settings.crawl_per_host)
         )
-        per_host[PACKAGE_SANDBOX] = threading.Semaphore(self.settings.sandbox_concurrency)
+        per_host[PACKAGE_SANDBOX] = threading.Semaphore(getattr(self.packages, "capacity", self.settings.sandbox_concurrency))
         guard = threading.Lock()
 
         def one(t: Target) -> Prepared:

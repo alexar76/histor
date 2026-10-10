@@ -189,3 +189,57 @@ HISTOR_SANDBOX_CERT_SHA256=<printed by install.sh>
 HISTOR pins the certificate: it checks the fingerprint before it sends a byte, token included. Two traps found while setting it up: on a user-defined Docker network gVisor cannot reach Docker's embedded DNS (`127.0.0.11`), so the install stage gets its own `resolv.conf`; and Docker's default `--memory-swap` doubles the memory limit — a 900 MB allocation passed a 512 MB container until swap was set equal to memory. Logs: `journalctl -u histor-sandbox`.
 
 **Throughput.** `HISTOR_SANDBOX_SLOTS` in `/etc/histor-sandbox.env` (default 2) is how many packages the sandbox host runs at once — each takes up to 1 GB while installing and 512 MB while running; set HISTOR's `HISTOR_SANDBOX_CONCURRENCY` to the same number. `HISTOR_SANDBOX_MAX_PER_CRAWL` caps the versions one crawl runs. One observation takes 13–60 s end to end, so three slots run about 500 packages an hour.
+
+### Several sandbox hosts
+
+One HISTOR spreads packages over up to **8** sandbox hosts. The first is `HISTOR_SANDBOX_URL` / `_TOKEN` / `_CERT_SHA256` with `HISTOR_SANDBOX_CONCURRENCY`; the others are `HISTOR_SANDBOX_2_URL` / `_TOKEN` / `_CERT_SHA256` / `_CONCURRENCY` … up to `HISTOR_SANDBOX_8_*`. A package goes to whichever host has a free slot, round-robin, so a faster host simply takes more. When a host fails as infrastructure — unreachable, wrong certificate, `busy`, gVisor missing — the package is tried once on another host and the failing host rests for 60 s: it is used again sooner only when no other host has a free slot. A package's own result (`exited`, `install-failed`, `timeout`, …) is never retried elsewhere: every host runs the same observer, so another host would say the same. Only when both attempts fail is the failure recorded as HISTOR's own (`sandbox-error`), never as a label about the package. Registry questions (latest version, provenance, publisher) are asked by HISTOR itself, not by a sandbox.
+
+**The limits, and why.**
+
+| Limit | Value | Why |
+|---|---|---|
+| Hosts | 8: `HISTOR_SANDBOX_URL`, then `_2_` … `_8_` | Every host runs strangers' code and keeps its own verified firewall, token and certificate on the same gVisor release and observer; past eight that upkeep costs more than the throughput gives. `HISTOR_SANDBOX_9_URL` stops the start. |
+| Slots per host | 1–8: `HISTOR_SANDBOX_N_CONCURRENCY`, equal to that host's `HISTOR_SANDBOX_SLOTS` | One slot takes up to 1 GB while installing, then 512 MB and one CPU while running: eight slots already need a 16-core, 16 GB machine. A higher number is cut to 8. |
+| In flight, all hosts together | 12 by default: `HISTOR_SANDBOX_MAX_SLOTS`, at most 32 | Each observation holds one of HISTOR's crawl workers (`HISTOR_CRAWL_WORKERS`, 12) for up to `HISTOR_SANDBOX_TIMEOUT_S` and may buffer a 32 MiB answer in HISTOR's 768 MB container. Twelve slots at 13–60 s per package run about 700–3 300 packages an hour — the whole curated list of ~40 000 in one to two days. Going past 12 means raising `HISTOR_CRAWL_WORKERS` and `HISTOR_MEM_LIMIT` as well. |
+
+HISTOR also refuses to start with a half-configured host (a URL without its token or pin), with extra hosts but no first one, or with one URL listed twice: a silently dropped host would look like a slow crawl, not like a typo.
+
+**Adding a sandbox host, in order.**
+
+1. **Check the machine.** Ubuntu 24.04 with Docker on x86-64; per slot about 1.5 GB of free memory and one core. The observer needs the subnet `10.231.0.0/24` and the ports 9443, 18025, 18080, 18443 and 18587 for itself — both commands must print nothing:
+   ```bash
+   ip route | grep '10\.231\.'
+   ss -ltn | grep -E ':(9443|18025|18080|18443|18587)\b'
+   ```
+2. **Install gVisor** from Google's repository, pinned to the same release as the other hosts (see "Set up the sandbox host" above), then `runsc install && systemctl reload docker`.
+3. **Copy the observer from the same commit as the other hosts.** Every host must run the observer version HISTOR expects (`HISTOR_SANDBOX_OBSERVER`): a host on another version would make its packages' evidence differ.
+   ```bash
+   rsync -a histor/sandbox/ <sandbox host>:/opt/histor-sandbox/
+   ```
+4. **Install as root**, opening 9443 to HISTOR's host only:
+   ```bash
+   sudo HISTOR_CALLER_IP=<HISTOR host IP> /opt/histor-sandbox/install.sh
+   ```
+   It prints the certificate's SHA-256 and ends with a self-test that must say `"gvisor":true`. Without ufw, open 9443 to HISTOR's IP alone in the host's or the provider's firewall.
+5. **Size it.** Set `HISTOR_SANDBOX_SLOTS` in `/etc/histor-sandbox.env` for the machine, then `systemctl restart histor-sandbox`.
+6. **Give the host to HISTOR**, in its `.env`, under the next free number. Each host has its own token; move it without displaying it:
+   ```bash
+   ssh <sandbox host> "sudo sed -n 's/^HISTOR_SANDBOX_TOKEN=/HISTOR_SANDBOX_2_TOKEN=/p' /etc/histor-sandbox.env" \
+     | ssh <HISTOR host> 'cat >> /opt/histor/.env'
+   ```
+   and add the rest by hand:
+   ```bash
+   HISTOR_SANDBOX_2_URL=https://<sandbox host IP>:9443
+   HISTOR_SANDBOX_2_CERT_SHA256=<printed by install.sh>
+   HISTOR_SANDBOX_2_CONCURRENCY=<that host's HISTOR_SANDBOX_SLOTS>
+   ```
+   With more slots, raise `HISTOR_SANDBOX_MAX_PER_CRAWL` too — otherwise a crawl observes the same number of packages, only sooner.
+7. **Restart HISTOR with the new `.env`:** `./scripts/deploy_histor.sh --remote <HISTOR host>`. It recreates the container (the `.env` on the host is kept) and starts again a crawl the restart interrupted; what that crawl already committed stays, and the versions not yet observed are next.
+8. **Check every host from HISTOR**, over the same pinned channel the crawl uses:
+   ```bash
+   docker compose -p histor exec -T histor python -m histor sandboxes
+   ```
+   One line per host: number, address, slots, observer, `gvisor`, `trace`, `observeNetwork`, `ok`. It exits non-zero when any host is not ready — unreachable, wrong pin or token, or another observer version. Tokens are never printed.
+9. **Watch the first crawl.** `/api/v1/stats` shows `crawl.sandboxHosts` (hosts configured) and, once the crawl ends, `lastRun.sandboxHosts`: by host number, how many packages each observed and how many times it failed. On a sandbox host: `journalctl -u histor-sandbox`.
+
+**A new observer version:** update every host first (`install.sh` again from the new commit — it is idempotent), check with `histor sandboxes`, and only then raise `HISTOR_SANDBOX_OBSERVER` on HISTOR. **Removing a host:** delete its four lines and restart HISTOR; the numbers do not have to be contiguous.

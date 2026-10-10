@@ -172,3 +172,57 @@ HISTOR_SANDBOX_CERT_SHA256=<由 install.sh 打印>
 HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之前先核对指纹。部署时遇到的两个陷阱：在用户自定义的 Docker 网络上，gVisor 访问不到 Docker 内置的 DNS（`127.0.0.11`），所以安装阶段使用自己的 `resolv.conf`；Docker 默认的 `--memory-swap` 会把内存上限翻倍——在把 swap 设为与内存相同之前，900 MB 的分配能在 512 MB 的容器中成功。日志：`journalctl -u histor-sandbox`。
 
 **吞吐量。** `/etc/histor-sandbox.env` 中的 `HISTOR_SANDBOX_SLOTS`（默认 2）是沙箱主机同时运行的软件包数量；每个在安装时最多占用 1 GB，运行时 512 MB。把 HISTOR 的 `HISTOR_SANDBOX_CONCURRENCY` 设为相同的数。`HISTOR_SANDBOX_MAX_PER_CRAWL` 限制一次抓取运行的版本数。一次完整观察耗时 13–60 秒，因此三个槽位每小时约处理 500 个软件包。
+
+### 多个沙箱主机
+
+一个 HISTOR 最多可把软件包分配到 **8** 台沙箱主机。第一台由 `HISTOR_SANDBOX_URL` / `_TOKEN` / `_CERT_SHA256` 和 `HISTOR_SANDBOX_CONCURRENCY` 配置；其余由 `HISTOR_SANDBOX_2_URL` / `_TOKEN` / `_CERT_SHA256` / `_CONCURRENCY` … 直到 `HISTOR_SANDBOX_8_*` 配置。软件包轮流交给有空闲槽位的主机，因此更快的主机自然承担更多。当某台主机作为基础设施出错——不可达、证书不符、`busy`、缺少 gVisor——该软件包会在另一台主机上再试一次，出错的主机休息 60 秒：只有在其他主机都没有空闲槽位时才会提前再用它。软件包自身的结果（`exited`、`install-failed`、`timeout` 等）绝不会换主机重试：所有主机运行同一个观察程序，换一台也会得出同样结果。只有两次尝试都失败时，才把故障记为 HISTOR 自己的错误（`sandbox-error`），绝不记成关于该软件包的标签。向注册表提出的问题（最新版本、来源证明、发布者）由 HISTOR 自己发出，不经过沙箱。
+
+**限制及其理由。**
+
+| 限制 | 取值 | 理由 |
+|---|---|---|
+| 主机数 | 8：`HISTOR_SANDBOX_URL`，然后 `_2_` … `_8_` | 每台主机都运行陌生人的代码，并各自维护经过校验的防火墙、令牌和证书，且须保持相同的 gVisor 版本和观察程序版本；超过八台，这些维护成本就超过了吞吐量带来的收益。设置 `HISTOR_SANDBOX_9_URL` 会使启动失败。 |
+| 每台主机的槽位 | 1–8：`HISTOR_SANDBOX_N_CONCURRENCY`，等于该主机的 `HISTOR_SANDBOX_SLOTS` | 一个槽位安装时最多占 1 GB，运行时占 512 MB 和一个 CPU：八个槽位已需要 16 核、16 GB 的机器。更大的数会被截为 8。 |
+| 所有主机合计同时进行 | 默认 12：`HISTOR_SANDBOX_MAX_SLOTS`，最多 32 | 每次观察在 `HISTOR_SANDBOX_TIMEOUT_S` 内占用 HISTOR 的一个抓取工作线程（`HISTOR_CRAWL_WORKERS`，12），并可能在 HISTOR 的 768 MB 容器中缓存 32 MiB 的应答。十二个槽位、每个软件包 13–60 秒，每小时约处理 700–3 300 个软件包——约 40 000 个的整份精选列表一到两天即可跑完。超过 12 就需要同时提高 `HISTOR_CRAWL_WORKERS` 和 `HISTOR_MEM_LIMIT`。 |
+
+以下情况 HISTOR 也会拒绝启动：主机只配置了一半（有 URL 但缺令牌或指纹）、配置了额外主机却没有第一台、同一个 URL 出现两次。被悄悄丢弃的主机看起来只像抓取变慢，而不像一个笔误。
+
+**按顺序添加一台沙箱主机。**
+
+1. **检查机器。** x86-64 上的 Ubuntu 24.04 加 Docker；每个槽位约需 1.5 GB 空闲内存和一个核。观察程序要独占子网 `10.231.0.0/24` 以及端口 9443、18025、18080、18443 和 18587——下面两条命令都必须没有任何输出：
+   ```bash
+   ip route | grep '10\.231\.'
+   ss -ltn | grep -E ':(9443|18025|18080|18443|18587)\b'
+   ```
+2. **安装 gVisor**：从 Google 的软件源安装，固定为与其他主机相同的版本（见上文“准备沙箱主机”），然后执行 `runsc install && systemctl reload docker`。
+3. **从与其他主机相同的提交复制观察程序。** 每台主机都必须运行 HISTOR 期望的观察程序版本（`HISTOR_SANDBOX_OBSERVER`）：版本不同的主机会让它所观察的软件包得到不同的证据。
+   ```bash
+   rsync -a histor/sandbox/ <沙箱主机>:/opt/histor-sandbox/
+   ```
+4. **以 root 安装**，只向 HISTOR 主机开放 9443：
+   ```bash
+   sudo HISTOR_CALLER_IP=<HISTOR 主机 IP> /opt/histor-sandbox/install.sh
+   ```
+   它会打印证书的 SHA-256，并以自检结束，自检结果必须包含 `"gvisor":true`。没有 ufw 时，请在主机或服务商的防火墙中只对 HISTOR 的 IP 开放 9443。
+5. **确定规模。** 按机器配置在 `/etc/histor-sandbox.env` 中设置 `HISTOR_SANDBOX_SLOTS`，然后执行 `systemctl restart histor-sandbox`。
+6. **把主机交给 HISTOR**：写入它的 `.env`，使用下一个空闲编号。每台主机有自己的令牌；转移时不要显示它：
+   ```bash
+   ssh <沙箱主机> "sudo sed -n 's/^HISTOR_SANDBOX_TOKEN=/HISTOR_SANDBOX_2_TOKEN=/p' /etc/histor-sandbox.env" \
+     | ssh <HISTOR 主机> 'cat >> /opt/histor/.env'
+   ```
+   其余手动添加：
+   ```bash
+   HISTOR_SANDBOX_2_URL=https://<沙箱主机 IP>:9443
+   HISTOR_SANDBOX_2_CERT_SHA256=<install.sh 打印的值>
+   HISTOR_SANDBOX_2_CONCURRENCY=<该主机的 HISTOR_SANDBOX_SLOTS>
+   ```
+   槽位增加时也要提高 `HISTOR_SANDBOX_MAX_PER_CRAWL`，否则一次抓取观察的软件包数量不变，只是完成得更早。
+7. **用新的 `.env` 重启 HISTOR：** `./scripts/deploy_histor.sh --remote <HISTOR 主机>`。它会重建容器（保留主机上的 `.env`），并重新启动被这次重启打断的抓取；该抓取已提交的内容保留，接下来处理尚未观察的版本。
+8. **从 HISTOR 一侧检查每台主机**，走与抓取相同的固定证书通道：
+   ```bash
+   docker compose -p histor exec -T histor python -m histor sandboxes
+   ```
+   每台主机一行：编号、地址、槽位、观察程序、`gvisor`、`trace`、`observeNetwork`、`ok`。只要有一台主机未就绪——不可达、指纹或令牌不符、观察程序版本不同——退出码就不为零。令牌从不打印。
+9. **关注第一次抓取。** `/api/v1/stats` 显示 `crawl.sandboxHosts`（已配置的主机数），抓取结束后显示 `lastRun.sandboxHosts`：按主机编号列出各自观察了多少个软件包、失败了多少次。在沙箱主机上：`journalctl -u histor-sandbox`。
+
+**观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。
