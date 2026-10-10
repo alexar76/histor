@@ -57,6 +57,7 @@ packages = ["histor"]
 include = [
     "/histor",
     "/scanner",
+    "/sandbox",
     "/tests",
     "/docs",
     "/README.md",

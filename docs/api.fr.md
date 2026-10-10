@@ -40,7 +40,7 @@ stable, un par entrée distante.
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | du plus récent au plus ancien ; chacun avec `summary.added`, `summary.removed`, `summary.modified[].fields` (diff mot à mot des descriptions, diff par chemin JSON des schémas) |
 | GET | `/api/v1/changes/<id>` | un changement |
-| GET | `/feed.xml` | flux Atom des 50 derniers changements |
+| GET | `/feed.xml` | flux Atom des 50 derniers changements ; `?watch=<id>,<id>,…` (jusqu’à 100 identifiants de cible, tels que `/check` et les pages de serveur les donnent) ne garde que ces serveurs et paquets — un abonnement dans n’importe quel lecteur de flux |
 
 ## Étiquettes et éléments de preuve
 
@@ -91,6 +91,7 @@ Content-Type: application/json
 
 {
   "endpoint": "https://example.com/mcp",      // or "name": "io.github.org/server"
+  // a stdio server instead: "package": "npm:@scope/name" or "pypi:name"
   "tools": [ … ],                             // the tools array you received, or:
   "toolSetDigest": "sha256-…",                // its MTL/1 digest
   "contribute": true                          // optional: add (endpoint, digest, day) to a count
@@ -119,6 +120,8 @@ Si l’ensemble n’a jamais été analysé et que votre adresse dispose encore 
 sidecar WARDEN l’analyse sur-le-champ. Limites : 30 contrôles par minute et 20 nouvelles analyses par
 heure, par adresse ; les corps de plus de 2 MiB sont refusés. Avec `contribute`, rien d’autre que le
 décompte du jour pour cette empreinte n’est stocké.
+
+Pour un serveur stdio (un paquet npm ou PyPI que votre client lance), envoyez `package` — `npm:<nom>` ou `pypi:<nom>` — au lieu d’`endpoint` ; les noms PyPI sont normalisés pour vous. `target.packageVersion` est la dernière version qu’HISTOR a observée dans son [bac à sable des paquets](operations.fr.md#bac-à-sable-des-paquets). Un nom de paquet n’est jamais compté comme hôte inconnu. Deux réponses de plus pour un paquet. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), pour tout paquet demandé, listé ou non, nomme le paquet populaire auquel ce nom ressemble — à un caractère près, le même nom sous un autre scope, ou d’autres séparateurs — quand celui-ci est téléchargé au moins 100 fois plus ; les noms génériques comme `mcp-server` ne sont à personne. `target.packageSignals` est ce que dit le registre de la version qu’HISTOR a observée : `provenance` (une compilation attestée en CI), `publisher` (jamais un e-mail), `installScripts`, et `flags` pour ce qui a changé depuis la version observée avant : `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — les marques d’un jeton de publication volé.
 
 ## Statistiques et badges en direct
 
@@ -149,3 +152,5 @@ Chaque réponse porte un reçu d’interopérabilité qu’un Hub vérifie avec 
 `POST /api/v1/admin/crawl` avec `x-histor-operator: $HISTOR_OPERATOR_TOKEN` lance une exploration
 immédiatement (202), ou répond 409 si une exploration est déjà en cours. Sans jeton configuré, la
 route répond 503.
+
+`GET /api/v1/admin/unlisted?days=7&limit=100` (même en-tête) liste les hôtes sur lesquels `/check` a été interrogé et que HISTOR ne liste pas, les plus demandés d’abord : `host`, `queries`, `days`, `first_day`, `last_day`. Seul le nom d’hôte d’un point de terminaison https portant un nom DNS public est compté — jamais le chemin ni les paramètres, l’adresse de l’appelant ou les outils —, une fois par adresse, hôte et jour ; les jours de plus de 90 sont supprimés. C’est ainsi que la liste propre à HISTOR (`histor/curated.json`) s’enrichit des serveurs que les gens utilisent vraiment.

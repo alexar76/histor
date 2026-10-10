@@ -40,10 +40,11 @@ from histor.config import Settings
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
-from histor.registry import Target, harvest, load_opt_out
+from histor.packages import SANDBOX_ERROR, PackageReader, parse_package, version_signals
+from histor.registry import Target, curated_rank, curated_targets, harvest, load_opt_out, with_curated
 from histor.scanner import RuleSets, Scanner, ScannerError
 from histor.store import Store, dumps
-from histor.subject import MTL_SUBJ_001, MtlError, Subject, build_subject, fallback_subject
+from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject
 from histor.untrusted import clean_text
 
 CONTINUITY_MIN_INTERVAL_S = 20 * 3600
@@ -61,13 +62,35 @@ class Prepared:
     observed_at: str
     subject: Subject | None = None
     subject_error: MtlError | None = None
+    # A package observation: the registry's facts about the version and what changed since the last one.
+    signals: dict[str, Any] | None = None
+
+
+PACKAGE_SANDBOX = "package-sandbox"
 
 
 def _host_of(endpoint: str) -> str:
+    if parse_package(endpoint):
+        # Every package goes through the one sandbox host, bounded by sandbox_concurrency.
+        return PACKAGE_SANDBOX
     try:
         return (urlsplit(endpoint).hostname or "").lower()
     except ValueError:  # an unparseable registry URL; netguard refuses it with a status later
         return ""
+
+
+def _observer_of(record: str | None) -> str:
+    try:
+        return str(json.loads(record).get("observer") or "") if record else ""
+    except (ValueError, AttributeError):
+        return ""
+
+
+def _artifact(t: Target) -> dict[str, str]:
+    """The subject descriptor's artifact members: what HISTOR connected to."""
+    if parse_package(t.endpoint):
+        return {"transport": "stdio", "package": t.endpoint}
+    return {"transport": "streamable-http", "endpoint": t.endpoint}
 
 
 def _interleave_by_host(targets: list[Target]) -> list[Target]:
@@ -95,6 +118,7 @@ class Crawler:
                  scanner: Scanner, *, reader: McpReader | None = None,
                  harvest_fn: Callable[[str], list[Target]] | None = None,
                  classifier: Classifier | None = None,
+                 packages: PackageReader | None = None,
                  clock: Callable[[], str] = utcnow) -> None:
         self.settings = settings
         self.store = store
@@ -104,14 +128,23 @@ class Crawler:
         self.classifier = classifier
         self.reader = reader or McpReader(timeout=settings.crawl_timeout_s,
                                           allow_private=settings.allow_private_targets)
-        self.harvest_fn = harvest_fn or (
-            lambda url: harvest(url, allow_cleartext=settings.allow_private_targets,
-                                opt_out=load_opt_out(settings.opt_out, settings.opt_out_path))
-        )
+        if packages is None and settings.sandbox_enabled:
+            packages = PackageReader(settings.sandbox_url, settings.sandbox_token, settings.sandbox_cert_sha256,
+                                     timeout=settings.sandbox_timeout_s)
+        self.packages = packages
+        self._due_versions: dict[str, str] = {}
+        self._seen_versions: dict[str, str] = {}
+        self.harvest_fn = harvest_fn or self._harvest_with_curated
         self.clock = clock
         self._lock = threading.Lock()
         self.running_since: str | None = None
         self.progress: dict[str, int] | None = None
+
+    def _harvest_with_curated(self, url: str) -> list[Target]:
+        opt_out = load_opt_out(self.settings.opt_out, self.settings.opt_out_path)
+        listed = harvest(url, allow_cleartext=self.settings.allow_private_targets, opt_out=opt_out,
+                         observe_packages=self.packages is not None)
+        return with_curated(listed, curated_targets(opt_out=opt_out, observe_packages=self.packages is not None))
 
     # -- orchestration ----------------------------------------------------------------
 
@@ -134,8 +167,14 @@ class Crawler:
         stats: dict[str, Any] = {"started_at": started}
         try:
             targets = self.harvest_fn(self.settings.registry_url)
-            stats["registry_servers"] = len({t.name for t in targets})
-            stats["registry_endpoints"] = len(targets)
+            official = [t for t in targets if t.registry != REGISTRY_CURATED]
+            curated = [t for t in targets if t.registry == REGISTRY_CURATED]
+            is_package = lambda t: bool(parse_package(t.endpoint)) or t.transport == "stdio"  # noqa: E731
+            stats["registry_servers"] = len({t.name for t in official})
+            stats["registry_endpoints"] = sum(1 for t in official if not is_package(t))
+            stats["registry_packages"] = sum(1 for t in official if is_package(t))
+            stats["curated_endpoints"] = sum(1 for t in curated if not is_package(t))
+            stats["curated_packages"] = sum(1 for t in curated if is_package(t))
             stats["not_attempted"] = dict(Counter(t.skip_reason for t in targets if t.skip_reason))
             self._sync_targets(targets, started)
 
@@ -145,6 +184,10 @@ class Crawler:
             dialable = [t for t in targets if not t.skip_reason]
             if self.settings.crawl_limit:
                 dialable = dialable[: self.settings.crawl_limit]
+            packages = [t for t in dialable if parse_package(t.endpoint)]
+            if packages:
+                due = self._packages_due(packages, stats)
+                dialable = [t for t in dialable if not parse_package(t.endpoint)] + due
             # Interleave once over the whole list, so every batch carries its share of each host
             # instead of one batch spending an hour on a single host's 2 000 endpoints.
             dialable = _interleave_by_host(dialable)
@@ -164,6 +207,11 @@ class Crawler:
                 for item in prepared:
                     # One target must never take the crawl down: whatever a stranger's server made
                     # us do, it is recorded against that target and the crawl moves on.
+                    if item.obs.status == SANDBOX_ERROR:
+                        # Our sandbox failed, not the package: no label may say the package did.
+                        internal["sandbox"] += 1
+                        self._commit_internal(item, run_id, item.obs.detail or "the package sandbox failed")
+                        continue
                     if item.target.id in scan_failed:
                         internal["scan-failed"] += 1
                         self._commit_internal(item, run_id, "the WARDEN sidecar failed on this tool set")
@@ -228,25 +276,115 @@ class Crawler:
             Store.set_meta(tx, "warden_package", rulesets.warden_package)
         return f"{rulesets.pattern_set_digest}|{rulesets.record_set_digest}"
 
+    def _packages_due(self, targets: list[Target], stats: dict[str, Any]) -> list[Target]:
+        """The packages to run in the sandbox this crawl: a version not observed yet.
+
+        A published npm or PyPI version cannot change, so an observed version is not run again
+        (unless its run timed out). New versions of packages HISTOR already knows go first — that
+        is where a changed tool description reaches everyone running the package unpinned — then
+        packages never observed, up to ``sandbox_max_per_crawl``; the rest wait for the next crawl.
+        """
+        assert self.packages is not None
+        reader = self.packages
+
+        def latest(t: Target) -> tuple[Target, str | None]:
+            registry, name = parse_package(t.endpoint) or ("", "")
+            try:
+                return t, reader.latest_version(registry, name)
+            except Exception:  # noqa: BLE001 - a registry hiccup skips this package for one crawl
+                return t, None
+
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            versions = list(pool.map(latest, targets))
+        updates, first = [], []
+        seen_by_id: dict[str, str] = {}
+        unchanged = unknown = refresh = outdated = incomplete_retries = 0
+        attempted_at: dict[str, str] = {}
+        for t, version in versions:
+            if version is None:
+                unknown += 1
+                continue
+            state = self.store.target(t.id) or {}
+            attempted_at[t.id] = str(state.get("last_attempt") or "")
+            seen = state.get("package_version")
+            if seen:
+                seen_by_id[t.id] = seen
+            observer = _observer_of(state.get("package_signals"))
+            signals = state.get("package_signals") or {}
+            if isinstance(signals, str):
+                try:
+                    signals = json.loads(signals)
+                except ValueError:
+                    signals = {}
+            complete = isinstance(signals, dict) and (signals.get("behaviour") or {}).get("complete") is True
+            if seen == version and state.get("last_status") == "ok" and complete and observer == self.settings.sandbox_observer:
+                unchanged += 1
+                continue
+            if seen and seen == version:
+                refresh += 1
+                if observer != self.settings.sandbox_observer:
+                    outdated += 1
+                else:
+                    incomplete_retries += 1
+            (updates if seen and seen != version else first).append((t, version))
+        # Never-observed packages in curated order (most downloaded first), wherever they are listed:
+        # what people actually run is covered before the long tail of the registry.
+        try:
+            rank = curated_rank()
+        except (OSError, ValueError):
+            rank = {}
+        # Never let a permanently incomplete popular package occupy the budget every crawl.
+        # Unobserved entries come first; retries rotate by oldest attempt, with popularity as a tie-breaker.
+        first.sort(key=lambda tv: (attempted_at[tv[0].id], rank.get(tv[0].endpoint, len(rank))))
+        due = (updates + first)[: self.settings.sandbox_max_per_crawl]
+        self._due_versions = {t.id: v for t, v in due}
+        self._seen_versions = {t.id: seen_by_id[t.id] for t, _ in due if seen_by_id.get(t.id)}
+        stats["packages"] = {"dialable": len(targets), "due": len(due), "newVersions": len(updates),
+                             "neverObserved": len(first) - refresh, "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
+                             "versionUnknown": unknown}
+        return [t for t, _ in due]
+
+    def _signals(self, package: tuple[str, str], version: str, previous: str | None) -> dict[str, Any] | None:
+        """Registry facts for the observed version and the one observed before it; None if the
+        registry does not answer — the observation stands without them."""
+        reader = self.packages
+        facts = getattr(reader, "version_facts", None)
+        if facts is None:
+            return None
+        try:
+            current = facts(*package, version)
+            prior = facts(*package, previous) if previous and previous != version else None
+            return version_signals(current, prior)
+        except Exception:  # noqa: BLE001 - metadata is a bonus; a registry hiccup must not cost the observation
+            log.warning("registry facts unavailable for %s:%s@%s", package[0], package[1], version)
+            return None
+
     def _observe(self, targets: list[Target]) -> list[Prepared]:
         per_host: dict[str, threading.Semaphore] = defaultdict(
             lambda: threading.Semaphore(self.settings.crawl_per_host)
         )
+        per_host[PACKAGE_SANDBOX] = threading.Semaphore(self.settings.sandbox_concurrency)
         guard = threading.Lock()
 
         def one(t: Target) -> Prepared:
             with guard:
                 sem = per_host[_host_of(t.endpoint)]
+            package = parse_package(t.endpoint)
             try:
                 with sem:
-                    obs = self.reader.list_tools(t.endpoint)
+                    if package and self.packages is not None:
+                        obs = self.packages.observe(*package, self._due_versions.get(t.id))
+                    else:
+                        obs = self.reader.list_tools(t.endpoint)
             except Exception as exc:  # noqa: BLE001 - the reader promises not to raise; belt and braces
-                obs = Observation(status="client-error", detail=type(exc).__name__)
+                obs = Observation(status=SANDBOX_ERROR if package else "client-error", detail=type(exc).__name__)
             item = Prepared(target=t, obs=obs, observed_at=self.clock())
+            if package and self.packages is not None and obs.status != SANDBOX_ERROR and obs.package_version:
+                item.signals = self._signals(package, obs.package_version, self._seen_versions.get(t.id))
             if obs.status == "ok":
                 try:
                     item.subject = build_subject(server_name=t.name, registry=t.registry, tools=obs.tools or [],
-                                                 transport="streamable-http", endpoint=t.endpoint)
+                                                 **_artifact(t))
                 except MtlError as exc:
                     item.subject_error = exc
                 except Exception as exc:  # noqa: BLE001 - hostile input the canonicalizer chokes on
@@ -378,6 +516,20 @@ class Crawler:
                 "last_attempt": p.observed_at,
                 "observations": int(state.get("observations") or 0) + 1,
             }
+            if p.obs.package_version:
+                # The version this observation is about; the next crawl reruns the sandbox only
+                # when the registry publishes another.
+                update["package_version"] = clean_text(p.obs.package_version, 64)
+            if p.obs.package_version:
+                # Facts about the version, the observer that ran it, and what the package did.
+                record = dict(p.signals or {})
+                record["observer"] = p.obs.package_observer
+                if p.obs.behaviour is not None:
+                    record["behaviour"] = p.obs.behaviour
+                update["package_signals"] = dumps(record)
+                from histor.security_events import append_event
+                append_event(tx, self.logbook.key, t.id, p.observed_at,
+                             json.loads(state.get("package_signals") or "{}"), record)
 
             def append(doc: dict[str, Any]) -> dict[str, Any]:
                 row = self.logbook.append(tx, doc, target_id=t.id)
@@ -404,7 +556,7 @@ class Crawler:
                 update.update(last_status="undigestible",
                               last_detail=clean_text(f"{code}: {p.subject_error.detail}", 300))
                 fallback = fallback_subject(server_name=t.name, registry=t.registry, tools=p.obs.tools or [],
-                                            transport="streamable-http", endpoint=t.endpoint)
+                                            **_artifact(t))
                 if fallback.digest != state.get("current_subject"):
                     # A set we cannot digest is still a set the server showed, and not the one it
                     # showed before. It breaks the chain: no badge, /check answer or later
@@ -537,8 +689,7 @@ class Crawler:
             raise RuntimeError(f"chain label {label_id} is missing from the log")
         return json.loads(row["body"])
 
-    @staticmethod
-    def _record_change(tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
+    def _record_change(self, tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
                        label_id: str) -> None:
         old_toolset = state.get("current_toolset")
         old_entries = None
@@ -550,6 +701,9 @@ class Crawler:
             row = tx.one("SELECT body FROM blobs WHERE digest=?", (state["current_subject"],))
             old_descriptor = json.loads(row["body"]) if row else None
         old_names = old_descriptor["toolSet"]["names"] if old_descriptor else []
+        from histor.security_events import append_event
+        append_event(tx, self.logbook.key, target_id, observed_at, {"toolSetDigest": old_toolset},
+                     {"toolSetDigest": subject.tool_set_digest, "subjectDigest": subject.digest}, kind="definitions")
         summary = diffing.tool_set_diff(old_entries, subject.entries, old_names, subject.names)
         tx.execute(
             "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id) "

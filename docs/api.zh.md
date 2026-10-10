@@ -39,7 +39,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | 最新的在前；每条含 `summary.added`、`summary.removed`、`summary.modified[].fields`（描述按词比较差异，schema 按 JSON 路径比较差异） |
 | GET | `/api/v1/changes/<id>` | 单条变更 |
-| GET | `/feed.xml` | 最近 50 条变更的 Atom 订阅源 |
+| GET | `/feed.xml` | 最近 50 条变更的 Atom 订阅源；`?watch=<id>,<id>,…`（最多 100 个目标 id，即 `/check` 和服务器页面给出的 id）只保留这些服务器和软件包——可在任意订阅阅读器中订阅 |
 
 ## 标签与证据
 
@@ -82,6 +82,7 @@ Content-Type: application/json
 
 {
   "endpoint": "https://example.com/mcp",      // or "name": "io.github.org/server"
+  // a stdio server instead: "package": "npm:@scope/name" or "pypi:name"
   "tools": [ … ],                             // the tools array you received, or:
   "toolSetDigest": "sha256-…",                // its MTL/1 digest
   "contribute": true                          // optional: add (endpoint, digest, day) to a count
@@ -110,6 +111,8 @@ Content-Type: application/json
 20 次新扫描；超过 2 MiB 的请求体会被拒绝。使用 `contribute` 时，除了该摘要当天的计数之外，不存储
 任何内容。
 
+对于 stdio 服务器（由你的客户端启动的 npm 或 PyPI 软件包），用 `package`——`npm:<名称>` 或 `pypi:<名称>`——代替 `endpoint`；PyPI 名称会替你规范化。`target.packageVersion` 是 HISTOR 在其[软件包沙箱](operations.zh.md#软件包沙箱)中最近观察到的版本。软件包名称永远不会被计为未知主机。 对软件包还有两项应答。`packageLookalike`（`of`、`weekly`、`how`、`ownWeekly`）：对任何被询问的软件包（无论是否已收录），当某个热门软件包的下载量至少高出 100 倍时，指出此名称模仿的那个热门软件包——相差一个字符、在另一个 scope 下同名，或仅分隔符不同；`mcp-server` 这类通用名称不属于任何人。`target.packageSignals` 是注册表对 HISTOR 所观察版本的说明：`provenance`（经证明的 CI 构建）、`publisher`（从不包含邮箱）、`installScripts`，以及 `flags`——相对上一个观察到的版本发生了什么变化：`provenance-lost`、`publisher-changed`、`install-scripts-added`、`new-dependencies`，这些是发布令牌被盗的典型迹象。
+
 ## 统计与实时徽章
 
 | 路径 | 返回 |
@@ -137,3 +140,5 @@ Ed25519 + ML-DSA-65 混合签名。
 
 带上 `x-histor-operator: $HISTOR_OPERATOR_TOKEN` 调用 `POST /api/v1/admin/crawl`，会立即启动一次
 抓取（202）；如果已有抓取在运行，则返回 409。未配置令牌时，该路由返回 503。
+
+`GET /api/v1/admin/unlisted?days=7&limit=100`（同样的请求头）列出向 `/check` 询问过、但 HISTOR 尚未收录的主机，按询问次数从多到少：`host`、`queries`、`days`、`first_day`、`last_day`。只统计具有公共 DNS 名称的 https 端点的主机名——从不记录路径或参数、调用方地址或任何工具——每个地址、主机每天最多计一次；超过 90 天的记录会被删除。HISTOR 自己的名单（`histor/curated.json`）就是这样按人们真正使用的服务器扩充的。

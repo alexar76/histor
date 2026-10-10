@@ -39,7 +39,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | newest first; each with `summary.added`, `summary.removed`, `summary.modified[].fields` (word diff of descriptions, JSON-path diff of schemas) |
 | GET | `/api/v1/changes/<id>` | one change |
-| GET | `/feed.xml` | Atom feed of the latest 50 changes |
+| GET | `/feed.xml` | Atom feed of the latest 50 changes; `?watch=<id>,<id>,…` (up to 100 target ids, as `/check` and the server pages give them) keeps only those servers and packages — a subscription in any feed reader |
 
 ## Labels and evidence
 
@@ -88,6 +88,7 @@ Content-Type: application/json
 
 {
   "endpoint": "https://example.com/mcp",      // or "name": "io.github.org/server"
+  // a stdio server instead: "package": "npm:@scope/name" or "pypi:name"
   "tools": [ … ],                             // the tools array you received, or:
   "toolSetDigest": "sha256-…",                // its MTL/1 digest
   "contribute": true                          // optional: add (endpoint, digest, day) to a count
@@ -115,6 +116,8 @@ Content-Type: application/json
 set was never scanned and your address still has scan budget, the WARDEN sidecar scans it on the
 spot. Limits: 30 checks a minute and 20 fresh scans an hour per address; bodies over 2 MiB are
 refused. With `contribute`, nothing but the day's count for that digest is stored.
+
+For a stdio server (an npm or PyPI package your client starts), send `package` — `npm:<name>` or `pypi:<name>` — instead of `endpoint`; PyPI names are normalised for you. `target.packageVersion` is the version HISTOR last observed in its [package sandbox](operations.md#package-sandbox). A package name is never counted as an unlisted host. Two more answers for a package. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), for any package asked about, listed or not, names the popular package this one is named like — one character away, the same name under another scope, or other separators — when that one is downloaded at least 100 times more; generic names such as `mcp-server` are nobody's to imitate. `target.packageSignals` is what the registry says about the version HISTOR observed: `provenance` (an attested CI build), `publisher` (never an email), `installScripts`, and `flags` for what changed since the version observed before it — `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — the marks of a stolen publishing token.
 
 ## Stats and live badges
 
@@ -144,3 +147,5 @@ Ed25519 + ML-DSA-65 when `HISTOR_PQC=1`.
 
 `POST /api/v1/admin/crawl` with `x-histor-operator: $HISTOR_OPERATOR_TOKEN` starts a crawl now
 (202), or answers 409 if one is running. Without a configured token the route answers 503.
+
+`GET /api/v1/admin/unlisted?days=7&limit=100` (same header) lists the hosts `/check` was asked about that HISTOR does not list, most asked first: `host`, `queries`, `days`, `first_day`, `last_day`. Only the host name of an https endpoint with a public DNS name is counted — never the path or query, the caller's address or any tool — once per address, host and day; days older than 90 are pruned. This is how the curated list (`histor/curated.json`) grows from the servers people actually use.

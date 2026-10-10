@@ -10,6 +10,7 @@ from __future__ import annotations
 import hmac
 import ipaddress
 import json
+import re
 import secrets
 import threading
 import time
@@ -27,6 +28,7 @@ from starlette.concurrency import run_in_threadpool
 from histor import __version__, badge
 from histor.check import MAX_MATCHES, CheckError
 from histor.labels import SHORT
+from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
 from histor.service import Services, crawl_in_background, scheduler
 from histor.untrusted import TooDeep, loads_limited
@@ -128,6 +130,13 @@ def _xml_text(value: Any) -> str:
                    or ("\ue000" <= ch <= "\ufffd") or ch >= "\U00010000")
     return xml_escape(text)
 
+
+
+def _json_or_none(text: str | None) -> Any:
+    try:
+        return json.loads(text) if text else None
+    except ValueError:
+        return None
 
 def create_app(services: Services) -> FastAPI:
     settings = services.settings
@@ -232,7 +241,60 @@ def create_app(services: Services) -> FastAPI:
 
     @app.get("/s/{target_id}", include_in_schema=False)
     def server_page(target_id: str) -> Response:
-        return spa()
+        """The desk, with this server's own title and description in the HTML: what a search engine
+        and a link preview read. Facts only — HISTOR never calls a server safe."""
+        page = spa()
+        t = store.target(target_id) if re.fullmatch(r"[0-9a-f]{16}", target_id) else None
+        if t is None:
+            return page
+        kind = "npm/PyPI package" if t["transport"] == "stdio" else "MCP server"
+        name = t["title"] or t["name"]
+        what = f"{t['current_count']} tools" if t["current_count"] is not None else "its tools"
+        since = f", unchanged since {str(t['unchanged_since'])[:10]}" if t["unchanged_since"] else ""
+        changes = f", {t['changes']} change{'s' if t['changes'] != 1 else ''} on record" if t["changes"] else ""
+        title = f"{name} — {kind} record · HISTOR"
+        desc = (f"What {t['endpoint']} tells AI models ({what}){since}{changes}: signed observations, a diff of every "
+                f"change{', and what the package did in HISTOR’s sandbox' if t['transport'] == 'stdio' else ''}.")
+        url = f"{settings.public_base}/s/{target_id}"
+        html = page.body.decode("utf-8")
+        html = re.sub(r"<title>.*?</title>", f"<title>{xml_escape(title)}</title>", html, count=1, flags=re.S)
+        html = re.sub(r'<meta name="description" content="[^"]*"/>', f'<meta name="description" content="{xml_escape(desc, {chr(34): "&quot;"})}"/>', html, count=1)
+        html = re.sub(r'<link rel="canonical" href="[^"]*"/>', f'<link rel="canonical" href="{xml_escape(url)}"/>', html, count=1)
+        html = re.sub(r'<meta property="og:title" content="[^"]*"/>', f'<meta property="og:title" content="{xml_escape(title, {chr(34): "&quot;"})}"/>', html, count=1)
+        html = re.sub(r'<meta property="og:description" content="[^"]*"/>', f'<meta property="og:description" content="{xml_escape(desc, {chr(34): "&quot;"})}"/>', html, count=1)
+        html = re.sub(r'<meta property="og:url" content="[^"]*"/>', f'<meta property="og:url" content="{xml_escape(url)}"/>', html, count=1)
+        return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
+
+    SITEMAP_PAGE = 40_000
+
+    @app.get("/robots.txt", include_in_schema=False)
+    def robots() -> Response:
+        return Response(f"User-agent: *\nDisallow: /api/v1/admin/\nSitemap: {settings.public_base}/sitemap.xml\n",
+                        media_type="text/plain")
+
+    @app.get("/sitemap.xml", include_in_schema=False)
+    def sitemap_index() -> Response:
+        pages = max(1, -(-store.count_observed_targets() // SITEMAP_PAGE))
+        items = "".join(f"<sitemap><loc>{xml_escape(settings.public_base)}/sitemap-{n}.xml</loc></sitemap>" for n in range(pages))
+        return Response('<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                        f"<sitemap><loc>{xml_escape(settings.public_base)}/sitemap-site.xml</loc></sitemap>{items}</sitemapindex>",
+                        media_type="application/xml")
+
+    @app.get("/sitemap-site.xml", include_in_schema=False)
+    def sitemap_site() -> Response:
+        urls = "".join(f"<url><loc>{xml_escape(settings.public_base)}{r}</loc></url>" for r in SPA_ROUTES)
+        return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
+                        media_type="application/xml")
+
+    @app.get("/sitemap-{n}.xml", include_in_schema=False)
+    def sitemap_page(n: int) -> Response:
+        if n < 0 or n > 1000:
+            raise HTTPException(status_code=404, detail="no such sitemap")
+        rows = store.observed_target_ids(SITEMAP_PAGE, n * SITEMAP_PAGE)
+        urls = "".join(f"<url><loc>{xml_escape(settings.public_base)}/s/{tid}</loc>"
+                       + (f"<lastmod>{str(last)[:10]}</lastmod>" if last else "") + "</url>" for tid, last in rows)
+        return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
+                        media_type="application/xml")
 
     if (settings.landing_dir / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=settings.landing_dir / "assets"), name="assets")
@@ -302,6 +364,7 @@ def create_app(services: Services) -> FastAPI:
                 "finishedAt": run["finished_at"],
                 "registryServers": s.get("registry_servers"),
                 "registryEndpoints": s.get("registry_endpoints"),
+                "curatedEndpoints": s.get("curated_endpoints", 0),
                 "notAttempted": s.get("not_attempted", {}),
                 "attempted": s.get("attempted"),
                 "statuses": s.get("statuses", {}),
@@ -347,6 +410,7 @@ def create_app(services: Services) -> FastAPI:
             "blockMatches": t["block_matches"], "adviseMatches": t["advise_matches"],
             "recordMatches": t["record_matches"], "state": state, "badgeText": message,
             "classifierModel": t["classifier_model"], "classifierFlags": t["classifier_flags"],
+            "packageVersion": t.get("package_version"), "packageSignals": _json_or_none(t.get("package_signals")),
         }
 
     @app.get("/api/v1/servers")
@@ -396,6 +460,11 @@ def create_app(services: Services) -> FastAPI:
             "changes": store.changes(limit=20, target_id=target_id),
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
         }
+        if t["transport"] == "stdio":
+            try:
+                page["packageLookalike"] = default_index().check(t["endpoint"])
+            except (OSError, ValueError):
+                page["packageLookalike"] = None
         # The tool set can be megabytes: spliced in as the stored text instead of parsed and
         # re-serialised on every request.
         tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
@@ -442,6 +511,34 @@ def create_app(services: Services) -> FastAPI:
 
     # -- changes --------------------------------------------------------------------
 
+    @app.get("/api/v1/security-events")
+    def security_events(after: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=200), watch: str | None = Query(None, max_length=1800)) -> dict[str, Any]:
+        from histor.security_events import events
+        ids = watch.split(",") if watch else None
+        if ids and (len(ids) > 100 or any(not re.fullmatch(r"[0-9a-f]{16}", v) for v in ids)):
+            raise HTTPException(status_code=400, detail="watch requires target ids")
+        rows = events(store, after=after, limit=limit, targets=ids)
+        return {"events": rows, "nextCursor": rows[-1]["cursor"] if rows else after}
+
+    @app.get("/security-feed.xml")
+    def security_feed(watch: str | None = Query(None, max_length=1800)) -> Response:
+        from histor.security_events import events
+        ids = watch.split(",") if watch else None
+        if ids and (len(ids) > 100 or any(not re.fullmatch(r"[0-9a-f]{16}", v) for v in ids)):
+            raise HTTPException(status_code=400, detail="watch requires target ids")
+        with store.db.read() as tx:
+            latest = tx.one("SELECT MAX(seq) AS seq FROM security_events")
+        rows = events(store, after=max(0, int((latest or {}).get("seq") or 0) - 200), limit=200, targets=ids)[-50:]
+        entries = []
+        for row in reversed(rows):
+            event = row["event"]
+            entries.append("<entry><id>urn:sha256:" + _xml_text(event["id"]) + "</id><title>" + _xml_text(event["kind"] + ": " + event["target"]) +
+                           "</title><updated>" + _xml_text(event["observedAt"]) + "</updated><summary>" + _xml_text(json.dumps(event["evidence"], ensure_ascii=False)) + "</summary></entry>")
+        updated = rows[-1]["event"]["observedAt"] if rows else datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        body = ('<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom"><id>' + _xml_text(settings.public_base + "/security-feed.xml") +
+                '</id><title>HISTOR security evidence changes</title><updated>' + _xml_text(updated) + '</updated>' + ''.join(entries) + '</feed>')
+        return Response(body, media_type="application/atom+xml")
+
     @app.get("/api/v1/changes")
     def changes(limit: int = Query(50, ge=1, le=200), before: int | None = Query(None, ge=1)) -> dict[str, Any]:
         return {"changes": store.changes(limit=limit, before_id=before)}
@@ -454,8 +551,15 @@ def create_app(services: Services) -> FastAPI:
         return row
 
     @app.get("/feed.xml")
-    def feed() -> Response:
-        items = store.changes(limit=50)
+    def feed(watch: str | None = Query(None, max_length=1800)) -> Response:
+        """All changes, or with ``watch=<id>,<id>,…`` (up to 100 target ids, as /check and the server
+        pages give them) only those servers' and packages': subscribe in any feed reader."""
+        watched: list[str] | None = None
+        if watch is not None:
+            watched = sorted({w for w in watch.split(",") if re.fullmatch(r"[0-9a-f]{16}", w)})[:100]
+            if not watched:
+                raise HTTPException(status_code=400, detail="watch takes target ids (16 hex characters), comma-separated")
+        items = store.changes(limit=50, target_ids=watched)
         updated = items[0]["observed_at"] if items else datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         entries = []
         for c in items:
@@ -481,11 +585,12 @@ def create_app(services: Services) -> FastAPI:
                 f"<summary>{_xml_text('; '.join(parts) or 'definitions changed')} — {_xml_text(c['endpoint'])}</summary>"
                 "</entry>"
             )
+        self_url = f"{settings.public_base}/feed.xml" + (f"?watch={','.join(watched)}" if watched else "")
         body = (
             '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom">'
-            f"<id>{xml_escape(settings.public_base)}/feed.xml</id><title>HISTOR — MCP tool-definition changes</title>"
+            f"<id>{xml_escape(self_url)}</id><title>HISTOR — MCP tool-definition changes{' (watched)' if watched else ''}</title>"
             f"<updated>{updated}</updated><author><name>HISTOR</name></author>"
-            f'<link rel="self" href="{xml_escape(settings.public_base)}/feed.xml"/>' + "".join(entries) + "</feed>"
+            f'<link rel="self" href="{xml_escape(self_url)}"/>' + "".join(entries) + "</feed>"
         )
         return Response(body, media_type="application/atom+xml")
 
@@ -596,8 +701,13 @@ def create_app(services: Services) -> FastAPI:
             # mint any number of "clients" and fake or bury that signal for any server.
             return limiter.allow(f"report:{addr}:{target_id}", 1, 86400)
 
+        def may_count_unlisted(host: str) -> bool:
+            # Once per address, host and day: the count says how many callers asked, not how often one did.
+            return limiter.allow(f"unlisted:{addr}:{host}", 1, 86400)
+
         try:
-            return services.checker.check(body, allow_scan=may_scan, may_contribute=may_contribute)
+            return services.checker.check(body, allow_scan=may_scan, may_contribute=may_contribute,
+                                          may_count_unlisted=may_count_unlisted)
         except CheckError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -710,6 +820,15 @@ def create_app(services: Services) -> FastAPI:
         started = crawl_in_background(services)
         return JSONResponse({"started": started, "runningSince": services.crawler.running_since},
                             status_code=202 if started else 409)
+
+    @app.get("/api/v1/admin/unlisted")
+    def admin_unlisted(request: Request, days: int = Query(7, ge=1, le=90),
+                       limit: int = Query(100, ge=1, le=1000)) -> dict[str, Any]:
+        """Hosts /check was asked about that HISTOR does not list, most asked first. Operator only:
+        even a host name can say which company runs which server."""
+        operator(request)
+        since = (datetime.now(UTC) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+        return {"since": since, "hosts": services.store.unlisted_queries(since, limit)}
 
     # -- federation peer -------------------------------------------------------------
 

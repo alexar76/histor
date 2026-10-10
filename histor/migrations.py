@@ -265,12 +265,48 @@ MIGRATION_004: tuple[str, ...] = (
     "CREATE INDEX receipt_anchors_issuer ON receipt_anchors(issuer, leaf_index)",
 )
 
+# Hosts people asked /check about that HISTOR does not list: the evidence for what to watch next.
+# Host and day only — never the path or query (credentials live there), never the caller's address,
+# never a tool. Operator-readable only; kept 90 days (histor.store.UNLISTED_RETENTION_DAYS).
+MIGRATION_005: tuple[str, ...] = (
+    """
+    CREATE TABLE unlisted_queries (
+        host TEXT NOT NULL,
+        day TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        PRIMARY KEY (host, day)
+    )
+    """,
+)
+
+# npm/PyPI packages observed in the sandbox (histor.packages): the version last observed, so a
+# crawl reruns the sandbox only when a new version is published.
+MIGRATION_006: tuple[str, ...] = (
+    "ALTER TABLE targets ADD COLUMN package_version TEXT",
+)
+
+# What the registry says about the observed package version and what changed since the one before
+# (histor.packages.version_signals), as JSON: provenance, publisher, install scripts, new dependencies.
+MIGRATION_007: tuple[str, ...] = (
+    "ALTER TABLE targets ADD COLUMN package_signals TEXT",
+)
+
+MIGRATION_008: Statements = {backend: (
+    f"CREATE TABLE security_events (seq {identity}, event_id TEXT NOT NULL UNIQUE, target_id TEXT NOT NULL, observed_at TEXT NOT NULL, body TEXT NOT NULL)",
+    "CREATE INDEX security_events_target ON security_events(target_id, seq)",
+    "CREATE TABLE webhook_cursors (id TEXT PRIMARY KEY, url_digest TEXT NOT NULL, cursor BIGINT NOT NULL, attempts INTEGER NOT NULL, next_attempt DOUBLE PRECISION NOT NULL, lease_until DOUBLE PRECISION NOT NULL, lease_token TEXT)",
+) for backend, identity in _IDENTITY.items()}
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
     (2, "002_scan_sets", MIGRATION_002),
     (3, "003_classifier", MIGRATION_003),
     (4, "004_receipts_log", MIGRATION_004),
+    (5, "005_unlisted_queries", MIGRATION_005),
+    (6, "006_package_version", MIGRATION_006),
+    (7, "007_package_signals", MIGRATION_007),
+    (8, "008_security_events", MIGRATION_008),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates
@@ -282,7 +318,7 @@ TARGET_COLUMNS: tuple[str, ...] = (
     "current_toolset", "current_count", "first_pinned", "unchanged_since", "observations",
     "ok_observations", "changes", "block_matches", "advise_matches", "record_matches",
     "chain_label", "last_continuity_at", "failure_reported", "scan_sets",
-    "classifier_model", "classifier_flags",
+    "classifier_model", "classifier_flags", "package_version", "package_signals",
 )
 
 

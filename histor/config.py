@@ -61,6 +61,22 @@ class Settings:
     # did:key issuers whose receipt anchors the receipts log accepts (histor.receipts). Empty =
     # the log is closed to submissions, which is the default: an open log is a free write.
     receipt_issuers: tuple[str, ...] = ()
+    # The package sandbox (histor.packages, histor/sandbox/): HTTPS to the observer on the sandbox
+    # host, pinned to its certificate. Off unless the URL, the token and the pin are all set.
+    sandbox_url: str = ""
+    sandbox_token: str = field(default="", repr=False)
+    sandbox_cert_sha256: str = ""
+    sandbox_max_per_crawl: int = 300
+    # Observations in flight at once; match HISTOR_SANDBOX_SLOTS on the sandbox host.
+    sandbox_concurrency: int = 2
+    # The observer version an observation must come from to count: an older one is run again
+    # (histor/sandbox/histor_observe.py VERSION; 2 = behaviour).
+    sandbox_observer: str = "3"
+    sandbox_timeout_s: int = 420
+
+    @property
+    def sandbox_enabled(self) -> bool:
+        return bool(self.sandbox_url and self.sandbox_token and self.sandbox_cert_sha256)
 
     @property
     def classifier_enabled(self) -> bool:
@@ -144,6 +160,13 @@ def load_settings() -> Settings:
         receipt_issuers=tuple(
             d.strip() for d in os.environ.get("HISTOR_RECEIPT_ISSUERS", "").split(",") if d.strip()
         ),
+        sandbox_url=os.environ.get("HISTOR_SANDBOX_URL", "").strip().rstrip("/"),
+        sandbox_token=os.environ.get("HISTOR_SANDBOX_TOKEN", "").strip(),
+        sandbox_cert_sha256=os.environ.get("HISTOR_SANDBOX_CERT_SHA256", "").strip(),
+        sandbox_max_per_crawl=_int("HISTOR_SANDBOX_MAX_PER_CRAWL", 300, minimum=0),
+        sandbox_concurrency=_int("HISTOR_SANDBOX_CONCURRENCY", 2, minimum=1),
+        sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "3").strip(),
+        sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 420, minimum=30),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

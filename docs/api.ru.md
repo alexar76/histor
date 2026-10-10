@@ -40,7 +40,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | сначала новые; у каждого `summary.added`, `summary.removed`, `summary.modified[].fields` (пословный дифф описаний, дифф схем по JSON-путям) |
 | GET | `/api/v1/changes/<id>` | одно изменение |
-| GET | `/feed.xml` | Atom-лента последних 50 изменений |
+| GET | `/feed.xml` | Atom-лента последних 50 изменений; `?watch=<id>,<id>,…` (до 100 идентификаторов целей, как их дают `/check` и страницы серверов) оставляет только эти серверы и пакеты — подписка в любом читателе лент |
 
 ## Метки и свидетельства
 
@@ -89,6 +89,7 @@ Content-Type: application/json
 
 {
   "endpoint": "https://example.com/mcp",      // or "name": "io.github.org/server"
+  // a stdio server instead: "package": "npm:@scope/name" or "pypi:name"
   "tools": [ … ],                             // the tools array you received, or:
   "toolSetDigest": "sha256-…",                // its MTL/1 digest
   "contribute": true                          // optional: add (endpoint, digest, day) to a count
@@ -118,6 +119,8 @@ Content-Type: application/json
 сканирований в час на адрес; тела запросов больше 2 MiB отклоняются. С `contribute` не хранится
 ничего, кроме дневного счётчика для этого дайджеста.
 
+Для stdio-сервера (пакета npm или PyPI, который запускает ваш клиент) передайте `package` — `npm:<имя>` или `pypi:<имя>` — вместо `endpoint`; имена PyPI нормализуются за вас. `target.packageVersion` — версия, которую HISTOR последней прочитал в своей [песочнице для пакетов](operations.ru.md#песочница-для-пакетов). Имя пакета никогда не считается незнакомым хостом. Ещё два ответа для пакета. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`) — для любого пакета, о котором спросили, в списке он или нет, — называет популярный пакет, на который это имя похоже: на один символ, то же имя под другим scope или с другими разделителями, если популярный скачивают хотя бы в 100 раз чаще; общие имена вроде `mcp-server` ничьи. `target.packageSignals` — что реестр говорит о прочитанной HISTOR версии: `provenance` (подтверждённая сборка в CI), `publisher` (никогда не email), `installScripts` и `flags` — что изменилось с предыдущей прочитанной версии: `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies`. Это признаки украденного токена публикации.
+
 ## Статистика и живые бейджи
 
 | Путь | Возвращает |
@@ -146,3 +149,5 @@ capability:
 
 `POST /api/v1/admin/crawl` с `x-histor-operator: $HISTOR_OPERATOR_TOKEN` сразу запускает обход
 (202) или отвечает 409, если обход уже идёт. Без настроенного токена маршрут отвечает 503.
+
+`GET /api/v1/admin/unlisted?days=7&limit=100` (тот же заголовок) показывает хосты, о которых спрашивали `/check`, но которых HISTOR не знает, — самые частые первыми: `host`, `queries`, `days`, `first_day`, `last_day`. Считается только имя хоста https-эндпоинта с публичным DNS-именем — никогда путь или параметры, адрес спрашивающего или инструменты — не чаще раза в день на адрес и хост; дни старше 90 удаляются. Так собственный список HISTOR (`histor/curated.json`) пополняется серверами, которыми люди действительно пользуются.

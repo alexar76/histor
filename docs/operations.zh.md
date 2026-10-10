@@ -129,3 +129,46 @@ HISTOR 会表明身份（`User-Agent: histor/<version> (+https://histor.modelmar
 不希望自己的端点被抓取的运营者可以提交 issue 说明。把主机（同时覆盖其子域名）或 URL 前缀加入 `HISTOR_OPT_OUT`（逗号分隔），
 或写入数据卷上的 `opt-out.txt`（每行一条，`#` 开头为注释），每次抓取都会重新读取。该端点仍会以未尝试状态列出，原因为 `operator-opt-out`，
 而不是被悄悄删除；已写入日志的标签会保留，因为日志只增不减。
+
+## 软件包沙箱
+
+人们使用的大多数 MCP 服务器是 npm 或 PyPI 软件包，由客户端在用户自己的机器上启动（`npx -y …`、`uvx …`）：没有可以连接的端点。HISTOR 在另一台主机上观察它们：该主机安装软件包，并在 [gVisor](https://gvisor.dev) 下启动它——gVisor 是一个在用户空间实现的内核，因此软件包与 gVisor 交互，而不是与主机内核交互。gVisor 是 Google 的开源项目，采用 [Apache 2.0 许可证](https://github.com/google/gvisor/blob/master/LICENSE)；HISTOR 运行它，但不分发它。
+
+**一次观察做什么**（`histor/sandbox/histor_observe.py`，只用标准库）：
+
+1. 安装，在 gVisor 下：npm 使用 `--ignore-scripts`，pip 使用 `--only-binary=:all:`——不执行软件包的任何代码。只发布 sdist 的 PyPI 软件包记为 `no-wheel`，从不构建。
+2. 运行，在 gVisor 的跟踪运行时（`runsc-trace`）下：没有对外路由的内部网络，唯一的解析器是观察程序的 DNS 记录器；根文件系统和软件包只读，`/tmp` 为 64 MB 的 tmpfs，非特权 uid，无 capabilities、不允许提升权限，512 MB 内存且关闭 swap，一个 CPU，256 个进程，环境中只有 `PATH`/`HOME`。HOME 中放着诱饵凭据（SSH 密钥、云/注册表/Git 令牌、钱包、shell 历史），工作目录中有诱饵 `.env`。观察程序通过标准输入输出说 MCP：`initialize`、`tools/list`，然后按每个工具的 schema 构造金丝雀参数（`histor-trap.invalid` 上的地址、指向诱饵笔记的路径），对最多 15 个工具各调用一次——在沙箱内，不作用于任何真实对象——然后杀掉容器。安装时跳过的 npm 安装脚本，会先在单独的、同样被跟踪的阶段运行。
+3. 应答：版本、其完整性哈希、镜像摘要、状态（`ok`；`exited`——多半是服务器启动需要密钥或路径——；`install-failed`、`no-entry-point`、`no-wheel`、`timeout`、`protocol`）以及工具。
+
+如果 `runsc` 不是 Docker 的运行时，它拒绝运行，而不是退回到普通的 `runc`。
+
+**行为。** gVisor 在沙箱之外自行记录运行跟踪（`execve`、`connect`、`open`/`openat`），软件包既无法隐藏也无法伪造；DNS 记录器记下每个被查询的名称，并以 198.18.0.0/15 中一个不通往任何地方的唯一地址作答，因此每次连接尝试都能和它所针对的名称一起被看到。按阶段——安装脚本、启动、金丝雀调用——观察结果报告：启动的程序、查询的名称和拨打的地址、被打开的诱饵，以及会在沙箱之外留存的写入（`.bashrc`、`authorized_keys` 等）。安装脚本阶段中容器入口进程的活动属于 npm 自身，予以丢弃；回环连接也丢弃。部署会增加 `runsc-trace` 运行时、内部网络 `histor-observe`（10.231.0.0/24）、只允许其访问解析器的防火墙规则、服务的 `CAP_NET_BIND_SERVICE`，以及删除已读跟踪的定时器。当某版本的观察程序早于 `HISTOR_SANDBOX_OBSERVER`（2 = 行为）时，HISTOR 会重新运行它。
+
+**观察哪些版本。** npm 或 PyPI 上已发布的版本不能修改，所以每个版本只观察一次。每次抓取都向注册表查询最新版本（成本很低），只对没见过的版本运行沙箱，每次最多 `HISTOR_SANDBOX_MAX_PER_CRAWL`（300）个：先是已观察过的软件包的新版本——被修改的工具描述正是这样到达所有不固定版本运行该软件包的人——然后是从未观察过的软件包。沙箱本身的故障记为 HISTOR 的内部错误，不会签发任何关于该软件包的标签。
+
+**准备沙箱主机**（Ubuntu 24.04，Docker）：
+
+```bash
+# 从 Google 签名的 apt 仓库安装 gVisor，固定到一个版本
+curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+#   指纹 6F1D F85E 3A71 C249 18E7  27D5 6FC6 D554 E32B D943（The gVisor Authors）
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases 20261005 main" \
+  > /etc/apt/sources.list.d/gvisor.list
+apt-get update && apt-get install -y runsc
+runsc install && systemctl reload docker      # 重新加载而不是重启：正在运行的容器不受影响
+
+# 观察程序：用户、网络、镜像、TLS、令牌、systemd 单元、只放行 HISTOR 主机的防火墙规则
+HISTOR_CALLER_IP=<HISTOR 主机 IP> ./histor/sandbox/install.sh
+```
+
+`install.sh` 打印证书的 SHA-256，最后运行一次自检，结果必须包含 `"gvisor":true`（容器内的内核是 `4.19.0-gvisor`）。令牌只在 `/etc/histor-sandbox.env` 中生成一次，从不打印；把它复制到 HISTOR 主机的 `.env` 时不要显示出来。在 HISTOR 主机上：
+
+```bash
+HISTOR_SANDBOX_URL=https://<沙箱主机>:9443
+HISTOR_SANDBOX_TOKEN=<取自 /etc/histor-sandbox.env>
+HISTOR_SANDBOX_CERT_SHA256=<由 install.sh 打印>
+```
+
+HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之前先核对指纹。部署时遇到的两个陷阱：在用户自定义的 Docker 网络上，gVisor 访问不到 Docker 内置的 DNS（`127.0.0.11`），所以安装阶段使用自己的 `resolv.conf`；Docker 默认的 `--memory-swap` 会把内存上限翻倍——在把 swap 设为与内存相同之前，900 MB 的分配能在 512 MB 的容器中成功。日志：`journalctl -u histor-sandbox`。
+
+**吞吐量。** `/etc/histor-sandbox.env` 中的 `HISTOR_SANDBOX_SLOTS`（默认 2）是沙箱主机同时运行的软件包数量；每个在安装时最多占用 1 GB，运行时 512 MB。把 HISTOR 的 `HISTOR_SANDBOX_CONCURRENCY` 设为相同的数。`HISTOR_SANDBOX_MAX_PER_CRAWL` 限制一次抓取运行的版本数。一次完整观察耗时 13–60 秒，因此三个槽位每小时约处理 500 个软件包。

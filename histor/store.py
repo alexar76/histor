@@ -7,10 +7,14 @@ Backend-neutral: every statement here runs unchanged on SQLite (development) and
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from typing import Any
 
 from histor import merkle
 from histor.db import Backend, Tx
+
+UNLISTED_RETENTION_DAYS = 90
+UNLISTED_HOSTS_PER_DAY = 5000
 
 
 def dumps(value: Any) -> str:
@@ -125,6 +129,20 @@ class Store:
             if endpoint:
                 return tx.execute("SELECT * FROM targets WHERE endpoint=? ORDER BY delisted, name", (endpoint,))
             return tx.execute("SELECT * FROM targets WHERE name=? ORDER BY delisted, endpoint", (name or "",))
+
+    def observed_target_ids(self, limit: int, offset: int = 0) -> list[tuple[str, str | None]]:
+        """Listed targets HISTOR has a tool set for, oldest first: the pages worth indexing."""
+        with self.db.read() as tx:
+            rows = tx.execute(
+                "SELECT id, last_ok FROM targets WHERE delisted=0 AND current_toolset IS NOT NULL ORDER BY first_pinned, id LIMIT ? OFFSET ?",
+                (limit, offset),
+            )
+        return [(r["id"], r["last_ok"]) for r in rows]
+
+    def count_observed_targets(self) -> int:
+        with self.db.read() as tx:
+            row = tx.one("SELECT COUNT(*) AS n FROM targets WHERE delisted=0 AND current_toolset IS NOT NULL")
+        return int((row or {}).get("n") or 0)
 
     def all_targets(self) -> list[dict[str, Any]]:
         with self.db.read() as tx:
@@ -268,9 +286,15 @@ class Store:
         row["summary"] = json.loads(row["summary"])
         return row
 
-    def changes(self, limit: int = 50, before_id: int | None = None, target_id: str | None = None) -> list[dict[str, Any]]:
+    def changes(self, limit: int = 50, before_id: int | None = None, target_id: str | None = None,
+                target_ids: list[str] | None = None) -> list[dict[str, Any]]:
         sql = "SELECT c.*, t.name, t.endpoint, t.title FROM changes c JOIN targets t ON t.id = c.target_id WHERE 1=1"
         args: list[Any] = []
+        if target_ids is not None:
+            if not target_ids:
+                return []
+            sql += f" AND c.target_id IN ({', '.join('?' for _ in target_ids)})"
+            args.extend(target_ids)
         if before_id:
             sql += " AND c.id < ?"
             args.append(before_id)
@@ -303,6 +327,31 @@ class Store:
                 "ON CONFLICT(target_id, toolset, day) DO UPDATE SET count = client_reports.count + 1",
                 (target_id, toolset, day),
             )
+
+    def add_unlisted_query(self, host: str, day: str) -> None:
+        """Count one /check for a host HISTOR does not list. A new host on a full day is dropped, so
+        a caller inventing hosts cannot grow the table without bound; old days are pruned then too."""
+        with self.db.transaction() as tx:
+            if tx.one("SELECT 1 AS x FROM unlisted_queries WHERE host=? AND day=?", (host, day)) is None:
+                row = tx.one("SELECT COUNT(*) AS n FROM unlisted_queries WHERE day=?", (day,))
+                if int((row or {}).get("n") or 0) >= UNLISTED_HOSTS_PER_DAY:
+                    return
+                cutoff = (datetime.strptime(day, "%Y-%m-%d") - timedelta(days=UNLISTED_RETENTION_DAYS)).strftime("%Y-%m-%d")
+                tx.execute("DELETE FROM unlisted_queries WHERE day < ?", (cutoff,))
+            tx.execute(
+                "INSERT INTO unlisted_queries(host, day, count) VALUES(?, ?, 1) "
+                "ON CONFLICT(host, day) DO UPDATE SET count = unlisted_queries.count + 1",
+                (host, day),
+            )
+
+    def unlisted_queries(self, since_day: str, limit: int = 100) -> list[dict[str, Any]]:
+        with self.db.read() as tx:
+            rows = tx.execute(
+                "SELECT host, SUM(count) AS queries, COUNT(*) AS days, MIN(day) AS first_day, MAX(day) AS last_day "
+                "FROM unlisted_queries WHERE day >= ? GROUP BY host ORDER BY queries DESC, host LIMIT ?",
+                (since_day, limit),
+            )
+        return [{**r, "queries": int(r["queries"]), "days": int(r["days"])} for r in rows]
 
     def client_reports(self, target_id: str, since_day: str, limit: int = 20) -> list[dict[str, Any]]:
         with self.db.read() as tx:

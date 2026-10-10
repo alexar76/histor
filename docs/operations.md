@@ -142,3 +142,50 @@ An operator who wants their endpoint left out says so in an issue. Add the host 
 a URL prefix to `HISTOR_OPT_OUT` (comma-separated) or to `opt-out.txt` on the data volume (one per line, `#`
 comments), which is re-read at every crawl. The endpoint stays listed as not attempted with the reason
 `operator-opt-out`, rather than silently dropped; labels already in the log stay, because the log only grows.
+
+## Package sandbox
+
+Most MCP servers people run are npm or PyPI packages that their client starts on their own machine (`npx -y …`, `uvx …`): there is no endpoint to dial. HISTOR observes them on a separate host that installs the package and starts it under [gVisor](https://gvisor.dev) — a kernel written in user space, so the package talks to gVisor rather than to the host's kernel. gVisor is open source by Google under the [Apache License 2.0](https://github.com/google/gvisor/blob/master/LICENSE); HISTOR runs it, it does not ship it.
+
+**What one observation does** (`histor/sandbox/histor_observe.py`, stdlib only):
+
+1. Install, under gVisor: npm with `--ignore-scripts`, pip with `--only-binary=:all:` — no code of the package runs. A PyPI package that only ships an sdist is reported as `no-wheel`, never built.
+2. Run, under gVisor's tracing runtime (`runsc-trace`): an internal network with no route out whose only resolver is the observer's DNS logger, read-only root and package, `/tmp` a 64 MB tmpfs, an unprivileged uid, no capabilities, no new privileges, 512 MB memory with swap off, one CPU, 256 processes, no environment beyond `PATH`/`HOME`. HOME holds decoy credentials (SSH keys, cloud, registry and Git tokens, a wallet, shell history) and the working directory a decoy `.env`. The observer speaks MCP over stdin/stdout: `initialize`, `tools/list`, then each of up to 15 tools once with canary arguments built from its schema (an address on `histor-trap.invalid`, a path to a decoy note) — inside the sandbox, against nothing real — then kills the container. npm install scripts, skipped at install, run on their own in a traced stage first.
+3. Answer: the version, its integrity hash, the image digest, a status (`ok`, `exited` — most often a server that needs a key or a path to start —, `install-failed`, `no-entry-point`, `no-wheel`, `timeout`, `protocol`) and the tools.
+
+It refuses to run if `runsc` is not a Docker runtime rather than fall back to plain `runc`.
+
+**Behaviour (observer 3).** gVisor writes syscall traces outside the sandbox. DNS records queried names and redirects A answers to the private trap gateway. HTTP, HTTPS and SMTP traps record recipients and synthetic secret payloads without forwarding traffic. The trap CA is mounted as a public certificate only. Protocols or schemas the observer cannot inspect leave explicit incomplete coverage.
+
+The internal network is `histor-observe` (10.231.0.0/24). The root-owned firewall redirects gateway ports 25/80/443/587 to listeners 18025/18080/18443/18587 **only from `br-histor-obs`**, before Docker's published-port rules. Existing nginx and mail services retain their ports. The bridge can reach only DNS and these traps; forwarding, host SSH and the observer API are blocked. A root-owned health record is refreshed only after checking the exact rules and network configuration. Without a fresh verified record, the observer refuses traced execution.
+
+All process file/network activity remains evidence, including PID 1. npm uses `/dev/null` as its own user configuration and disables its update notifier; the planted `.npmrc` remains available for package code. Socket creation distinguishes local netlink from outbound `sendto` activity. Missing paths, destinations or truncated evidence are incomplete. Container address discovery retries transient Docker timeouts within a 30-second bound.
+
+**Which versions.** A version with successful, complete observer-3 evidence is cached. New versions, incomplete observations and older observers are retried, ordered by oldest attempt so popular failures cannot starve unobserved packages. `HISTOR_SANDBOX_MAX_PER_CRAWL` caps work per crawl. Sandbox infrastructure errors are not clean package results. Details and acceptance evidence: [observer 3](behaviour-v3.md).
+
+**Set up the sandbox host** (Ubuntu 24.04, Docker):
+
+```bash
+# gVisor from Google's signed apt repository, pinned to one release
+curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+#   fingerprint 6F1D F85E 3A71 C249 18E7  27D5 6FC6 D554 E32B D943 (The gVisor Authors)
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases 20261005 main" \
+  > /etc/apt/sources.list.d/gvisor.list
+apt-get update && apt-get install -y runsc
+runsc install && systemctl reload docker      # a reload, not a restart: running containers stay up
+
+# the observer: user, network, images, TLS, token, systemd unit, firewall rule for HISTOR's host only
+HISTOR_CALLER_IP=<HISTOR host IP> ./histor/sandbox/install.sh
+```
+
+`install.sh` prints the certificate's SHA-256 and ends with a self-test that must say `"gvisor":true` (the kernel inside reads `4.19.0-gvisor`). The token is generated once in `/etc/histor-sandbox.env` and never printed; copy it to HISTOR's host `.env` without displaying it. On HISTOR's host:
+
+```bash
+HISTOR_SANDBOX_URL=https://<sandbox host>:9443
+HISTOR_SANDBOX_TOKEN=<from /etc/histor-sandbox.env>
+HISTOR_SANDBOX_CERT_SHA256=<printed by install.sh>
+```
+
+HISTOR pins the certificate: it checks the fingerprint before it sends a byte, token included. Two traps found while setting it up: on a user-defined Docker network gVisor cannot reach Docker's embedded DNS (`127.0.0.11`), so the install stage gets its own `resolv.conf`; and Docker's default `--memory-swap` doubles the memory limit — a 900 MB allocation passed a 512 MB container until swap was set equal to memory. Logs: `journalctl -u histor-sandbox`.
+
+**Throughput.** `HISTOR_SANDBOX_SLOTS` in `/etc/histor-sandbox.env` (default 2) is how many packages the sandbox host runs at once — each takes up to 1 GB while installing and 512 MB while running; set HISTOR's `HISTOR_SANDBOX_CONCURRENCY` to the same number. `HISTOR_SANDBOX_MAX_PER_CRAWL` caps the versions one crawl runs. One observation takes 13–60 s end to end, so three slots run about 500 packages an hour.

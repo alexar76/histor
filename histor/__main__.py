@@ -45,6 +45,20 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             print(json.dumps(services.crawler.run(), indent=2))
             return 0
+        if command == "census":
+            from histor.security_events import census
+            print(json.dumps(census(services.store, services.key), ensure_ascii=False))
+            return 0
+        if command == "webhooks":
+            from pathlib import Path
+
+            from histor.security_events import deliver
+            if len(args) != 2:
+                raise ValueError("histor webhooks /operator/owned/subscriptions.json")
+            subscriptions = json.loads(Path(args[1]).read_text())
+            for subscription in subscriptions:
+                print(json.dumps({"id": subscription["id"], **deliver(services.store, subscription)}))
+            return 0
         if command == "issuer":
             print(services.key.did)
             return 0

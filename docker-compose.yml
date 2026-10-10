@@ -29,6 +29,16 @@ services:
       # one rate-limit bucket.
       HISTOR_TRUSTED_PROXIES: "${HISTOR_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12}"
       HISTOR_PQC: "${HISTOR_PQC:-1}"
+      # Package sandbox (npm/PyPI MCP servers run under gVisor on another host; histor/sandbox/).
+      # Off unless all three are set; the token stays in the host .env, the pin is the sandbox
+      # certificate's SHA-256 (install.sh prints it).
+      HISTOR_SANDBOX_URL: "${HISTOR_SANDBOX_URL:-}"
+      HISTOR_SANDBOX_TOKEN: "${HISTOR_SANDBOX_TOKEN:-}"
+      HISTOR_SANDBOX_CERT_SHA256: "${HISTOR_SANDBOX_CERT_SHA256:-}"
+      HISTOR_SANDBOX_MAX_PER_CRAWL: "${HISTOR_SANDBOX_MAX_PER_CRAWL:-300}"
+      HISTOR_SANDBOX_CONCURRENCY: "${HISTOR_SANDBOX_CONCURRENCY:-2}"
+      HISTOR_SANDBOX_TIMEOUT_S: "${HISTOR_SANDBOX_TIMEOUT_S:-420}"
+      HISTOR_SANDBOX_OBSERVER: "${HISTOR_SANDBOX_OBSERVER:-3}"
       # Optional meaning-based classifier (OpenAI-compatible; DeepSeek's own API by default). Off
       # unless a model, a key and a budget are all set. The key stays in the host .env.
       HISTOR_CLASSIFIER_MODEL: "${HISTOR_CLASSIFIER_MODEL:-}"

@@ -144,3 +144,46 @@ ses sous-domaines) ou un préfixe d’URL à `HISTOR_OPT_OUT` (séparés par des
 de données (un par ligne, commentaires avec `#`), relu à chaque exploration. Le point de terminaison reste listé comme
 non tenté avec la raison `operator-opt-out`, au lieu de disparaître en silence ; les étiquettes déjà dans le journal
 restent, car le journal ne fait que croître.
+
+## Bac à sable des paquets
+
+La plupart des serveurs MCP qu’on utilise sont des paquets npm ou PyPI que le client lance sur la machine même de l’utilisateur (`npx -y …`, `uvx …`) : il n’y a aucun point de terminaison à contacter. HISTOR les observe sur un autre hôte qui installe le paquet et le lance sous [gVisor](https://gvisor.dev), un noyau écrit en espace utilisateur : le paquet parle à gVisor, pas au noyau de l’hôte. gVisor est un logiciel libre de Google sous [licence Apache 2.0](https://github.com/google/gvisor/blob/master/LICENSE) ; HISTOR l’exécute, il ne le distribue pas.
+
+**Ce que fait une observation** (`histor/sandbox/histor_observe.py`, bibliothèque standard seulement) :
+
+1. Installation, sous gVisor : npm avec `--ignore-scripts`, pip avec `--only-binary=:all:` — aucun code du paquet ne s’exécute. Un paquet PyPI qui ne publie qu’un sdist est signalé `no-wheel`, jamais construit.
+2. Exécution, sous le runtime de traçage de gVisor (`runsc-trace`) : un réseau interne sans route vers l’extérieur dont le seul résolveur est le journal DNS de l’observateur, racine et paquet en lecture seule, `/tmp` un tmpfs de 64 Mo, un uid sans privilèges, sans capabilities ni nouveaux privilèges, 512 Mo de mémoire sans swap, un CPU, 256 processus, aucun environnement hormis `PATH`/`HOME`. HOME contient des identifiants leurres (clés SSH, jetons cloud, de registres et Git, un portefeuille, un historique shell) et le répertoire de travail un `.env` leurre. L’observateur parle MCP par stdin/stdout : `initialize`, `tools/list`, puis chacun d’au plus 15 outils une fois avec des arguments canaris construits d’après son schéma (une adresse sur `histor-trap.invalid`, un chemin vers une note leurre) — dans le bac à sable, sans agir sur rien de réel — puis tue le conteneur. Les scripts d’installation npm, sautés à l’installation, s’exécutent d’abord à part, eux aussi tracés.
+3. Réponse : la version, son empreinte d’intégrité, l’empreinte de l’image, un statut (`ok`, `exited` — le plus souvent un serveur qui a besoin d’une clé ou d’un chemin pour démarrer —, `install-failed`, `no-entry-point`, `no-wheel`, `timeout`, `protocol`) et les outils.
+
+Si `runsc` n’est pas un runtime Docker, il refuse de s’exécuter plutôt que de se rabattre sur `runc`.
+
+**Comportement.** gVisor écrit lui-même la trace de l’exécution (`execve`, `connect`, `open`/`openat`) hors du bac à sable : le paquet ne peut ni la cacher ni la falsifier ; le journal DNS note chaque nom demandé et répond par une adresse unique de 198.18.0.0/15 qui ne mène nulle part, si bien que chaque tentative de connexion est vue avec le nom visé. Par phase — scripts d’installation, démarrage, appels canaris — l’observation rapporte les programmes lancés, les noms demandés et les adresses composées, les leurres ouverts et les écritures qui survivraient hors du bac à sable (`.bashrc`, `authorized_keys`, …). L’activité du processus d’entrée dans la phase des scripts est celle de npm lui-même et est écartée, de même que les connexions loopback. L’installation ajoute le runtime `runsc-trace`, le réseau interne `histor-observe` (10.231.0.0/24), une règle de pare-feu qui ne lui laisse joindre que le résolveur, `CAP_NET_BIND_SERVICE` pour le service et une minuterie qui efface les traces lues. HISTOR relance une version quand son observateur est antérieur à `HISTOR_SANDBOX_OBSERVER` (2 = comportement).
+
+**Quelles versions.** Une version publiée sur npm ou PyPI ne peut pas changer : chaque version est observée une fois. Chaque exploration demande aux registres la dernière version (c’est peu coûteux) et ne lance le bac à sable que pour les versions jamais vues, au plus `HISTOR_SANDBOX_MAX_PER_CRAWL` (300) : d’abord les nouvelles versions de paquets déjà observés — c’est là qu’une description d’outil modifiée atteint tous ceux qui lancent le paquet sans version fixée —, puis les paquets jamais observés. Une panne du bac à sable lui-même est enregistrée comme erreur interne d’HISTOR et n’émet aucune étiquette sur le paquet.
+
+**Préparer l’hôte du bac à sable** (Ubuntu 24.04, Docker) :
+
+```bash
+# gVisor depuis le dépôt apt signé de Google, figé sur une version
+curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+#   empreinte 6F1D F85E 3A71 C249 18E7  27D5 6FC6 D554 E32B D943 (The gVisor Authors)
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases 20261005 main" \
+  > /etc/apt/sources.list.d/gvisor.list
+apt-get update && apt-get install -y runsc
+runsc install && systemctl reload docker      # un rechargement, pas un redémarrage : les conteneurs restent en marche
+
+# l’observateur : utilisateur, réseau, images, TLS, jeton, unité systemd, règle de pare-feu pour le seul hôte d’HISTOR
+HISTOR_CALLER_IP=<IP de l’hôte HISTOR> ./histor/sandbox/install.sh
+```
+
+`install.sh` affiche le SHA-256 du certificat et se termine par un auto-test qui doit indiquer `"gvisor":true` (le noyau à l’intérieur est `4.19.0-gvisor`). Le jeton est généré une fois dans `/etc/histor-sandbox.env` et jamais affiché ; copiez-le dans le `.env` de l’hôte HISTOR sans l’afficher. Sur l’hôte HISTOR :
+
+```bash
+HISTOR_SANDBOX_URL=https://<hôte du bac à sable>:9443
+HISTOR_SANDBOX_TOKEN=<depuis /etc/histor-sandbox.env>
+HISTOR_SANDBOX_CERT_SHA256=<affiché par install.sh>
+```
+
+HISTOR épingle le certificat : il vérifie l’empreinte avant d’envoyer le moindre octet, jeton compris. Deux pièges rencontrés pendant la mise en place : sur un réseau Docker défini par l’utilisateur, gVisor n’atteint pas le DNS intégré de Docker (`127.0.0.11`), donc l’étape d’installation reçoit son propre `resolv.conf` ; et le `--memory-swap` par défaut de Docker double la limite mémoire — une allocation de 900 Mo passait dans un conteneur de 512 Mo jusqu’à ce que le swap soit fixé égal à la mémoire. Journaux : `journalctl -u histor-sandbox`.
+
+**Débit.** `HISTOR_SANDBOX_SLOTS` dans `/etc/histor-sandbox.env` (2 par défaut) est le nombre de paquets que l’hôte du bac à sable exécute à la fois ; chacun prend jusqu’à 1 Go pendant l’installation et 512 Mo pendant l’exécution. Réglez `HISTOR_SANDBOX_CONCURRENCY` d’HISTOR sur le même nombre. `HISTOR_SANDBOX_MAX_PER_CRAWL` plafonne les versions exécutées par exploration. Une observation complète prend 13 à 60 s : trois emplacements traitent environ 500 paquets par heure.

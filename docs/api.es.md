@@ -39,7 +39,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | primero los más recientes; cada uno con `summary.added`, `summary.removed`, `summary.modified[].fields` (diff por palabras de las descripciones, diff por JSON-path de los esquemas) |
 | GET | `/api/v1/changes/<id>` | un cambio |
-| GET | `/feed.xml` | feed Atom de los últimos 50 cambios |
+| GET | `/feed.xml` | feed Atom de los últimos 50 cambios; `?watch=<id>,<id>,…` (hasta 100 ids de destino, como los dan `/check` y las páginas de servidor) deja solo esos servidores y paquetes: una suscripción en cualquier lector de feeds |
 
 ## Etiquetas y evidencia
 
@@ -89,6 +89,7 @@ Content-Type: application/json
 
 {
   "endpoint": "https://example.com/mcp",      // or "name": "io.github.org/server"
+  // a stdio server instead: "package": "npm:@scope/name" or "pypi:name"
   "tools": [ … ],                             // the tools array you received, or:
   "toolSetDigest": "sha256-…",                // its MTL/1 digest
   "contribute": true                          // optional: add (endpoint, digest, day) to a count
@@ -118,6 +119,8 @@ lo escanea en el acto. Límites: 30 comprobaciones por minuto y 20 escaneos nuev
 dirección; los cuerpos de más de 2 MiB se rechazan. Con `contribute` no se guarda nada salvo el
 recuento del día para ese resumen.
 
+Para un servidor stdio (un paquete de npm o PyPI que arranca tu cliente), envía `package` —`npm:<nombre>` o `pypi:<nombre>`— en lugar de `endpoint`; los nombres de PyPI se normalizan por ti. `target.packageVersion` es la última versión que HISTOR observó en su [sandbox de paquetes](operations.es.md#sandbox-de-paquetes). Un nombre de paquete nunca se cuenta como host desconocido. Dos respuestas más para un paquete. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), para cualquier paquete consultado, esté listado o no, nombra el paquete popular al que se parece este nombre —a un carácter, el mismo nombre bajo otro scope u otros separadores— cuando ese se descarga al menos 100 veces más; los nombres genéricos como `mcp-server` no son de nadie. `target.packageSignals` es lo que dice el registro sobre la versión que HISTOR observó: `provenance` (una compilación atestiguada en CI), `publisher` (nunca un correo), `installScripts` y `flags` con lo que cambió desde la versión observada antes: `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies`, las marcas de un token de publicación robado.
+
 ## Estadísticas e insignias en vivo
 
 | Ruta | Devuelve |
@@ -146,3 +149,5 @@ híbrido Ed25519 + ML-DSA-65 cuando `HISTOR_PQC=1`.
 
 `POST /api/v1/admin/crawl` con `x-histor-operator: $HISTOR_OPERATOR_TOKEN` inicia un rastreo en ese
 momento (202), o responde 409 si ya hay uno en curso. Sin un token configurado, la ruta responde 503.
+
+`GET /api/v1/admin/unlisted?days=7&limit=100` (la misma cabecera) lista los hosts por los que se preguntó a `/check` y que HISTOR no lista, los más consultados primero: `host`, `queries`, `days`, `first_day`, `last_day`. Solo se cuenta el nombre de host de un endpoint https con un nombre DNS público — nunca la ruta ni los parámetros, la dirección de quien pregunta ni las herramientas —, una vez por dirección, host y día; los días de más de 90 se eliminan. Así crece la lista propia de HISTOR (`histor/curated.json`) con los servidores que la gente usa de verdad.

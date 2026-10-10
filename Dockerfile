@@ -7,6 +7,7 @@ RUN apt-get update -qq \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY scanner/package.json scanner/package-lock.json ./scanner/
+COPY scanner/vendor ./scanner/vendor
 RUN npm ci --prefix scanner --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY scanner/scan.mjs ./scanner/
 COPY pyproject.toml uv.lock README.md LICENSE ./

@@ -19,11 +19,14 @@ import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from awr import SigningKey
 
 from histor.logbook import sign_document, utcnow
+from histor.lookalike import default_index
 from histor.mcpclient import MAX_TOOLS
+from histor.packages import package_key
 from histor.scanner import Scanner, ScannerError
 from histor.store import Store, dumps
 from histor.subject import MtlError, tool_set_digest
@@ -36,8 +39,29 @@ CHECK_SCAN_TIMEOUT_S = 30  # a /check scan is one set, not a crawl batch
 # behind each other is exactly the stall this prevents. A caller who finds it busy is told so.
 _SCAN_SLOT = threading.Semaphore(1)
 
+# What may be counted as an unlisted host: a public DNS name. Never an address literal or a name that
+# only means something inside one network — those say where a person works, not what to watch.
+_HOSTNAME = re.compile(r"^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")
+_LOCAL_SUFFIXES = (".local", ".localhost", ".internal", ".lan", ".home", ".corp", ".intranet", ".private",
+                   ".test", ".example", ".invalid", ".localdomain", ".home.arpa")
+
+
+def unlisted_host(endpoint: str) -> str | None:
+    """The host of an https endpoint, if it is a public DNS name; the path and query are dropped."""
+    try:
+        parts = urlsplit(endpoint.strip())
+        host = (parts.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return None
+    if parts.scheme != "https" or not _HOSTNAME.match(host) or host.endswith(_LOCAL_SUFFIXES):
+        return None
+    return host
+
 NOTES = {
-    "not-listed": "HISTOR has no record of this endpoint or name in the registries it reads.",
+    "not-listed": (
+        "HISTOR has no record of this endpoint or name in the registries it reads. It counts the host name of an "
+        "endpoint it does not know (host and day, nothing else) to decide which servers to watch next."
+    ),
     "not-observed": "HISTOR lists this endpoint but has not retrieved its tool definitions (see lastStatus).",
     "same": "The tool definitions you sent are the set HISTOR currently observes at this endpoint.",
     "previously-observed": (
@@ -88,16 +112,26 @@ class Checker:
         self.classifier_enabled = classifier_enabled
 
     def check(self, body: dict[str, Any], *, allow_scan: bool | Callable[[], bool],
-              may_contribute: Callable[[str], bool] | None = None) -> dict[str, Any]:
+              may_contribute: Callable[[str], bool] | None = None,
+              may_count_unlisted: Callable[[str], bool] | None = None) -> dict[str, Any]:
         """*allow_scan* may be a callable: it is asked only when a fresh scan is about to run, so a
         check that needs none does not spend the caller's scan budget."""
         endpoint = body.get("endpoint")
         name = body.get("name")
-        for field, value in (("endpoint", endpoint), ("name", name)):
+        package = body.get("package")
+        for field, value in (("endpoint", endpoint), ("name", name), ("package", package)):
             if value is not None and (not isinstance(value, str) or "\x00" in value or len(value) > 2000):
                 raise CheckError(f"{field} must be a string of at most 2000 characters")
+        if package:
+            # A stdio server: "npm:<name>" or "pypi:<name>", as the client launched it. PyPI names
+            # are compared normalised (PEP 503), so the client need not normalise them itself.
+            registry, _, pkg_name = package.partition(":")
+            key = package_key(registry, pkg_name)
+            if key is None:
+                raise CheckError("package must be npm:<name> or pypi:<name>")
+            endpoint = key
         if not endpoint and not name:
-            raise CheckError("send endpoint or name")
+            raise CheckError("send endpoint, package or name")
 
         client_digest: str | None = None
         client_entries: list[dict[str, Any]] | None = None
@@ -123,13 +157,17 @@ class Checker:
             "type": CHECK_TYPE,
             "checkedAt": utcnow(),
             "issuer": self.key.did,
-            "query": {k: v for k, v in (("endpoint", endpoint), ("name", name), ("toolSetDigest", client_digest)) if v},
+            "query": {k: v for k, v in (("package" if package else "endpoint", endpoint), ("name", name),
+                                        ("toolSetDigest", client_digest)) if v},
         }
         if digest_error:
             result["query"]["digestError"] = digest_error
 
         if target is None:
             state = "not-listed"
+            host = unlisted_host(endpoint) if endpoint and not package else None
+            if host and (may_count_unlisted is None or may_count_unlisted(host)):
+                self.store.add_unlisted_query(host, datetime.now(UTC).strftime("%Y-%m-%d"))
         else:
             result["target"] = {
                 "id": target["id"],
@@ -140,6 +178,13 @@ class Checker:
                 "lastStatus": target["last_status"],
                 "listed": not target["delisted"],
             }
+            if target.get("package_version"):
+                result["target"]["packageVersion"] = target["package_version"]
+            if target.get("package_signals"):
+                try:
+                    result["target"]["packageSignals"] = json.loads(target["package_signals"])
+                except ValueError:
+                    pass
             if target["current_toolset"] or target["current_subject"]:
                 result["observed"] = {
                     k: v for k, v in (
@@ -175,6 +220,15 @@ class Checker:
                 result["contributed"] = True
 
         result["match"] = state
+        if package:
+            # A name made to be taken for a popular one — asked for any package, listed or not:
+            # a typosquat is usually published the day it is used.
+            try:
+                lookalike = default_index().check(endpoint)
+            except (OSError, ValueError):
+                lookalike = None
+            if lookalike:
+                result["packageLookalike"] = lookalike
         note = NOTES[state]
         if target is not None and state not in ("not-listed", "not-observed"):
             if target["delisted"]:

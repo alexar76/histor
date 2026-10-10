@@ -62,6 +62,11 @@ class Observation:
     protocol_version: str = ""
     pages: int = 0
     address: str = ""
+    # A package observation (histor.packages): the npm/PyPI version the sandbox ran, the observer's
+    # version, and what the package did there (install scripts, startup, canary tool calls).
+    package_version: str = ""
+    package_observer: str = ""
+    behaviour: dict[str, Any] | None = None
 
 
 class _Stop(Exception):

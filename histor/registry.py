@@ -1,13 +1,15 @@
 """Harvest the official MCP registry into observation targets.
 
-One target per (server name, streamable-http remote). Remotes HISTOR does not dial are still
-recorded, with the reason, so the public numbers account for every listed endpoint instead of
-quietly shrinking the denominator.
+One target per (server name, streamable-http remote), and one per npm or PyPI package a server
+ships (``npm:<name>``, ``pypi:<name>``; observed in the package sandbox, histor.packages).
+Remotes and packages HISTOR does not observe are still recorded, with the reason, so the public
+numbers account for every listed endpoint instead of quietly shrinking the denominator.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -18,8 +20,11 @@ from urllib.parse import urlsplit
 import httpx
 
 from histor.mcpclient import USER_AGENT
-from histor.subject import REGISTRY_OFFICIAL
+from histor.packages import REGISTRIES, package_key, parse_package
+from histor.subject import REGISTRY_CURATED, REGISTRY_OFFICIAL
 from histor.untrusted import clean_text
+
+CURATED_PATH = Path(__file__).with_name("curated.json")
 
 # Not a size limit: the registry may grow as it likes (the first production harvest was ~355 pages
 # of 100). A pagination that loops is caught by the seen-cursor check in harvest(); this only bounds
@@ -59,9 +64,12 @@ OPT_OUT = "operator-opt-out"
 
 
 def opted_out(url: str, entries: tuple[str, ...]) -> bool:
-    """An entry is a URL prefix (``https://host/path``) or a host, which also covers its subdomains."""
+    """An entry is a URL prefix (``https://host/path``), a host, which also covers its subdomains,
+    or a package (``npm:@scope/name``, ``pypi:name``)."""
     if not entries:
         return False
+    if url.startswith(tuple(f"{r}:" for r in REGISTRIES)):
+        return url in entries
     try:
         host = (urlsplit(url).hostname or "").lower()
     except ValueError:
@@ -87,7 +95,7 @@ def load_opt_out(env_value: str, path: Path | None) -> tuple[str, ...]:
 
 
 def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool = False,
-                         opt_out: tuple[str, ...] = ()) -> list[Target]:
+                         opt_out: tuple[str, ...] = (), observe_packages: bool = False) -> list[Target]:
     """Latest record per name → targets. Pure, so the selection rules are testable offline.
 
     ``allow_cleartext`` exists for a loopback test registry, the same switch that lets the
@@ -108,6 +116,7 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
             latest[clean_text(srv["name"], 300)] = (srv, meta)
 
     out: list[Target] = []
+    packages_seen: set[str] = set()
     for name, (srv, _meta) in sorted(latest.items()):
         remotes = [r for r in (srv.get("remotes") or []) if isinstance(r, dict) and isinstance(r.get("url"), str)]
         repo = srv.get("repository") if isinstance(srv.get("repository"), dict) else {}
@@ -137,7 +146,108 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
                 website=_str(srv.get("websiteUrl"), 500),
                 skip_reason=skip,
             ))
+        kinds: set[str] = set()
+        for pkg in srv.get("packages") or []:
+            if not isinstance(pkg, dict):
+                continue
+            kind = str(pkg.get("registryType") or pkg.get("registry_type") or pkg.get("registry_name") or "").lower()
+            ident = pkg.get("identifier") or pkg.get("name")
+            if not isinstance(ident, str) or not ident.strip() or kind in kinds:
+                continue  # one package per registry type per server
+            kinds.add(kind)
+            ptransport = pkg.get("transport") if isinstance(pkg.get("transport"), dict) else {}
+            ptransport = clean_text(str(ptransport.get("type") or "stdio"), 40)
+            key = package_key(kind, ident.strip()) if kind in REGISTRIES else None
+            endpoint = key or clean_text(f"{kind or 'unknown'}:{ident.strip()}", 300)
+            skip = None
+            if kind not in REGISTRIES:
+                skip = "package-type-not-observed"  # oci, mcpb, nuget: no sandbox runner for them yet
+            elif key is None:
+                skip = "bad-package-name"
+            elif ptransport != "stdio":
+                skip = "transport-not-observed"
+            elif endpoint in packages_seen:
+                skip = "package-observed-under-another-name"  # the same package listed twice
+            elif not observe_packages:
+                skip = "sandbox-not-configured"
+            if opted_out(endpoint, opt_out):
+                skip = OPT_OUT
+            packages_seen.add(endpoint)
+            out.append(Target(
+                id=target_id(name, endpoint),
+                name=name,
+                endpoint=endpoint,
+                transport=ptransport or "stdio",
+                registry=REGISTRY_OFFICIAL,
+                title=_str(srv.get("title"), 200),
+                description=_str(srv.get("description")),
+                version=_str(pkg.get("version"), 100),
+                repository=_str(repo.get("url"), 500),
+                website=_str(srv.get("websiteUrl"), 500),
+                skip_reason=skip,
+            ))
     return out
+
+
+def curated_targets(path: Path = CURATED_PATH, *, opt_out: tuple[str, ...] = (),
+                    observe_packages: bool = False) -> list[Target]:
+    """HISTOR's own list of popular remote servers the official registry does not carry.
+
+    Many servers people actually install never published to the registry, and a /check for them
+    answered "not-listed" — as if nobody had ever seen them. The list ships with the code, so what
+    HISTOR watches beyond the registry is public and reviewed like any other change. Its names are
+    HISTOR's, in their own namespace (REGISTRY_CURATED): a label never claims a registry listing.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out: list[Target] = []
+    seen: set[str] = set()
+    for entry in data.get("servers") or []:
+        name, url = entry.get("name"), entry.get("endpoint")
+        if not isinstance(name, str) or not name.strip() or not isinstance(url, str) or url in seen:
+            continue
+        seen.add(url)
+        if parse_package(url):
+            transport = "stdio"
+            skip = None if observe_packages else "sandbox-not-configured"
+        else:
+            transport = "streamable-http"
+            skip = None if url.startswith("https://") else "cleartext-url"
+        if opted_out(url, opt_out):
+            skip = OPT_OUT
+        out.append(Target(
+            id=target_id(name, url),
+            name=name,
+            endpoint=url,
+            transport=transport,
+            registry=REGISTRY_CURATED,
+            title=_str(entry.get("title"), 200),
+            description=_str(entry.get("description")),
+            version=None,
+            repository=_str(entry.get("repository"), 500),
+            website=_str(entry.get("website"), 500),
+            skip_reason=skip,
+        ))
+    return out
+
+
+def curated_rank(path: Path = CURATED_PATH) -> dict[str, int]:
+    """Endpoint/package → its place in the curated list: the order never-observed packages run in."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out: dict[str, int] = {}
+    for i, entry in enumerate(data.get("servers") or []):
+        if isinstance(entry.get("endpoint"), str):
+            out.setdefault(entry["endpoint"], i)
+    return out
+
+
+def with_curated(registry_targets: list[Target], curated: list[Target]) -> list[Target]:
+    """The registry's targets plus the curated ones it does not already list.
+
+    One endpoint keeps one record: when a curated server is published to the registry, the
+    registry's listing replaces ours (our record is delisted at that crawl, its history kept).
+    """
+    listed = {t.endpoint for t in registry_targets}
+    return registry_targets + [t for t in curated if t.endpoint not in listed]
 
 
 def _get_page(client: httpx.Client, url: str, params: dict[str, Any], attempts: int = 5,
@@ -159,7 +269,7 @@ def _get_page(client: httpx.Client, url: str, params: dict[str, Any], attempts: 
 
 def harvest(registry_url: str, *, timeout: float = 90.0, pause_s: float = 0.15,
             allow_cleartext: bool = False, transport: httpx.BaseTransport | None = None,
-            retry_delay: float = 2.0, opt_out: tuple[str, ...] = ()) -> list[Target]:
+            retry_delay: float = 2.0, opt_out: tuple[str, ...] = (), observe_packages: bool = False) -> list[Target]:
     servers: list[dict[str, Any]] = []
     cursor: str | None = None
     seen: set[str] = set()
@@ -186,4 +296,5 @@ def harvest(registry_url: str, *, timeout: float = 90.0, pause_s: float = 0.15,
             time.sleep(pause_s)
         else:
             raise RuntimeError(f"registry pagination did not end within {MAX_PAGES} pages")
-    return targets_from_servers(servers, allow_cleartext=allow_cleartext, opt_out=opt_out)
+    return targets_from_servers(servers, allow_cleartext=allow_cleartext, opt_out=opt_out,
+                                observe_packages=observe_packages)

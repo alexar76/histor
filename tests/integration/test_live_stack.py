@@ -49,7 +49,8 @@ POISONED = [
 
 class Live:
     def __init__(self, settings) -> None:
-        self.services = build(settings)
+        from histor.registry import harvest
+        self.services = build(settings, crawler_kwargs={"harvest_fn": lambda url: harvest(url, allow_cleartext=True)})
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self.server = uvicorn.Server(uvicorn.Config(create_app(self.services), host="127.0.0.1", port=self.port,
@@ -189,4 +190,5 @@ def test_the_migration_cli_reports_the_head(settings):
     assert up.returncode == 0, up.stderr
     status = subprocess.run([sys.executable, "-m", "histor", "migrate", "status"], env=env, capture_output=True,
                             text=True, timeout=60)
-    assert "applied=[1, 2, 3, 4]" in status.stdout and "pending=[]" in status.stdout
+    from histor.migrations import MIGRATIONS
+    assert f"applied={[v for v, _, _ in MIGRATIONS]}" in status.stdout and "pending=[]" in status.stdout

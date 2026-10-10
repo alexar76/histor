@@ -40,7 +40,8 @@ flowchart TB
 
 | 模块 | 职责 |
 |---|---|
-| `histor/registry.py` | 分页读取官方注册表（`version=latest`，带重试：每页耗时 1–50 秒），每个名称只保留一条记录，并把每个远程端点转为一个目标。它不会连接的端点也连同原因一起保留（`transport-not-observed`、`templated-url`、`cleartext-url`），这样公开数字的分母永远不会缩小。 |
+| `histor/registry.py` | 分页读取官方注册表（`version=latest`，带重试：每页耗时 1–50 秒），每个名称只保留一条记录，并把每个远程端点转为一个目标。它不会连接的端点也连同原因一起保留（`transport-not-observed`、`templated-url`、`cleartext-url`），这样公开数字的分母永远不会缩小。 随后加入 HISTOR 自己维护的注册表未收录的热门服务器名单（`histor/curated.json`），使用独立的命名空间；注册表已列出的端点只从注册表读取。 |
+| `histor/packages.py` + `histor/sandbox/` | npm 和 PyPI 软件包：`npm:<名称>` / `pypi:<名称>` 目标；每次抓取取最新版本和注册表事实（来源证明、发布者、安装脚本、依赖），并通过固定证书的 HTTPS 从沙箱主机取得观察结果：安装时不运行软件包代码，安装脚本单独运行，在带诱饵凭据、无对外路由的 gVisor 跟踪运行时中启动，`initialize` + `tools/list`，每个工具用金丝雀参数调用一次；gVisor 的跟踪记录和观察程序的 DNS 记录器说明它做了什么。每个版本观察一次（已发布版本不可更改），观察程序更新后再观察一次；沙箱故障是 HISTOR 的内部错误，绝不是关于软件包的标签。`histor/lookalike.py` 指出模仿热门软件包的软件包。见[运维](operations.zh.md#软件包沙箱)。 |
 | `histor/netguard.py` | 只解析一次主机名，只要**任何**一条解析结果不是公网地址就拒绝该目标，然后连接已检查的地址，并把 `Host` 和 TLS SNI 设为该主机名。DNS 重绑定永远得不到第二次查询的机会。 |
 | `histor/mcpclient.py` | `initialize` → `notifications/initialized` → `tools/list`，沿 `nextCursor` 翻完所有分页。流式读取有大小上限，SSE 只读到我们的响应 id 为止，不跟随重定向，拒绝重复的 JSON 成员。它没有任何调用工具的代码路径。 |
 | `histor/subject.py` | MTL/1 描述符与两个摘要，基于 AWR/2 参考规范化器实现。一项逐字节对等测试把它与该一致性档次（profile）自带的 `mtl_subject.py` 对照运行。 |

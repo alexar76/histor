@@ -530,3 +530,111 @@ def test_check_uses_the_observed_set_when_no_tools_are_sent(api):
     _store_verdict(world, digest, [], checked=2, total=2)
     answer = check(client, name="io.example/weather").json()
     assert answer["classifier"]["status"] == "classified" and answer["classifier"]["flagged"] == 0
+
+
+def test_unknown_hosts_are_counted_by_host_once_per_caller_and_only_the_operator_reads_them(api):
+    client, _ = api
+    op = {"x-histor-operator": "t" * 32}
+    for endpoint in ("https://mcp.newcomer.dev/mcp?api_key=SECRET", "https://mcp.newcomer.dev/other/path",
+                     "https://mcp.newcomer.dev/mcp"):
+        answer = check(client, endpoint=endpoint).json()
+        assert answer["match"] == "not-listed" and "counts the host name" in answer["note"]
+    for local in ("https://10.0.0.5/mcp", "https://mcp.corp.internal/mcp", "http://plain.example.org/mcp",
+                  "https://localhost:8443/mcp", "https://[::1]/mcp", "https://printer.local/mcp"):
+        check(client, endpoint=local)
+    check(client, name="io.unknown/by-name")  # a name is not a host: nothing to count
+
+    assert client.get("/api/v1/admin/unlisted").status_code == 401
+    hosts = client.get("/api/v1/admin/unlisted", headers=op).json()["hosts"]
+    assert [(h["host"], h["queries"], h["days"]) for h in hosts] == [("mcp.newcomer.dev", 1, 1)], \
+        "one caller asking three times counts once; path, query and private names are never stored"
+    assert "SECRET" not in client.get("/api/v1/admin/unlisted", headers=op).text
+
+
+def test_unlisted_host_keeps_only_public_dns_names():
+    from histor.check import unlisted_host
+
+    assert unlisted_host("https://MCP.Example.com:8443/path?q=1#f") == "mcp.example.com"
+    assert unlisted_host("https://xn--e1afmkfd.xn--p1ai/mcp") == "xn--e1afmkfd.xn--p1ai"
+    for bad in ("http://mcp.example.com/", "https://192.168.1.1/", "https://8.8.8.8/mcp", "https://[2001:db8::1]/",
+                "https://localhost/", "https://box.local/", "https://a.home.arpa/", "https://intranet/",
+                "not a url", "https://user:pw@/x", "https://ex ample.com/"):
+        assert unlisted_host(bad) is None, bad
+
+
+def test_unlisted_counts_are_capped_per_day_and_pruned_after_retention(world):
+    from histor import store as store_mod
+
+    s = world["services"].store
+    old_cap = store_mod.UNLISTED_HOSTS_PER_DAY
+    store_mod.UNLISTED_HOSTS_PER_DAY = 2
+    try:
+        s.add_unlisted_query("a.example.com", "2026-01-01")
+        for host in ("a.example.com", "b.example.com", "c.example.com"):
+            s.add_unlisted_query(host, "2026-06-01")
+        assert {h["host"] for h in s.unlisted_queries("2026-06-01")} == {"a.example.com", "b.example.com"}, \
+            "a new host on a full day is dropped; known hosts still count"
+        assert s.unlisted_queries("2025-01-01")[0]["host"] == "a.example.com"
+        assert all(h["first_day"] >= "2026-03-01" for h in s.unlisted_queries("2000-01-01")), \
+            "a day older than the retention window is pruned when a new host arrives"
+    finally:
+        store_mod.UNLISTED_HOSTS_PER_DAY = old_cap
+
+
+def test_check_by_package_validates_normalises_and_never_counts_a_package_as_a_host(api):
+    client, _ = api
+    answer = client.post("/api/v1/check", json={"package": "pypi:Mcp_Fetch"}).json()
+    assert answer["match"] == "not-listed" and answer["query"] == {"package": "pypi:mcp-fetch"}
+    assert client.post("/api/v1/check", json={"package": "oci:ghcr.io/x"}).status_code == 400
+    hosts = client.get("/api/v1/admin/unlisted", headers={"x-histor-operator": "t" * 32}).json()["hosts"]
+    assert hosts == [], "a package name (maybe a private one) is never stored"
+
+
+def test_check_names_a_package_that_imitates_a_popular_one_even_when_unlisted(api):
+    client, _ = api
+    answer = client.post("/api/v1/check", json={"package": "npm:@modelcontextprotocol/server-githb"}).json()
+    assert answer["match"] == "not-listed"
+    assert answer["packageLookalike"]["of"] == "npm:@modelcontextprotocol/server-github"
+    assert "packageLookalike" not in client.post("/api/v1/check", json={"package": "npm:@modelcontextprotocol/server-github"}).json()
+    assert "packageLookalike" not in client.post("/api/v1/check", json={"endpoint": "https://x.example.com/mcp"}).json()
+
+
+
+def test_a_watched_feed_carries_only_the_servers_asked_for(api):
+    client, world = api
+    world["mcp"].tools["/a"] = [tool("get_weather", "Return the weather, now in kelvin.")]
+    world["mcp"].tools["/b"] = [tool("drop_db", "Drop the database.")]
+    world["clock"].advance(days=1)
+    world["services"].crawler.run()
+    weather, wallet = target_id(world, "io.example/weather"), target_id(world, "io.example/drain-wallet")
+    both = client.get("/feed.xml").text
+    assert "io.example/weather" in both and "io.example/drain-wallet" in both
+    one = client.get(f"/feed.xml?watch={weather},0000000000000000")
+    assert one.status_code == 200 and "io.example/weather" in one.text and "drain-wallet" not in one.text
+    assert f"/feed.xml?watch=0000000000000000,{weather}" in one.text and "(watched)" in one.text
+    assert "<entry>" not in client.get("/feed.xml?watch=0000000000000000").text
+    assert client.get("/feed.xml?watch=not-an-id").status_code == 400
+    assert wallet
+
+
+def test_server_pages_carry_their_own_title_and_the_sitemap_lists_them(api):
+    client, world = api
+    tid = target_id(world, "io.example/weather")
+    page = client.get(f"/s/{tid}").text
+    assert "<title>weather — MCP server record · HISTOR</title>" in page
+    assert f'<link rel="canonical" href="http://testserver/s/{tid}"/>' in page or f"/s/{tid}" in page
+    assert "safe" not in page.split("<title>")[1].split("</title>")[0].lower()
+    assert "<title>HISTOR" in client.get("/s/0000000000000000").text, "unknown id: the plain desk"
+    robots = client.get("/robots.txt").text
+    assert "Sitemap:" in robots and "Disallow: /api/v1/admin/" in robots
+    index = client.get("/sitemap.xml").text
+    assert "sitemap-site.xml" in index and "sitemap-0.xml" in index
+    assert f"/s/{tid}</loc>" in client.get("/sitemap-0.xml").text
+    assert "/servers</loc>" in client.get("/sitemap-site.xml").text
+    assert client.get("/sitemap-5000.xml").status_code == 404
+
+
+def test_server_summary_carries_package_facts(api):
+    client, world = api
+    summary = client.get("/api/v1/servers").json()["servers"][0]
+    assert "packageVersion" in summary and "packageSignals" in summary

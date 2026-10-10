@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from histor import merkle
 from histor.app import create_app
 from histor.logbook import verify_document
-from histor.receipts import ANCHOR_TYPE, RECEIPT_STH_TYPE, AnchorRefused, ReceiptLog, sign_anchor
+from histor.receipts import RECEIPT_STH_TYPE, AnchorRefused, ReceiptLog, sign_anchor
 
 HUB = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-hub").digest())
 STRANGER = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-stranger").digest())

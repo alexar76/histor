@@ -60,6 +60,8 @@ flowchart LR
 
 - **读取**官方注册表中的每个远程端点：先 `initialize`，再 `tools/list`，并翻完所有分页。
   不调用任何工具，不安装也不执行任何东西，私有地址在建立连接之前即被拒绝。
+- **另外读取**一份注册表未收录的热门远程服务器短名单（[`histor/curated.json`](histor/curated.json)，其中包括 DeepWiki），使用 HISTOR 自己的命名空间 `urn:awr:mtl:1:registry:histor.modelmarket.dev/curated`，因此任何标签都不会声称服务器在注册表中登记。一旦这类服务器发布到注册表，就以注册表的条目取代我们的条目。
+- **运行 npm 和 PyPI 软件包**——人们用 `npx` 或 `uvx` 在本地启动的服务器——于[沙箱](docs/operations.zh.md#软件包沙箱)中：安装时不运行其代码，在带诱饵凭据、无对外路由的 gVisor 中启动，用 `initialize` + `tools/list` 读取，然后在沙箱内用金丝雀参数把每个工具各调用一次。gVisor 自己的跟踪记录说明软件包做了什么——启动了哪些程序、查询了哪些名称、打开了哪些诱饵——分别在安装时、启动时和工具被调用时。每个已发布版本一次；新版本若改变了其工具对模型所说的内容，就像任何端点一样，在日志中记为一次变更。
 - **计算摘要**：严格按 [MTL/1](https://github.com/alexar76/aicom/blob/main/awr/adoption/mcp-trust-label/PROFILE.md)
   的定义处理工具集——名称、描述、输入与输出 schema，按 UTF-16 码元排序，RFC 8785。
 - **签名**四种标签，每种都是一份独立的 AWR/2 `VerificationVerdict`：观测到了什么、WARDEN 模式集

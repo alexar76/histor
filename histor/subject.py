@@ -31,6 +31,9 @@ MTL_SUBJ_003 = "MTL-SUBJ-003"  # duplicate tool name
 MTL_NUM_001 = "MTL-NUM-001"  # non-integer JSON number in a tool schema: not digestible
 
 REGISTRY_OFFICIAL = "urn:awr:mtl:1:registry:registry.modelcontextprotocol.io"
+# HISTOR's own list of popular servers the official registry does not carry (histor/curated.json).
+# A separate namespace, so a label never says the registry assigned a name it did not.
+REGISTRY_CURATED = "urn:awr:mtl:1:registry:histor.modelmarket.dev/curated"
 
 
 class MtlError(Exception):
@@ -198,7 +201,7 @@ def build_subject(
 
 
 def fallback_subject(*, server_name: str, registry: str, tools: list[Any], transport: str | None = None,
-                     endpoint: str | None = None) -> Subject:
+                     endpoint: str | None = None, package: str | None = None) -> Subject:
     """A descriptor for a tool set that failed SUBJ-001/002/003: names only, never a digest.
 
     The label over it is ``inconclusive`` with the reason; the descriptor exists so that label
@@ -215,7 +218,7 @@ def fallback_subject(*, server_name: str, registry: str, tools: list[Any], trans
         "server": {"name": clean_text(server_name), "registry": clean_text(registry)},
         "toolSet": {"count": len(tools), "names": names},
     }
-    artifact = {k: v for k, v in (("transport", transport), ("endpoint", endpoint)) if v}
+    artifact = {k: v for k, v in (("transport", transport), ("package", package), ("endpoint", endpoint)) if v}
     if artifact:
         descriptor["artifact"] = artifact
     return Subject(

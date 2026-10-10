@@ -421,6 +421,41 @@ async function serverView(id, done) {
       el("button", { class: "chip", type: "button", text: t("js_copy"), onclick: (e) => { navigator.clipboard?.writeText(md); e.target.textContent = t("js_copied"); } })),
   );
   root.insertBefore(summaryLine(s), root.querySelector(".facts"));
+  const sig = s.packageSignals || null;
+  if (s.transport === "stdio" && (s.packageVersion || sig || data.packageLookalike)) {
+    root.append(el("h3", { class: "block-h", text: t("js_h_package") }));
+    const yn = (v) => (v === true ? t("js_yes") : v === false ? t("js_no") : "—");
+    root.append(el("div", { class: "facts" }, ...[["js_p_version", s.packageVersion || "—"], ["js_p_provenance", yn(sig?.provenance)],
+      ["js_p_publisher", sig?.publisher || "—"], ["js_p_scripts", (sig?.installScripts || []).join(", ") || "—"]]
+      .map(([k, v]) => el("div", { class: "fact" }, el("div", { class: "k", text: t(k) }), el("div", { class: "v", text: String(v) })))));
+    const flags = (sig?.flags || []).filter((f) => typeof f === "string");
+    if (flags.length) root.append(el("p", { class: "warn-t" }, sig.previousVersion ? t("js_p_flags", { prev: sig.previousVersion }) + " " : "",
+      ...flags.map((f) => el("span", { class: "pill advise", text: f }))));
+    const look = data.packageLookalike;
+    if (look && look.of) {
+      const how = { "one character away": "js_how_one", "the same name under another scope": "js_how_scope",
+        "the same name with other separators or look-alike characters": "js_how_sep" }[look.how];
+      root.append(el("p", { class: "warn-t", text: t("js_p_lookalike", { of: look.of, weekly: num(look.weekly), own: num(look.ownWeekly), how: how ? t(how) : String(look.how || "") }) }));
+    }
+    const b = sig?.behaviour;
+    if (b && typeof b === "object") {
+      root.append(el("h3", { class: "block-h", text: t("js_h_behaviour") }), el("p", { class: "faint", text: t("js_behaviour_note") }));
+      for (const phase of ["installScripts", "startup", "calls"]) {
+        const ph = b[phase];
+        if (!ph || typeof ph !== "object") continue;
+        const head = phase === "calls" ? t("js_b_calls", { n: ph.tools ?? 0 }) : t(`js_b_${phase}`);
+        const rows = [["js_b_packages", ph.packages], ["js_b_decoys", ph.decoys], ["js_b_writes", ph.writes], ["js_b_exec", ph.exec],
+          ["js_b_network", ph.network], ["js_b_lookups", ph.lookups]]
+          .filter(([, v]) => Array.isArray(v) && v.length && !(v === ph.packages && phase !== "installScripts"));
+        const loud = (ph.decoys || []).some((d) => !String(d).startsWith(".env")) || (ph.writes || []).length;
+        const box = el("div", { class: "tool" }, el("div", { class: "tn", text: head }));
+        if (!rows.some(([k]) => k !== "js_b_packages")) box.append(el("p", { class: "ok-t", text: t("js_b_nothing") }));
+        for (const [k, v] of rows) box.append(el("div", { class: "match" }, el("b", { class: loud && (k === "js_b_decoys" || k === "js_b_writes") ? "bad-t" : "", text: t(k) }), " · ",
+          v.slice(0, 20).map((x) => String(x)).join(", ")));
+        root.append(box);
+      }
+    }
+  }
   if (!s.toolSetDigest) {
     root.append(el("div", { class: "empty", text: t("js_unobserved_why", { status: reasonText(s) }) }));
   }

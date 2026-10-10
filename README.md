@@ -74,6 +74,8 @@ flowchart LR
 - **Reads** every remote endpoint in the official registry: `initialize`, then `tools/list`
   drained across pages. No tool is called, nothing is installed or executed, private addresses
   are refused before a connection opens.
+- **Also reads** a short list of popular remote servers the registry does not carry ([`histor/curated.json`](histor/curated.json), DeepWiki among them), under HISTOR's own namespace `urn:awr:mtl:1:registry:histor.modelmarket.dev/curated`, so no label claims a registry listing. When such a server publishes to the registry, the registry's listing replaces ours.
+- **Runs npm and PyPI packages** — the servers people start locally with `npx` or `uvx` — in a [sandbox](docs/operations.md#package-sandbox): installed without running their code, started under gVisor with decoy credentials and no route out, read with `initialize` + `tools/list`, then up to 15 tools called once with canary arguments, inside the sandbox. gVisor's own trace says what the package did — programs started, names looked up, decoys opened — at install, at startup and when its tools were called. Completed observations are cached per published version; incomplete observations are retried; a new version that changes what its tools tell the model is a change in the log, like any endpoint's.
 - **Digests** the tool set exactly as [MTL/1](https://github.com/alexar76/aicom/blob/main/awr/adoption/mcp-trust-label/PROFILE.md)
   defines it — name, description, input and output schema, UTF-16 code-unit order, RFC 8785.
 - **Signs** four kinds of label, each a standalone AWR/2 `VerificationVerdict`: what was observed,

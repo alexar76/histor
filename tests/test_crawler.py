@@ -357,3 +357,33 @@ def test_a_rescan_interrupted_halfway_runs_again_on_the_next_crawl(world):
         assert methods.count(PATTERN_SCAN) == 2, (t["name"], "exactly one rescan: none skipped, none repeated")
     with s.store.db.read() as tx:
         assert tx.one("SELECT value FROM meta WHERE key='pattern_set'")["value"] == canonical_sri(newer)
+
+
+def test_a_curated_server_is_observed_counted_apart_and_handed_to_the_registry_when_listed(world):
+    from dataclasses import replace
+
+    from histor.registry import target_id
+    from histor.subject import REGISTRY_CURATED
+
+    s, mcp = world["services"], world["mcp"]
+    mcp.tools["/a"] = [tool("get_weather", "Return the weather.")]
+    mcp.tools["/wiki"] = [tool("ask_question", "Answer a question about a repository.")]
+    curated = make_target("com.wiki/wiki", "/wiki")
+    curated = replace(curated, registry=REGISTRY_CURATED)
+    world["targets"].extend([make_target("io.example/weather", "/a"), curated])
+
+    stats = s.crawler.run()
+    assert stats["registry_endpoints"] == 1 and stats["registry_servers"] == 1 and stats["curated_endpoints"] == 1
+    assert stats["statuses"] == {"ok": 2}
+    answer = s.checker.check({"endpoint": curated.endpoint}, allow_scan=False)
+    assert answer["target"]["name"] == "com.wiki/wiki", "listed by HISTOR, not 'not-listed'"
+
+    # The server publishes to the registry: the same endpoint, the registry's name, one live record.
+    listed = make_target("io.github.wiki/wiki", "/wiki")
+    world["targets"][:] = [make_target("io.example/weather", "/a"), listed]
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    assert stats["curated_endpoints"] == 0 and stats["registry_endpoints"] == 2
+    live = [t for t in s.store.targets_by(endpoint=curated.endpoint) if not t["delisted"]]
+    assert [t["id"] for t in live] == [target_id("io.github.wiki/wiki", curated.endpoint)]
+    assert s.checker.check({"endpoint": curated.endpoint}, allow_scan=False)["target"]["name"] == "io.github.wiki/wiki"
