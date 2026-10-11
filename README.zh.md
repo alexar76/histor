@@ -141,4 +141,4 @@ HISTOR 是 [Base 上的 `96683` 号](https://8004scan.io/agents/base/96683) ERC-
 
 ## 许可证
 
-MIT——见 [LICENSE](LICENSE)。属于 [AIMarket 生态](https://modeldev.modelmarket.dev)的一部分。
+MIT——见 [LICENSE](LICENSE)。属于 [AIMarket 生态](https://ecosystem.modelmarket.dev/)的一部分。

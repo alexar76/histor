@@ -162,4 +162,4 @@ label's signature can be tied back to the registered agent. Transactions and how
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Part of the [AIMarket ecosystem](https://modeldev.modelmarket.dev).
+MIT — see [LICENSE](LICENSE). Part of the [AIMarket ecosystem](https://ecosystem.modelmarket.dev/).

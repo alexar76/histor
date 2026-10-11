@@ -157,4 +157,4 @@ comprobarlas: [Identidades ERC-8004](https://github.com/alexar76/aicom/blob/main
 
 ## Licencia
 
-MIT — consulte [LICENSE](LICENSE). Forma parte del [ecosistema AIMarket](https://modeldev.modelmarket.dev).
+MIT — consulte [LICENSE](LICENSE). Forma parte del [ecosistema AIMarket](https://ecosystem.modelmarket.dev/).

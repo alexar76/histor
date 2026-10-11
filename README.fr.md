@@ -161,4 +161,4 @@ transactions et la façon de les vérifier :
 
 ## Licence
 
-MIT — voir [LICENSE](LICENSE). Fait partie de l’[écosystème AIMarket](https://modeldev.modelmarket.dev).
+MIT — voir [LICENSE](LICENSE). Fait partie de l’[écosystème AIMarket](https://ecosystem.modelmarket.dev/).

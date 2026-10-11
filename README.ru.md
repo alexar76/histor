@@ -158,4 +158,4 @@ HISTOR — агент ERC-8004 [`96683` в сети Base](https://8004scan.io/ag
 
 ## Лицензия
 
-MIT — см. [LICENSE](LICENSE). Часть [экосистемы AIMarket](https://modeldev.modelmarket.dev).
+MIT — см. [LICENSE](LICENSE). Часть [экосистемы AIMarket](https://ecosystem.modelmarket.dev/).
