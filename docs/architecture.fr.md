@@ -86,6 +86,56 @@ sequenceDiagram
     C->>DB: signature d’une tête d’arbre sur la nouvelle taille
 ```
 
+## Conditions de test des paquets
+
+Une observation d’un paquet npm ou PyPI vaut pour les conditions dans lesquelles il a tourné, et pour
+aucune autre. Les mêmes conditions sont sur le site ([histor.modelmarket.dev/#conditions](https://histor.modelmarket.dev/#conditions)) ;
+l’enregistrement de chaque paquet conserve le digest exact de l’image et la configuration reçue
+(`packageSignals.conditions`, `packageSignals.supplied`).
+
+| | |
+|---|---|
+| Système | Linux x86_64, dans gVisor (`runsc`) ; utilisateur non privilégié, aucune capability, racine en lecture seule |
+| Environnements d’exécution | npm : `node:22-alpine` ; PyPI : `python:3.12-slim` — étiquettes récupérées à l’installation d’un hôte du bac à sable ; le digest exact est enregistré à chaque observation |
+| Installation | npm `--ignore-scripts`, puis les scripts d’installation dans une étape tracée à part ; PyPI wheels uniquement (un sdist est signalé, jamais compilé) |
+| Réseau | aucune route vers l’extérieur ; chaque nom pointe vers les pièges de HISTOR, qui enregistrent et ne transmettent rien |
+| Secrets | aucun réel : identifiants leurres dans HOME, un `.env` leurre ; une variable réclamée par le paquet reçoit une valeur factice |
+| Limites | 512 Mo, 1 CPU, 64 Mo de `/tmp` ; 240 s pour installer, 150 s pour démarrer et répondre ; ≤ 15 outils appelés une fois, 8 s chacun |
+| Configuration | des noms seulement (ci-dessous) ; l’observateur fabrique toutes les valeurs |
+
+Les chiffres sont les constantes de l’observateur lui-même (`sandbox/histor_observe.py`) ; un test fait
+échouer la construction si les chiffres publiés s’en écartent.
+
+**Pourquoi un paquet s’est arrêté.** Une exécution qui finit en `exited` est classée d’après ce que le
+paquet a affiché (`histor/exit_reasons.py`) et conservée dans `packageSignals.exit` : `needs-config`
+(avec les noms de variables qu’il a donnés), `needs-arguments` (avec un argument de démarrage comme
+`serve` ou `--transport=stdio` quand son texte d’usage en propose un), `sdk-incompatible` (écrit pour
+le SDK MCP 1.x et lancé avec la 2.x), `needs-other-os`, `needs-network`, `silent`, `crashed`.
+
+**Le relancer avec ce qu’il a demandé.** Le crawl suivant relance la même version avec des valeurs
+factices pour ces noms — et, dès le premier lancement, pour les variables que son entrée de registre
+marque `isRequired`. HISTOR n’envoie que des noms ; l’observateur refuse ceux qui pilotent
+l’environnement d’exécution (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) et fabrique les valeurs :
+`histor-envkey-<run>` pour une clé, une adresse sur `histor-trap.invalid` pour une URL, le répertoire de
+travail pour un chemin. L’endroit où une clé factice a été envoyée est enregistré
+(`envKeyDestinations`) : sa propre API, ou ailleurs.
+
+**Serveurs cassés par le SDK MCP 2.0.** Un serveur PyPI écrit pour `mcp` 1.x (`from mcp.server.fastmcp import
+FastMCP`) dont la dépendance n’est pas bornée sous 2 échoue à l’import depuis que `mcp` 2.0.0
+(2026-07-28) a renommé FastMCP. Son statut reste celui d’une installation neuve (`exited`,
+`sdk-incompatible`) ; le crawl suivant relance la même version avec pip limité à `mcp<2` (la liste fixe
+de l’observateur — HISTOR n’envoie jamais de chaîne d’exigences) et garde le résultat à côté de
+l’enregistrement dans `packageSignals.legacy` : statut, outils, correspondances de motifs WARDEN et
+comportement dans le bac à sable. Aucune étiquette n’est émise et cet ensemble ne devient jamais celui
+de la cible. Une nouvelle version est d’abord lancée comme une installation neuve.
+
+**Ce qui n’est pas relancé.** Une version terminée en `exited`, `no-entry-point`, `no-wheel`,
+`not-found` ou `protocol` avec l’observateur actuel, sans rien de nouveau à fournir, attend une nouvelle
+version ou un nouvel observateur (`settled` dans les statistiques du crawl). Les paquets jamais observés
+passent dans l’ordre des téléchargements ; leur dernière version n’est demandée que lorsque leur tour
+vient, à un rythme borné par registre (npm répond à une rafale par 429 et un `Retry-After` de dix
+minutes, que HISTOR attend au lieu de le lire comme « pas de version »).
+
 ## Quand une étiquette est émise
 
 Le journal doit consigner des faits, pas du bruit : des résultats déterministes identiques ne sont

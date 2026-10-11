@@ -87,3 +87,19 @@ def test_tls_payload_capture_with_private_trap_ca(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_placeholder_key_is_traced_to_where_it_went_not_called_theft():
+    collector = sink.Collector()
+    server = sink.HTTPTrap(("127.0.0.1", 0), sink.HTTPHandler)
+    server.collector = collector
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        req = urllib.request.Request(f"http://127.0.0.1:{server.server_port}/v1/search",
+                                     data=json.dumps({"api_key": "histor-envkey-r1", "q": "x"}).encode())
+        urllib.request.urlopen(req, timeout=3).read()
+        phase = collector.phase("127.0.0.1", 0, 9999999999, "r1")
+        assert phase["envKeyDestinations"] and not phase["decoyTransmitted"]
+    finally:
+        server.shutdown()
+        server.server_close()

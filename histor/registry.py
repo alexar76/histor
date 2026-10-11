@@ -12,13 +12,14 @@ import hashlib
 import json
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
 
+from histor.exit_reasons import declared_needs
 from histor.mcpclient import USER_AGENT
 from histor.packages import REGISTRIES, package_key, parse_package
 from histor.subject import REGISTRY_CURATED, REGISTRY_OFFICIAL
@@ -48,6 +49,8 @@ class Target:
     repository: str | None
     website: str | None
     skip_reason: str | None  # set when HISTOR will not dial this endpoint
+    # A package's registry entry: the variables and start arguments it says it needs (names only).
+    needs: dict[str, list[str]] | None = field(default=None, compare=False)
 
 
 def target_id(name: str, endpoint: str) -> str:
@@ -185,6 +188,7 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
                 repository=_str(repo.get("url"), 500),
                 website=_str(srv.get("websiteUrl"), 500),
                 skip_reason=skip,
+                needs=declared_needs(pkg) or None,
             ))
     return out
 

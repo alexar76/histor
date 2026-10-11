@@ -461,3 +461,70 @@ def test_pypi_existing_dependency_version_change_is_reported():
     before, after = (r.version_facts("pypi", "fixture", v) for v in ("1", "2"))
     assert "dependency-specs-changed" in version_signals(after, before)["flags"]
     r.close()
+
+
+def test_a_rate_limited_registry_is_waited_out_not_read_as_no_version():
+    answers = [httpx.Response(429, headers={"retry-after": "585"}), httpx.Response(200, json={"version": "2.0.0"})]
+    slept: list[float] = []
+    now = [0.0]
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    r = PackageReader("https://sandbox.test:9443", "t" * 40, PIN,
+                      transport=httpx.MockTransport(lambda req: answers.pop(0)), sleep=sleep, clock=lambda: now[0])
+    assert r.latest_version("npm", "@a/mem") == "2.0.0"
+    assert slept and slept[-1] >= 585, "the Retry-After is honoured before asking again"
+
+
+def test_a_registry_that_stays_closed_skips_the_package_after_the_wait():
+    now = [0.0]
+
+    def sleep(s):
+        now[0] += s
+
+    r = PackageReader("https://sandbox.test:9443", "t" * 40, PIN,
+                      transport=httpx.MockTransport(lambda req: httpx.Response(429, headers={"retry-after": "600"})),
+                      sleep=sleep, clock=lambda: now[0])
+    assert r.latest_version("npm", "x") is None
+    assert now[0] <= PackageReader.RATE_LIMIT_WAIT_S + 1
+
+
+def test_registry_lookups_are_paced_per_registry():
+    now = [0.0]
+
+    def sleep(s):
+        now[0] += s
+
+    r = PackageReader("https://sandbox.test:9443", "t" * 40, PIN,
+                      transport=httpx.MockTransport(lambda req: httpx.Response(200, json={"version": "1"})),
+                      sleep=sleep, clock=lambda: now[0])
+    for _ in range(9):
+        r.latest_version("npm", "x")
+    assert now[0] >= 8 / PackageReader.REGISTRY_RATE["npm"]
+
+
+def test_only_the_versions_a_crawl_can_run_are_asked_for(world, monkeypatch):
+    from dataclasses import replace
+
+    import histor.crawler as crawler_mod
+
+    s = world["services"]
+    fake = FakePackages()
+    asked: list[str] = []
+    real = fake.latest_version
+    fake.latest_version = lambda registry, name: asked.append(name) or real(registry, name)
+    s.crawler.packages = fake
+    s.crawler.settings = replace(s.crawler.settings, sandbox_max_per_crawl=2)
+    names = [f"p{i:03d}" for i in range(200)]
+    monkeypatch.setattr(crawler_mod, "curated_rank", lambda: {f"npm:{n}": i for i, n in enumerate(names)})
+    for n in names:
+        world["targets"].append(package_target(f"io.x/{n}", f"npm:{n}"))
+        fake.tools[(f"npm:{n}", "1.0.0")] = [tool("t", "A tool.")]
+        if n != "p000":  # the most popular one has no version today: the next in line takes its place
+            fake.latest[f"npm:{n}"] = "1.0.0"
+    stats = s.crawler.run()
+    assert [r[1] for r in fake.runs] == ["p001", "p002"]
+    assert len(asked) < 100, "the registry is not asked about the whole list"
+    assert stats["packages"]["versionUnknownBy"] == {"npm": 1} and stats["packages"]["neverObserved"] == 200

@@ -63,8 +63,16 @@ def parse_package(key: str) -> tuple[str, str] | None:
 class PackageReader:
     """Latest versions from the registries (cheap, every crawl) and observations from the sandbox."""
 
+    # Registry lookups per second, per registry. npm answers 429 with Retry-After ≈ 10 minutes
+    # after a few hundred requests in a burst, and a 429 read as "no version" once dropped
+    # every npm package from a crawl; paced, the per-crawl lookups stay under it.
+    REGISTRY_RATE = {"npm": 8.0, "pypi": 20.0}
+    # How long one lookup may wait out a 429 before the package is skipped for this crawl.
+    RATE_LIMIT_WAIT_S = 660.0
+
     def __init__(self, url: str, token: str, cert_sha256: str, *, timeout: float = 420.0,
-                 registry_timeout: float = 20.0, transport: httpx.BaseTransport | None = None) -> None:
+                 registry_timeout: float = 20.0, transport: httpx.BaseTransport | None = None,
+                 sleep: Any = time.sleep, clock: Any = time.monotonic) -> None:
         parts = urllib.parse.urlsplit(url)
         if parts.scheme != "https" or not parts.hostname:
             raise ValueError("the sandbox URL must be https://host:port")
@@ -77,16 +85,43 @@ class PackageReader:
         self.timeout = timeout
         self.registry = httpx.Client(timeout=registry_timeout, transport=transport, follow_redirects=False,
                                      headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+        self._sleep, self._clock = sleep, clock
+        self._pace = threading.Lock()
+        self._next_at = {r: 0.0 for r in REGISTRIES}
+        self._blocked_until = {r: 0.0 for r in REGISTRIES}
 
     def close(self) -> None:
         self.registry.close()
 
+    def _registry_get(self, registry: str, url: str) -> httpx.Response:
+        """One registry request, paced per registry; a 429 is waited out (all threads), not read as an answer."""
+        deadline = self._clock() + self.RATE_LIMIT_WAIT_S
+        while True:
+            with self._pace:
+                now = self._clock()
+                at = max(now, self._next_at[registry], self._blocked_until[registry])
+                self._next_at[registry] = at + 1.0 / self.REGISTRY_RATE[registry]
+            if at > now:
+                self._sleep(at - now)
+            res = self.registry.get(url)
+            if res.status_code != 429:
+                return res
+            try:
+                wait = float(res.headers.get("retry-after") or 60)
+            except ValueError:
+                wait = 60.0
+            wait = min(max(wait, 1.0), self.RATE_LIMIT_WAIT_S)
+            with self._pace:
+                self._blocked_until[registry] = max(self._blocked_until[registry], self._clock() + wait)
+                if self._blocked_until[registry] > deadline:
+                    return res
+
     def latest_version(self, registry: str, name: str) -> str | None:
         """The version ``npx -y`` / ``uvx`` would run today, or None when the registry does not say."""
         if registry == "npm":
-            res = self.registry.get(f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/latest")
+            res = self._registry_get(registry, f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/latest")
         else:
-            res = self.registry.get(f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json")
+            res = self._registry_get(registry, f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json")
         if res.status_code != 200:
             return None
         doc = res.json()
@@ -97,7 +132,7 @@ class PackageReader:
         """What the registry says about one published version: whether its build is attested, who
         published it, the install scripts it runs and the packages it depends on. Never an email."""
         if registry == "npm":
-            res = self.registry.get(f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/{urllib.parse.quote(version)}")
+            res = self._registry_get(registry, f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/{urllib.parse.quote(version)}")
             if res.status_code != 200:
                 return None
             m = res.json()
@@ -115,7 +150,7 @@ class PackageReader:
                 "dependencySpecs": {str(k): str(v) for k, v in (m.get("dependencies") or {}).items()},
                 "dependencies": sorted(str(k)[:214] for k in (m.get("dependencies") or {}))[:300],
             }
-        res = self.registry.get(f"https://pypi.org/pypi/{urllib.parse.quote(name)}/{urllib.parse.quote(version)}/json")
+        res = self._registry_get("pypi", f"https://pypi.org/pypi/{urllib.parse.quote(name)}/{urllib.parse.quote(version)}/json")
         if res.status_code != 200:
             return None
         doc = res.json()
@@ -123,7 +158,7 @@ class PackageReader:
         wheel = next((w for w in wheels if str(w.get("filename", "")).endswith("-none-any.whl")), wheels[0] if wheels else None)
         attested = None
         if wheel:
-            prov = self.registry.get(f"https://pypi.org/integrity/{urllib.parse.quote(name)}/{urllib.parse.quote(version)}/"
+            prov = self._registry_get("pypi", f"https://pypi.org/integrity/{urllib.parse.quote(name)}/{urllib.parse.quote(version)}/"
                                      f"{urllib.parse.quote(str(wheel.get('filename')))}/provenance")
             attested = True if prov.status_code == 200 else False if prov.status_code == 404 else None
         raw_requires = (doc.get("info") or {}).get("requires_dist") or []
@@ -135,10 +170,17 @@ class PackageReader:
                 "dependencies": sorted({r for r in requires if r})[:300], "provenanceVerified": None,
                 "dependencySpecs": {k: sorted(v) for k, v in dependency_specs.items()}}
 
-    def observe(self, registry: str, name: str, version: str | None) -> Observation:
+    def observe(self, registry: str, name: str, version: str | None, *, env: list[str] | None = None,
+                args: list[str] | None = None, pins: list[str] | None = None) -> Observation:
         body: dict[str, Any] = {"registry": registry, "name": name}
         if version:
             body["version"] = version
+        if env:
+            body["env"] = list(env)
+        if args:
+            body["args"] = list(args)
+        if pins:
+            body["pins"] = list(pins)
         try:
             code, doc = self._post("/observe", body)
         except (OSError, ssl.SSLError, http.client.HTTPException, ValueError) as exc:
@@ -149,14 +191,19 @@ class PackageReader:
         observed = doc.get("version") if isinstance(doc.get("version"), str) else (version or "")
         observer = str(doc.get("observer") or "")[:20]
         behaviour = doc.get("behaviour") if isinstance(doc.get("behaviour"), dict) else None
+        conditions = {k: str(doc[k])[:200] for k in ("image", "runtime") if isinstance(doc.get(k), str) and doc[k]} or None
+        given = doc.get("supplied") if isinstance(doc.get("supplied"), dict) else {}
+        supplied = {k: [str(v)[:100] for v in given.get(k) or [] if isinstance(v, str)][:8] for k in ("env", "args", "pins")}
+        supplied = {k: v for k, v in supplied.items() if v} or None
+        extra = {"package_conditions": conditions, "package_supplied": supplied}
         if status != "ok":
             return Observation(status=status[:40], detail=str(doc.get("detail") or "")[:300],
-                               package_version=observed, package_observer=observer, behaviour=behaviour)
+                               package_version=observed, package_observer=observer, behaviour=behaviour, **extra)
         tools = doc.get("tools")
         info = doc.get("serverInfo") if isinstance(doc.get("serverInfo"), dict) else {}
         return Observation(status="ok", tools=tools if isinstance(tools, list) else [], server_info=info,
                            protocol_version=str(doc.get("protocolVersion") or "")[:40], pages=1,
-                           package_version=observed, package_observer=observer, behaviour=behaviour)
+                           package_version=observed, package_observer=observer, behaviour=behaviour, **extra)
 
     def selftest(self) -> dict[str, Any]:
         """The host's own self-test (gVisor, tracing runtime, network, observer version)."""
@@ -278,9 +325,9 @@ class SandboxPool:
                         return i
             time.sleep(0.2)
 
-    def _run(self, i: int, registry: str, name: str, version: str | None) -> Observation:
+    def _run(self, i: int, registry: str, name: str, version: str | None, **config: Any) -> Observation:
         try:
-            obs = self.members[i][0].observe(registry, name, version)
+            obs = self.members[i][0].observe(registry, name, version, **config)
         finally:
             self.members[i][1].release()
         with self.lock:
@@ -289,12 +336,12 @@ class SandboxPool:
             self.resting_until[i] = time.monotonic() + self.REST_S if failed else 0.0
         return obs
 
-    def observe(self, registry: str, name: str, version: str | None) -> Observation:
+    def observe(self, registry: str, name: str, version: str | None, **config: Any) -> Observation:
         first = self._take()
-        obs = self._run(first, registry, name, version)
+        obs = self._run(first, registry, name, version, **config)
         if obs.status != SANDBOX_ERROR or len(self.members) == 1:
             return obs
-        return self._run(self._take(skip=first), registry, name, version)
+        return self._run(self._take(skip=first), registry, name, version, **config)
 
     def take_counts(self) -> dict[str, dict[str, int]]:
         """Per host, what it did since the last call; then start counting again. Hosts are named by

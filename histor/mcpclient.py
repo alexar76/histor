@@ -67,6 +67,10 @@ class Observation:
     package_version: str = ""
     package_observer: str = ""
     behaviour: dict[str, Any] | None = None
+    # Where it ran (image digest, runtime) and the configuration it was given (variable names,
+    # start arguments): the conditions a reader needs to judge the observation by.
+    package_conditions: dict[str, Any] | None = None
+    package_supplied: dict[str, Any] | None = None
 
 
 class _Stop(Exception):

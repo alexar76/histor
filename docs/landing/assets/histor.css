@@ -237,3 +237,5 @@ footer a:hover{color:var(--ink)}
 .help summary{cursor:pointer;color:var(--obs);font-size:14px}
 .help pre{margin-top:8px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+
+.cond { overflow-wrap: anywhere; }

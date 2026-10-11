@@ -36,6 +36,13 @@ The package is a stranger's code and some packages are hostile, so:
   working directory a decoy ``.env``. The report says, for install scripts (npm, run in their
   own traced stage), startup and the tool calls: programs started, names looked up and
   addresses dialled, decoys opened, and writes that would persist outside the sandbox.
+* Configuration (only when HISTOR asks, and only names): a server that refuses to start without
+  ``SOME_API_KEY`` is started again with that variable set to a placeholder this script makes —
+  ``histor-envkey-<run>`` for a key, an address on ``histor-trap.invalid`` for a URL, the working
+  directory for a path — and, when its registry entry or its usage text names one, a start
+  argument such as ``serve``; for PyPI, a dependency pin from a fixed list (``mcp<2``: how a
+  server written for MCP SDK 1.x ran before 2.0). HISTOR never sends a value. The traps record where a placeholder
+  key was sent, so "sent the key to its own API" and "sent it somewhere else" can be told apart.
 * ``--memory-swap`` equals ``--memory``: Docker's default doubles the limit with swap, and a
   900 MB allocation passed a 512 MB container on a host with swap until it was set.
 
@@ -93,6 +100,17 @@ NPM_NAME = re.compile(r"^(@[a-z0-9][a-z0-9._~-]{0,100}/)?[a-z0-9][a-z0-9._~-]{0,
 PYPI_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$")
 VERSION_RE = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$")
 UA = f"histor-sandbox/{VERSION} (+https://histor.modelmarket.dev)"
+# Configuration HISTOR may ask for: variable NAMES (the values are made here) and start arguments.
+ENV_NAME = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+ENV_DENY = re.compile(r"^(PATH|HOME|USER|SHELL|PWD|TMPDIR|TERM|LANG|LC_[A-Z_]+|NODE_[A-Z_]+|NPM_[A-Z_]+|PYTHON[A-Z_]*|PIP_[A-Z_]+"
+                      r"|UV_[A-Z_]+|LD_[A-Z_]+|DYLD_[A-Z_]+|SSL_[A-Z_]+|REQUESTS_CA_BUNDLE|CURL_CA_BUNDLE|HISTOR_[A-Z_]+"
+                      r"|(?:HTTPS?|ALL|NO)_PROXY|GIT_[A-Z_]+|DOCKER_[A-Z_]+)$")
+ARG_TOKEN = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,63}|-{1,2}[A-Za-z0-9][A-Za-z0-9._-]{0,40}(?:=[A-Za-z0-9._:/@+-]{1,63})?)$")
+MAX_ENV = 8
+MAX_ARGS = 6
+# Dependency pins HISTOR may ask for, by registry: a fixed list, never a requirement string from
+# outside. mcp<2 is how a server written for the MCP SDK 1.x ran before 2.0 renamed FastMCP.
+PINS = {"pypi": ("mcp<2",)}
 
 
 class Refused(Exception):
@@ -143,6 +161,38 @@ def resolve(registry: str, name: str, version: str | None) -> dict[str, Any]:
 def _canary(*parts: str) -> str:
     # Joined at run time: a literal key shape in this file would trip secret scanners.
     return "".join(parts)
+
+
+def env_value(name: str, tag: str) -> str:
+    """The placeholder for one variable a server asked for: never a real value, always recognisable."""
+    last = name.rsplit("_", 1)[-1]
+    if last in ("URL", "URI", "ENDPOINT", "HOST", "BASE", "SERVER", "ORIGIN", "DOMAIN"):
+        return f"https://env-{tag}.histor-trap.invalid"
+    if last in ("PATH", "DIR", "DIRECTORY", "FILE", "ROOT", "FOLDER", "WORKSPACE"):
+        return APP_IN
+    if last in ("PORT",):
+        return "8080"
+    if last in ("EMAIL", "USER", "USERNAME", "LOGIN", "ACCOUNT"):
+        return f"canary-{tag}@histor-trap.invalid"
+    return f"histor-envkey-{tag}"
+
+
+def check_config(env: Any, args: Any, pins: Any = None, registry: str = "pypi") -> tuple[list[str], list[str], list[str]]:
+    """The configuration HISTOR asked for, or Refused: names only, bounded, nothing that steers the runtime."""
+    env = list(env or [])
+    args = list(args or [])
+    pins = list(pins or [])
+    if any(p not in PINS.get(registry, ()) for p in pins):
+        raise Refused("pin not on the list")
+    if len(env) > MAX_ENV or len(args) > MAX_ARGS:
+        raise Refused("too much configuration")
+    for name in env:
+        if not isinstance(name, str) or not ENV_NAME.match(name) or ENV_DENY.match(name) or len(name) > 64:
+            raise Refused("bad variable name")
+    for arg in args:
+        if not isinstance(arg, str) or not ARG_TOKEN.match(arg):
+            raise Refused("bad start argument")
+    return sorted(set(env)), args, sorted(set(pins))
 
 
 def plant_decoys(work: Path, tag: str) -> None:
@@ -486,7 +536,7 @@ def base_flags(run_id: str, runtime: str = RUNTIME) -> list[str]:
             "--label", "histor-sandbox=1"]
 
 
-def install(registry: str, name: str, version: str, work: Path, run_id: str) -> tuple[bool, str]:
+def install(registry: str, name: str, version: str, work: Path, run_id: str, pins: list[str] | None = None) -> tuple[bool, str]:
     # On a user-defined network Docker points resolv.conf at its embedded DNS (127.0.0.11), which
     # lives in iptables rules gVisor's own network stack never sees: name the resolvers instead.
     flags = [*base_flags(run_id + "-i"), "--network", FETCH_NETWORK, "--memory", "1g", "--memory-swap", "1g", "--cpus", "1",
@@ -497,7 +547,7 @@ def install(registry: str, name: str, version: str, work: Path, run_id: str) -> 
                "--prefix", "/work/pkg", f"{name}@{version}"]
     else:
         cmd = ["pip", "install", "--disable-pip-version-check", "--no-cache-dir", "--only-binary=:all:",
-               "--no-compile", "--target", "/work/pkg", f"{name}=={version}"]
+               "--no-compile", "--target", "/work/pkg", f"{name}=={version}", *(pins or [])]
     try:
         res = docker("run", *flags, IMAGES[registry], *cmd, timeout=INSTALL_TIMEOUT_S)
     except subprocess.TimeoutExpired:
@@ -690,9 +740,13 @@ def run_scripts(work: Path, run_id: str, packages: list[str]) -> dict[str, Any]:
             "complete": section.get("complete") is True and not timed_out and proc.returncode == 0}
 
 
-def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool = False) -> dict[str, Any]:
+def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool = False,
+        env: list[str] | None = None, args: list[str] | None = None) -> dict[str, Any]:
     cidfile = work / "cid-run"
     flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile), "-i", "-w", APP_IN]
+    for name in env or []:
+        flags += ["-e", f"{name}={env_value(name, run_id)}"]
+    entry = [*entry, *(args or [])]
     if registry == "pypi":
         flags += ["-e", "PYTHONPATH=/work/pkg", "-e", "PYTHONDONTWRITEBYTECODE=1"]
     start, wall = time.monotonic(), time.time()
@@ -827,9 +881,11 @@ def image_digest(registry: str) -> str | None:
     return res.stdout.strip() or None
 
 
-def observe(registry: str, name: str, version: str | None) -> dict[str, Any]:
+def observe(registry: str, name: str, version: str | None, env: list[str] | None = None,
+            args: list[str] | None = None, pins: list[str] | None = None) -> dict[str, Any]:
     doc: dict[str, Any] = {"type": "histor.package-observation/v1", "observer": VERSION, "registry": registry,
-                           "name": name, "runtime": RUNTIME, "observedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+                           "name": name, "runtime": RUNTIME, "observedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                           "supplied": {"env": list(env or []), "args": list(args or []), "pins": list(pins or [])}}
     try:
         meta = resolve(registry, name, version)
     except Exception as exc:  # noqa: BLE001 - every failure is a status, never a crash
@@ -844,14 +900,14 @@ def observe(registry: str, name: str, version: str | None) -> dict[str, Any]:
         (work / "pkg").mkdir(parents=True)
         (work / ".home").mkdir()
         plant_decoys(work, run_id)
-        ok, log = install(registry, name, meta["version"], work, run_id)
+        ok, log = install(registry, name, meta["version"], work, run_id, pins)
         if not ok:
             return {**doc, "status": "install-failed", "detail": log}
         traced = traced_available()
         pkgs = lifecycle_packages(work) if registry == "npm" else []
         scripts = (run_scripts(work, run_id, pkgs) if traced else {"complete": False, "incompleteReasons": ["trace-unavailable"]}) if pkgs else {"complete": True, "status": "not-applicable", "packages": []}
         entry = npm_entry(work, name) if registry == "npm" else pypi_entry(work, name)
-        result = run(registry, work, entry, run_id, traced) if entry else {"status": "no-entry-point", "detail": "the package declares no command to start"}
+        result = run(registry, work, entry, run_id, traced, env, args) if entry else {"status": "no-entry-point", "detail": "the package declares no command to start"}
         behaviour = result.setdefault("behaviour", {})
         behaviour["installScripts"] = scripts
         behaviour["observer"] = "gvisor-trace/2"
@@ -955,6 +1011,7 @@ def serve() -> None:
                     argv = ["observe", str(body["registry"]), str(body["name"]),
                             *([str(body["version"])] if body.get("version") else [])]
                     req = parse(argv)
+                    config = check_config(body.get("env"), body.get("args"), body.get("pins"), req[1])
             except (ValueError, KeyError, TypeError, Refused) as exc:
                 self.reply(400, {"status": "refused", "detail": str(exc)[:200]})
                 return
@@ -967,7 +1024,7 @@ def serve() -> None:
                     return
                 try:
                     result = (campaign_case(body) if self.path == "/campaign-case"
-                              else observe(req[1], req[2], req[3] if len(req) > 3 else None))
+                              else observe(req[1], req[2], req[3] if len(req) > 3 else None, *config))
                     self.reply(200, result)
                 except Refused as exc:
                     self.reply(400, {"status": "refused", "detail": str(exc)})

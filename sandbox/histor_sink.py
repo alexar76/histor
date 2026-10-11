@@ -72,6 +72,9 @@ class Collector:
             "recipients": recipient_list,
             "payloadSha256": hashlib.sha256(payload).hexdigest(),
             "complete": complete,
+            # A placeholder key HISTOR set because the server asked for one: where it went is a
+            # fact to show (its own API, or somewhere else), not a decoy theft.
+            "envKeySent": b"histor-envkey-" in payload,
             "decoyTransmitted": b"HISTOR_DECOY" in payload
             or b"histor-decoy-" in payload
             or b"histor-canary-" in payload,
@@ -94,6 +97,7 @@ class Collector:
             "requests": [{k: v for k, v in row.items() if k not in ("source", "at")} for row in rows[:100]],
             "unexpectedRecipients": unexpected[:40],
             "decoyTransmitted": any(r["decoyTransmitted"] for r in rows),
+            "envKeyDestinations": sorted({row["destination"] for row in rows if row.get("envKeySent")})[:20],
             "truncated": len(rows) > 100,
         }
 

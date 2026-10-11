@@ -86,6 +86,53 @@ sequenceDiagram
     C->>DB: sign tree head over the new size
 ```
 
+## Package test conditions
+
+An observation of an npm or PyPI package is true for the conditions it ran under, and no others.
+The same conditions are on the site ([histor.modelmarket.dev/#conditions](https://histor.modelmarket.dev/#conditions));
+each package record carries the exact image digest and any configuration the package was given
+(`packageSignals.conditions`, `packageSignals.supplied`).
+
+| | |
+|---|---|
+| System | Linux x86_64, inside gVisor (`runsc`); unprivileged user, no capabilities, read-only root |
+| Runtimes | npm: `node:22-alpine`; PyPI: `python:3.12-slim` — tags pulled when a sandbox host is installed; the exact digest is recorded per observation |
+| Install | npm `--ignore-scripts`, then install scripts in their own traced stage; PyPI wheels only (an sdist is reported, never built) |
+| Network | no route out; every name resolves to HISTOR's traps, which record and forward nothing |
+| Secrets | none real: decoy credentials in HOME, a decoy `.env`; a variable the package needs gets a placeholder |
+| Limits | 512 MB, 1 CPU, 64 MB `/tmp`; 240 s to install, 150 s to start and answer; ≤ 15 tools called once, 8 s each |
+| Configuration | names only (below); the observer makes every value |
+
+The numbers are the observer's own constants (`sandbox/histor_observe.py`); a test fails the build
+when the published ones drift from them.
+
+**Why a package exited.** A run that ends with `exited` is classified from what the package printed
+(`histor/exit_reasons.py`) and kept as `packageSignals.exit`: `needs-config` (with the variable names
+it gave), `needs-arguments` (with a start argument such as `serve` or `--transport=stdio` when its
+usage text offers one), `sdk-incompatible` (written for MCP SDK 1.x and run with 2.x),
+`needs-other-os`, `needs-network`, `silent`, `crashed`.
+
+**Starting it again with what it asked for.** The next crawl starts the same version once more with
+placeholders for those names — and, from the first run, for the variables its registry entry marks
+`isRequired`. HISTOR sends names only; the observer refuses names that steer the runtime (`PATH`,
+`NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) and makes the values: `histor-envkey-<run>` for a key, an
+address on `histor-trap.invalid` for a URL, the working directory for a path. Where a placeholder key
+was sent is recorded (`envKeyDestinations`): to its own API, or somewhere else.
+
+**Servers broken by MCP SDK 2.0.** A PyPI server written for `mcp` 1.x (`from mcp.server.fastmcp import
+FastMCP`) whose dependency is not pinned below 2 crashes on import since `mcp` 2.0.0 (2026-07-28)
+renamed FastMCP. Its status stays what a fresh install gets (`exited`, `sdk-incompatible`); the next
+crawl starts the same version once more with pip held to `mcp<2` (the observer's fixed pin list —
+HISTOR never sends a requirement string) and keeps the result beside the record as
+`packageSignals.legacy`: status, tools, WARDEN pattern matches and sandbox behaviour. It issues no
+label and never becomes the target's tool set. A new version runs as a fresh install first.
+
+**What is not run again.** A version that ended `exited`, `no-entry-point`, `no-wheel`, `not-found`
+or `protocol` under the current observer, with nothing new to supply, waits for a new version or a
+new observer (`settled` in the crawl's stats). Never-observed packages go in download order; their
+latest version is asked for only when they are next in line, paced per registry (npm answers a burst
+with 429 and a ten-minute `Retry-After`, which HISTOR waits out instead of reading as "no version").
+
 ## When a label is issued
 
 The log should record facts, not noise, so identical deterministic results are not re-issued daily.

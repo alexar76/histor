@@ -249,6 +249,23 @@ const serverQuery = { q: new URLSearchParams(location.search).get("q") || "", st
 function stateChip(s) { return el("span", { class: `state ${s.state}`, text: s.badgeText }); }
 
 /** Why an endpoint has no tool set on record, in words rather than status codes. */
+function renderBehaviour(root, b) {
+  for (const phase of ["installScripts", "startup", "calls"]) {
+    const ph = b[phase];
+    if (!ph || typeof ph !== "object") continue;
+    const head = phase === "calls" ? t("js_b_calls", { n: ph.tools ?? 0 }) : t(`js_b_${phase}`);
+    const rows = [["js_b_packages", ph.packages], ["js_b_decoys", ph.decoys], ["js_b_writes", ph.writes], ["js_b_exec", ph.exec],
+      ["js_b_network", ph.network], ["js_b_lookups", ph.lookups], ["js_b_envkey", ph.envKeyDestinations]]
+      .filter(([, v]) => Array.isArray(v) && v.length && !(v === ph.packages && phase !== "installScripts"));
+    const loud = (ph.decoys || []).some((d) => !String(d).startsWith(".env")) || (ph.writes || []).length;
+    const box = el("div", { class: "tool" }, el("div", { class: "tn", text: head }));
+    if (!rows.some(([k]) => k !== "js_b_packages")) box.append(el("p", { class: "ok-t", text: t("js_b_nothing") }));
+    for (const [k, v] of rows) box.append(el("div", { class: "match" }, el("b", { class: loud && (k === "js_b_decoys" || k === "js_b_writes") ? "bad-t" : "", text: t(k) }), " · ",
+      v.slice(0, 20).map((x) => String(x)).join(", ")));
+    root.append(box);
+  }
+}
+
 function reasonText(s) {
   const r = s.skipReason || s.lastStatus || "";
   if (r === "transport-not-observed") return t("js_why_sse");
@@ -431,6 +448,26 @@ async function serverView(id, done) {
     const flags = (sig?.flags || []).filter((f) => typeof f === "string");
     if (flags.length) root.append(el("p", { class: "warn-t" }, sig.previousVersion ? t("js_p_flags", { prev: sig.previousVersion }) + " " : "",
       ...flags.map((f) => el("span", { class: "pill advise", text: f }))));
+    const cond = sig?.conditions;
+    if (cond || sig?.observer) {
+      root.append(el("p", { class: "faint cond" }, t("js_cond_line", { image: cond?.image ? short(cond.image, 40) : "—", runtime: cond?.runtime || "runsc" }), " ",
+        el("a", { href: "/#conditions", text: t("js_cond_more") })));
+    }
+    const exit = sig?.exit;
+    if (exit && typeof exit.kind === "string" && s.lastStatus !== "ok") {
+      const key = "js_exit_" + exit.kind.replace(/-/g, "_");
+      const env = (exit.env || []).filter((x) => typeof x === "string");
+      const args = (exit.args || []).filter((x) => typeof x === "string");
+      const named = exit.kind === "needs-config" && env.length ? key + "_named"
+        : exit.kind === "needs-arguments" && args.length ? key + "_named"
+        : exit.kind === "sdk-incompatible" && sig?.legacy ? key + "_seen" : key;
+      root.append(el("p", { class: "warn-t", text: t(named, { env: env.join(", "), args: args.join(" ") }) }));
+    }
+    const given = sig?.supplied;
+    if (given && typeof given === "object") {
+      const what = [...(given.env || []), ...(given.args || [])].filter((x) => typeof x === "string");
+      if (what.length) root.append(el("p", { class: "faint", text: t("js_supplied", { what: what.join(", ") }) }));
+    }
     const look = data.packageLookalike;
     if (look && look.of) {
       const how = { "one character away": "js_how_one", "the same name under another scope": "js_how_scope",
@@ -440,24 +477,27 @@ async function serverView(id, done) {
     const b = sig?.behaviour;
     if (b && typeof b === "object") {
       root.append(el("h3", { class: "block-h", text: t("js_h_behaviour") }), el("p", { class: "faint", text: t("js_behaviour_note") }));
-      for (const phase of ["installScripts", "startup", "calls"]) {
-        const ph = b[phase];
-        if (!ph || typeof ph !== "object") continue;
-        const head = phase === "calls" ? t("js_b_calls", { n: ph.tools ?? 0 }) : t(`js_b_${phase}`);
-        const rows = [["js_b_packages", ph.packages], ["js_b_decoys", ph.decoys], ["js_b_writes", ph.writes], ["js_b_exec", ph.exec],
-          ["js_b_network", ph.network], ["js_b_lookups", ph.lookups]]
-          .filter(([, v]) => Array.isArray(v) && v.length && !(v === ph.packages && phase !== "installScripts"));
-        const loud = (ph.decoys || []).some((d) => !String(d).startsWith(".env")) || (ph.writes || []).length;
-        const box = el("div", { class: "tool" }, el("div", { class: "tn", text: head }));
-        if (!rows.some(([k]) => k !== "js_b_packages")) box.append(el("p", { class: "ok-t", text: t("js_b_nothing") }));
-        for (const [k, v] of rows) box.append(el("div", { class: "match" }, el("b", { class: loud && (k === "js_b_decoys" || k === "js_b_writes") ? "bad-t" : "", text: t(k) }), " · ",
-          v.slice(0, 20).map((x) => String(x)).join(", ")));
-        root.append(box);
+      renderBehaviour(root, b);
+    }
+    const legacy = sig?.legacy;
+    if (legacy && typeof legacy === "object" && sig?.exit?.kind === "sdk-incompatible") {
+      const pins = (legacy.supplied?.pins || []).filter((x) => typeof x === "string").join(", ") || "mcp<2";
+      root.append(el("h3", { class: "block-h", text: t("js_h_legacy", { pins }) }), el("p", { class: "faint", text: t("js_legacy_note", { pins }) }));
+      const tools = (legacy.tools || []).filter((x) => typeof x === "string");
+      if (legacy.status === "ok") {
+        root.append(el("p", { class: "ok-t", text: t("js_legacy_ok", { n: num(legacy.toolCount ?? tools.length) }) }));
+        if (tools.length) root.append(el("p", { class: "mono cond", text: tools.slice(0, 60).join(", ") + (tools.length > 60 ? " …" : "") }));
+        const pm = legacy.patternMatches;
+        if (pm && (pm.block || pm.advise)) root.append(el("p", { class: "warn-t", text: t("js_legacy_matches", { block: num(pm.block || 0), advise: num(pm.advise || 0) }) }));
+      } else {
+        root.append(el("p", { class: "warn-t", text: t("js_legacy_failed", { status: String(legacy.status || "—") }) }));
       }
+      if (legacy.behaviour && typeof legacy.behaviour === "object") renderBehaviour(root, legacy.behaviour);
     }
   }
   if (!s.toolSetDigest) {
-    root.append(el("div", { class: "empty", text: t("js_unobserved_why", { status: reasonText(s) }) }));
+    root.append(el("div", { class: "empty", text: s.transport === "stdio" && s.packageVersion
+      ? t("js_unobserved_pkg", { status: s.lastStatus || "—" }) : t("js_unobserved_why", { status: reasonText(s) }) }));
   }
   if (data.changes?.length) {
     root.append(el("h3", { class: "block-h", text: t("js_h_changes") }));

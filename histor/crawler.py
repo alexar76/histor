@@ -37,6 +37,7 @@ from urllib.parse import urlsplit
 from histor import diffing
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
+from histor.exit_reasons import classify
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
@@ -114,6 +115,25 @@ def _interleave_by_host(targets: list[Target]) -> list[Target]:
     return out
 
 
+# A run that ended this way ends the same way next time unless something about it changes: a new
+# version, a new observer, or configuration the package asked for that it was not given yet.
+SETTLED = frozenset({"exited", "no-entry-point", "no-wheel", "not-found", "protocol"})
+# A PyPI server written for MCP SDK 1.x crashes on import once pip resolves mcp 2.x. Its status
+# stays what a fresh install gets; a second run with this pin shows what it was before 2.0, kept
+# beside the record (``legacy``) and never in the label chain.
+LEGACY_PINS = {"sdk-incompatible": ["mcp<2"]}
+
+
+def _config_for(t: Target, record: dict[str, Any]) -> dict[str, list[str]]:
+    """Variable names and start arguments to start a package with: what its registry entry
+    declares, plus what it named when it last exited without them."""
+    declared = t.needs or {}
+    asked = record.get("exit") if isinstance(record.get("exit"), dict) else {}
+    env = sorted({str(n) for n in [*(declared.get("env") or []), *(asked.get("env") or [])]})[:8]
+    args = list(declared.get("args") or asked.get("args") or [])[:6]
+    return {k: v for k, v in (("env", env), ("args", args)) if v}
+
+
 def _parse_ts(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -140,6 +160,8 @@ class Crawler:
             packages = SandboxPool(readers, max_slots=settings.sandbox_max_slots) if len(readers) > 1 else readers[0][0]
         self.packages = packages
         self._due_versions: dict[str, str] = {}
+        self._due_config: dict[str, dict[str, list[str]]] = {}
+        self._due_legacy: set[str] = set()
         self._seen_versions: dict[str, str] = {}
         self.harvest_fn = harvest_fn or self._harvest_with_curated
         self.clock = clock
@@ -206,6 +228,7 @@ class Crawler:
             classify_budget = self.settings.classifier_max_per_crawl if self.classifier else 0
             step = self.settings.crawl_batch
             internal: Counter[str] = Counter()
+            legacy_statuses: Counter[str] = Counter()
             take_counts = getattr(self.packages, "take_counts", None)
             if take_counts:
                 take_counts()  # count this crawl only
@@ -221,6 +244,10 @@ class Crawler:
                         # Our sandbox failed, not the package: no label may say the package did.
                         internal["sandbox"] += 1
                         self._commit_internal(item, run_id, item.obs.detail or "the package sandbox failed")
+                        continue
+                    if item.target.id in self._due_legacy:
+                        legacy_statuses[item.obs.status] += 1
+                        self._commit_legacy(item, scans)
                         continue
                     if item.target.id in scan_failed:
                         internal["scan-failed"] += 1
@@ -239,6 +266,8 @@ class Crawler:
                 self.progress = {"done": start + len(prepared), "of": len(dialable)}
             if internal:
                 stats["internal_errors"] = dict(internal)
+            if legacy_statuses:
+                stats["legacy_statuses"] = dict(legacy_statuses)
             if take_counts:
                 stats["sandbox_hosts"] = take_counts()
             stats["statuses"] = dict(statuses)
@@ -298,29 +327,43 @@ class Crawler:
         """
         assert self.packages is not None
         reader = self.packages
+        cap = self.settings.sandbox_max_per_crawl
+        unknown_by: Counter[str] = Counter()
 
         def latest(t: Target) -> tuple[Target, str | None]:
             registry, name = parse_package(t.endpoint) or ("", "")
             try:
-                return t, reader.latest_version(registry, name)
+                version = reader.latest_version(registry, name)
             except Exception:  # noqa: BLE001 - a registry hiccup skips this package for one crawl
-                return t, None
-
-        with ThreadPoolExecutor(max_workers=16) as pool:
-            versions = list(pool.map(latest, targets))
-        updates, first = [], []
-        seen_by_id: dict[str, str] = {}
-        unchanged = unknown = refresh = outdated = incomplete_retries = 0
-        attempted_at: dict[str, str] = {}
-        for t, version in versions:
+                version = None
             if version is None:
-                unknown += 1
+                unknown_by[registry] += 1
+            return t, version
+
+        def lookup(batch: list[Target]) -> list[tuple[Target, str | None]]:
+            with ThreadPoolExecutor(max_workers=16) as pool:
+                return list(pool.map(latest, batch))
+
+        states = {t.id: self.store.target(t.id) or {} for t in targets}
+        attempted_at = {t.id: str(states[t.id].get("last_attempt") or "") for t in targets}
+        known = [t for t in targets if states[t.id].get("package_version")]
+        never = [t for t in targets if not states[t.id].get("package_version")]
+        updates, first = [], []
+        # The same version again with what it asked for (a placeholder key, a start argument, mcp<2):
+        # a known, finite set, run right after new versions — behind 40 000 never-observed
+        # packages it would wait for days.
+        configured: list[tuple[Target, str]] = []
+        seen_by_id: dict[str, str] = {}
+        config: dict[str, dict[str, list[str]]] = {}
+        unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = 0
+        legacy_ids: set[str] = set()
+        # A package observed before is looked up every crawl: a new version of it goes first.
+        for t, version in lookup(known):
+            if version is None:
                 continue
-            state = self.store.target(t.id) or {}
-            attempted_at[t.id] = str(state.get("last_attempt") or "")
+            state = states[t.id]
             seen = state.get("package_version")
-            if seen:
-                seen_by_id[t.id] = seen
+            seen_by_id[t.id] = seen
             observer = _observer_of(state.get("package_signals"))
             signals = state.get("package_signals") or {}
             if isinstance(signals, str):
@@ -328,17 +371,44 @@ class Crawler:
                     signals = json.loads(signals)
                 except ValueError:
                     signals = {}
-            complete = isinstance(signals, dict) and (signals.get("behaviour") or {}).get("complete") is True
+            if not isinstance(signals, dict):
+                signals = {}
+            complete = (signals.get("behaviour") or {}).get("complete") is True
             if seen == version and state.get("last_status") == "ok" and complete and observer == self.settings.sandbox_observer:
                 unchanged += 1
                 continue
-            if seen and seen == version:
+            exit_kind = (signals.get("exit") or {}).get("kind") if isinstance(signals.get("exit"), dict) else None
+            if (seen == version and state.get("last_status") == "exited" and exit_kind in LEGACY_PINS
+                    and observer == self.settings.sandbox_observer and t.endpoint.startswith("pypi:")):
+                legacy = signals.get("legacy") if isinstance(signals.get("legacy"), dict) else {}
+                lplan = {"pins": LEGACY_PINS[exit_kind], **_config_for(t, legacy if legacy.get("version") == version else {})}
+                if legacy.get("version") == version and lplan == (legacy.get("supplied") or {}):
+                    settled += 1  # the pinned run happened with everything it asked for
+                    continue
+                config[t.id] = lplan
+                legacy_ids.add(t.id)
+                with_pins += 1
+                configured.append((t, version))
+                continue
+            plan = _config_for(t, signals)
+            if plan:
+                config[t.id] = plan
+            if seen == version and state.get("last_status") in SETTLED and observer == self.settings.sandbox_observer:
+                if not plan or plan == (signals.get("supplied") or {}):
+                    settled += 1  # nothing new to try until the package or the observer changes
+                    continue
+                with_config += 1
+                configured.append((t, version))
+                continue
+            if seen == version:
                 refresh += 1
                 if observer != self.settings.sandbox_observer:
                     outdated += 1
                 else:
                     incomplete_retries += 1
-            (updates if seen and seen != version else first).append((t, version))
+                first.append((t, version))
+            else:
+                updates.append((t, version))
         # Never-observed packages in curated order (most downloaded first), wherever they are listed:
         # what people actually run is covered before the long tail of the registry.
         try:
@@ -347,13 +417,42 @@ class Crawler:
             rank = {}
         # Never let a permanently incomplete popular package occupy the budget every crawl.
         # Unobserved entries come first; retries rotate by oldest attempt, with popularity as a tie-breaker.
-        first.sort(key=lambda tv: (attempted_at[tv[0].id], rank.get(tv[0].endpoint, len(rank))))
-        due = (updates + first)[: self.settings.sandbox_max_per_crawl]
+        order = sorted([(t, v) for t, v in first] + [(t, None) for t in never],
+                       key=lambda tv: (attempted_at[tv[0].id], rank.get(tv[0].endpoint, len(rank))))
+        # A never-observed package's version is asked for only when it is next in line: asking
+        # the registries about every one of ~45 000 packages each crawl is what got npm to refuse.
+        configured.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
+        configured = configured[: max(0, cap - len(updates))]
+        room = max(0, cap - len(updates) - len(configured))
+        chosen: list[tuple[Target, str]] = []
+        looked_up = 0
+        i = 0
+        while i < len(order) and len(chosen) < room:
+            batch = order[i : i + max(32, room - len(chosen))]
+            i += len(batch)
+            pending = [t for t, v in batch if v is None]
+            looked_up += len(pending)
+            found = dict((t.id, v) for t, v in lookup(pending)) if pending else {}
+            for t, v in batch:
+                version = v or found.get(t.id)
+                if version and len(chosen) < room:
+                    chosen.append((t, version))
+        for t in never:
+            if t.needs:
+                config[t.id] = _config_for(t, {})
+        due = (updates + configured + chosen)[:cap]
+        unknown = sum(unknown_by.values())
+        if unknown:
+            log.warning("package versions unknown this crawl: %s", dict(unknown_by))
         self._due_versions = {t.id: v for t, v in due}
+        self._due_config = {t.id: config[t.id] for t, _ in due if config.get(t.id)}
+        self._due_legacy = {t.id for t, _ in due if t.id in legacy_ids}
         self._seen_versions = {t.id: seen_by_id[t.id] for t, _ in due if seen_by_id.get(t.id)}
         stats["packages"] = {"dialable": len(targets), "due": len(due), "newVersions": len(updates),
-                             "neverObserved": len(first) - refresh, "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
-                             "versionUnknown": unknown}
+                             "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
+                             "withConfig": with_config, "withPins": with_pins, "settled": settled,
+                             "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
+                             "versionsAsked": len(known) + looked_up}
         return [t for t, _ in due]
 
     def _signals(self, package: tuple[str, str], version: str, previous: str | None) -> dict[str, Any] | None:
@@ -385,7 +484,7 @@ class Crawler:
             try:
                 with sem:
                     if package and self.packages is not None:
-                        obs = self.packages.observe(*package, self._due_versions.get(t.id))
+                        obs = self.packages.observe(*package, self._due_versions.get(t.id), **self._due_config.get(t.id, {}))
                     else:
                         obs = self.reader.list_tools(t.endpoint)
             except Exception as exc:  # noqa: BLE001 - the reader promises not to raise; belt and braces
@@ -501,6 +600,50 @@ class Crawler:
         except Exception:  # noqa: BLE001 - even the record of a failure must not end the crawl
             log.exception("could not record the internal error for target %s", p.target.id)
 
+    def _commit_legacy(self, p: Prepared, scans: dict[str, dict[str, Any]]) -> None:
+        """A run with a legacy pin (mcp<2): kept beside the record, never a label or the target's status.
+
+        What a fresh install gets stays the observation; this says what the same version did when
+        it could still start — its tools, what WARDEN matched in them, and what it did in the sandbox.
+        """
+        t = p.target
+        try:
+            with self.store.db.transaction() as tx:
+                state = tx.one("SELECT package_signals FROM targets WHERE id=?", (t.id,)) or {}
+                try:
+                    previous = json.loads(state.get("package_signals") or "{}")
+                except ValueError:
+                    previous = {}
+                record = dict(previous) if isinstance(previous, dict) else {}
+                legacy: dict[str, Any] = {"version": p.obs.package_version or None, "observedAt": p.observed_at,
+                                          "status": p.obs.status, "supplied": p.obs.package_supplied or {}}
+                if p.obs.package_conditions:
+                    legacy["conditions"] = p.obs.package_conditions
+                if p.obs.status != "ok":
+                    legacy["detail"] = clean_text(p.obs.detail or "", 300)
+                    reason = classify(p.obs.status, p.obs.detail)
+                    if reason:
+                        legacy["exit"] = reason
+                subject = p.subject
+                if subject is not None and subject.tool_set_digest:
+                    Store.put_blob(tx, subject.tool_set_digest, "toolset", subject.entries)
+                    legacy.update(toolSetDigest=subject.tool_set_digest, toolCount=len(subject.entries or []),
+                                  tools=[clean_text(str(e.get("name", "")), 100) for e in (subject.entries or [])][:200])
+                    scan = scans.get(t.id)
+                    if scan is not None:
+                        matches = scan.get("patternMatches") or []
+                        legacy["patternMatches"] = {"block": sum(1 for m in matches if m.get("tier") == "block"),
+                                                    "advise": sum(1 for m in matches if m.get("tier") == "advise"),
+                                                    "matches": matches[:20]}
+                if p.obs.behaviour is not None:
+                    legacy["behaviour"] = p.obs.behaviour
+                record["legacy"] = legacy
+                tx.execute("UPDATE targets SET package_signals=?, last_attempt=? WHERE id=?", (dumps(record), p.observed_at, t.id))
+                from histor.security_events import append_event
+                append_event(tx, self.logbook.key, t.id, p.observed_at, previous, record)
+        except Exception:  # noqa: BLE001 - a side observation must not end the crawl
+            log.exception("could not record the pinned run for target %s", t.id)
+
     # -- per-target commit -----------------------------------------------------------
 
     def _commit(self, p: Prepared, run_id: int, rulesets: RuleSets, scans: dict[str, dict[str, Any]],
@@ -538,6 +681,13 @@ class Crawler:
                 record["observer"] = p.obs.package_observer
                 if p.obs.behaviour is not None:
                     record["behaviour"] = p.obs.behaviour
+                if p.obs.package_conditions:
+                    record["conditions"] = p.obs.package_conditions
+                if p.obs.package_supplied:
+                    record["supplied"] = p.obs.package_supplied
+                reason = classify(p.obs.status, p.obs.detail)
+                if reason:
+                    record["exit"] = reason
                 update["package_signals"] = dumps(record)
                 from histor.security_events import append_event
                 append_event(tx, self.logbook.key, t.id, p.observed_at,

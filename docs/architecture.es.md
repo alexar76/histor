@@ -86,6 +86,56 @@ sequenceDiagram
     C->>DB: firma el encabezado de árbol sobre el nuevo tamaño
 ```
 
+## Condiciones de prueba de los paquetes
+
+Una observación de un paquete npm o PyPI es cierta para las condiciones en que se ejecutó, y para
+ninguna otra. Las mismas condiciones están en el sitio ([histor.modelmarket.dev/#conditions](https://histor.modelmarket.dev/#conditions));
+el registro de cada paquete guarda el digest exacto de la imagen y la configuración que recibió
+(`packageSignals.conditions`, `packageSignals.supplied`).
+
+| | |
+|---|---|
+| Sistema | Linux x86_64, dentro de gVisor (`runsc`); usuario sin privilegios, sin capabilities, raíz de solo lectura |
+| Entornos de ejecución | npm: `node:22-alpine`; PyPI: `python:3.12-slim` — etiquetas descargadas al instalar un host del sandbox; el digest exacto se registra en cada observación |
+| Instalación | npm `--ignore-scripts`, luego los scripts de instalación en su propia etapa trazada; PyPI solo wheels (un sdist se señala, nunca se compila) |
+| Red | sin ruta hacia fuera; cada nombre resuelve a las trampas de HISTOR, que registran y no reenvían nada |
+| Secretos | ninguno real: credenciales señuelo en HOME, un `.env` señuelo; una variable que el paquete necesita recibe un valor de relleno |
+| Límites | 512 MB, 1 CPU, 64 MB de `/tmp`; 240 s para instalar, 150 s para arrancar y responder; ≤ 15 herramientas llamadas una vez, 8 s cada una |
+| Configuración | solo nombres (abajo); el observador crea todos los valores |
+
+Las cifras son constantes del propio observador (`sandbox/histor_observe.py`); una prueba hace fallar
+la compilación si las publicadas se desvían de ellas.
+
+**Por qué terminó un paquete.** Una ejecución que acaba en `exited` se clasifica por lo que imprimió el
+paquete (`histor/exit_reasons.py`) y se guarda como `packageSignals.exit`: `needs-config` (con los
+nombres de variables que dio), `needs-arguments` (con un argumento de arranque como `serve` o
+`--transport=stdio` cuando su texto de uso lo ofrece), `sdk-incompatible` (escrito para MCP SDK 1.x y
+ejecutado con 2.x), `needs-other-os`, `needs-network`, `silent`, `crashed`.
+
+**Arrancarlo de nuevo con lo que pidió.** El siguiente rastreo arranca la misma versión otra vez con
+valores de relleno para esos nombres — y, desde la primera ejecución, para las variables que su entrada
+en el registro marca `isRequired`. HISTOR envía solo nombres; el observador rechaza los que controlan el
+entorno de ejecución (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) y crea los valores:
+`histor-envkey-<run>` para una clave, una dirección en `histor-trap.invalid` para una URL, el directorio
+de trabajo para una ruta. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
+propia API o a otro sitio.
+
+**Servidores rotos por MCP SDK 2.0.** Un servidor PyPI escrito para `mcp` 1.x (`from mcp.server.fastmcp import
+FastMCP`) cuya dependencia no está fijada por debajo de 2 falla al importar desde que `mcp` 2.0.0
+(2026-07-28) renombró FastMCP. Su estado sigue siendo el de una instalación nueva (`exited`,
+`sdk-incompatible`); el siguiente rastreo arranca la misma versión otra vez con pip limitado a `mcp<2`
+(la lista fija del observador — HISTOR nunca envía una cadena de requisitos) y guarda el resultado junto
+al registro como `packageSignals.legacy`: estado, herramientas, coincidencias de patrones de WARDEN y
+comportamiento en el sandbox. No emite ninguna etiqueta y nunca pasa a ser el conjunto de herramientas
+del objetivo. Una versión nueva se ejecuta primero como instalación nueva.
+
+**Qué no se vuelve a ejecutar.** Una versión que terminó en `exited`, `no-entry-point`, `no-wheel`,
+`not-found` o `protocol` con el observador actual, sin nada nuevo que aportar, espera a una nueva versión
+o a un nuevo observador (`settled` en las estadísticas del rastreo). Los paquetes nunca observados van por
+orden de descargas; su última versión se consulta solo cuando les toca, con un ritmo por registro (npm
+responde a una ráfaga con 429 y un `Retry-After` de diez minutos, que HISTOR espera en lugar de leerlo
+como «sin versión»).
+
 ## Cuándo se emite una etiqueta
 
 El registro debe recoger hechos, no ruido, así que los resultados deterministas idénticos no se

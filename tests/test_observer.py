@@ -170,3 +170,50 @@ def test_container_address_retries_daemon_timeout_and_empty_network(tmp_path, mo
     monkeypatch.setattr(obs, "docker", inspect)
     monkeypatch.setattr(obs.time, "sleep", lambda _: None)
     assert obs.container_ip(cidfile) == ("container", "10.231.0.2")
+
+
+@pytest.mark.parametrize("env,args", [
+    (["PATH"], []), (["NODE_OPTIONS"], []), (["LD_PRELOAD"], []), (["HISTOR_SANDBOX_TOKEN"], []),
+    (["lower_case"], []), (["NOUNDERSCORE"], []), (["A_KEY=1"], []), ([f"K{i}_KEY" for i in range(9)], []),
+    ([], ["; rm -rf /"]), ([], ["$(id)"]), ([], ["--x=$HOME"]), ([], ["serve"] * 7), ([1], []),
+])
+def test_configuration_is_names_and_plain_arguments_only(env, args):
+    with pytest.raises(obs.Refused):
+        obs.check_config(env, args)
+
+
+def test_placeholders_are_made_here_and_recognisable():
+    assert obs.check_config(["HASDATA_API_KEY", "HASDATA_API_KEY"], ["serve", "--transport=stdio"]) == (
+        ["HASDATA_API_KEY"], ["serve", "--transport=stdio"], [])
+    assert obs.env_value("HASDATA_API_KEY", "r1") == "histor-envkey-r1"
+    assert obs.env_value("ACME_BASE_URL", "r1").endswith(".histor-trap.invalid")
+    assert obs.env_value("NOTES_DIR", "r1") == obs.APP_IN
+    assert "histor-canary-" not in obs.env_value("X_TOKEN", "r1"), "a placeholder key is not a decoy"
+
+
+def test_the_published_test_conditions_are_the_observers_own_numbers():
+    import re as _re
+    page = (Path(__file__).parents[1] / "docs/landing/index.html").read_text(encoding="utf-8")
+    text = {k: v for k, v in _re.findall(r'data-i="(c\dp)">([^<]+)<', page)}
+    src = (Path(__file__).parents[1] / "sandbox/histor_observe.py").read_text(encoding="utf-8")
+    assert '"--memory", "512m"' in src and '"--cpus", "1"' in src and "/tmp:rw,size=64m" in src
+    assert "512 MB" in text["c6p"] and "one CPU" in text["c6p"] and "64 MB" in text["c6p"]
+    assert f"{obs.INSTALL_TIMEOUT_S} s to install" in text["c6p"] and f"{obs.RUN_TIMEOUT_S} s to start" in text["c6p"]
+    assert f"up to {obs.CALL_LIMIT} tools" in text["c6p"] and f"{obs.CALL_TIMEOUT_S} s per call" in text["c6p"]
+    assert obs.IMAGES["npm"] in text["c2p"] and obs.IMAGES["pypi"] in text["c2p"]
+
+
+@pytest.mark.parametrize("pins,registry", [(["mcp<3"], "pypi"), (["requests==2.0"], "pypi"), (["mcp<2"], "npm"),
+                                            (["mcp<2; os.system('id')"], "pypi"), (["--index-url=https://x.invalid"], "pypi")])
+def test_only_listed_pins_reach_pip(pins, registry):
+    with pytest.raises(obs.Refused):
+        obs.check_config([], [], pins, registry)
+
+
+def test_the_mcp_1x_pin_goes_to_pip_next_to_the_package(tmp_path, monkeypatch):
+    assert obs.check_config([], [], ["mcp<2"], "pypi")[2] == ["mcp<2"]
+    seen = []
+    monkeypatch.setattr(obs, "docker", lambda *a, **k: seen.append(a) or SimpleNamespace(returncode=0, stderr="", stdout=""))
+    obs.install("pypi", "model-radar-mcp", "0.12.0", tmp_path, "r1", ["mcp<2"])
+    cmd = seen[0]
+    assert cmd[-2:] == ("model-radar-mcp==0.12.0", "mcp<2") and "--only-binary=:all:" in cmd
