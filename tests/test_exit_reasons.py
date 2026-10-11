@@ -27,6 +27,15 @@ from tests.test_packages import FakePackages, package_target, reader
      {"kind": "sdk-incompatible"}),
     ("import comtypes  # need 'pip install comtypes'", {"kind": "needs-other-os"}),
     ("getaddrinfo ENOTFOUND api.example.com", {"kind": "needs-network"}),
+    ("error: Node 24+ required, found 22.23.3", {"kind": "needs-newer-node", "node": 24}),
+    ("story-vault-mcp requires Node.js >= 18 (with npx). Install Node.js", {"kind": "crashed"}),
+    ("Run 'xcodebuildmcp mcp' to start the MCP server", {"kind": "needs-arguments", "args": ["mcp"]}),
+    ("[supergateway] Error: You must specify one of --stdio, --sse, or --streamableHttp", {"kind": "needs-arguments", "args": ["--stdio"]}),
+    ("Commands:\n  index.js stdio   Start ArgoCD MCP server using stdio.\n  index.js sse     Start it using SSE.",
+     {"kind": "needs-arguments", "args": ["stdio"]}),
+    ("Please provide a database URL as a command-line argument", {"kind": "needs-arguments"}),
+    ("Error: no session cookie with x-transcend-active-organization-id. at resolveAuth (file:///x.mjs:1:1)", {"kind": "needs-config"}),
+    ("This directory isn't set up yet. Run `ok init` first, then `ok start` again.", {"kind": "needs-config"}),
     ("", {"kind": "silent"}),
     ("Traceback (most recent call last): ZeroDivisionError", {"kind": "crashed"}),
 ])
@@ -203,3 +212,37 @@ def test_a_rerun_with_what_it_asked_for_goes_before_never_observed_packages(worl
     stats = s.crawler.run()
     assert [r[1] for r in fake.runs] == ["keyed", "p0"], "the configured rerun first, then the most popular new package"
     assert stats["packages"]["withConfig"] == 1
+
+
+class NodePackages(KeyedPackages):
+    """An npm server that needs Node 24 and starts once it gets it."""
+
+    def observe(self, registry, name, version, **config):
+        self.runs.append((registry, name, version))
+        self.configs.append(config)
+        if config.get("runtime") != "node24":
+            return Observation(status="exited", detail="error: Node 24+ required, found 22.23.3",
+                               package_version=version, package_observer=self.observer)
+        obs = FakePackages.observe(self, registry, name, version)
+        self.runs.pop()
+        return replace(obs, package_supplied={"runtime": "node24"},
+                       package_conditions={"image": "node@sha256:24", "imageTag": "node:24-alpine", "runtime": "runsc"})
+
+
+def test_a_package_that_needs_node_24_runs_again_on_the_lts_image(world):
+    s = world["services"]
+    fake = NodePackages()
+    s.crawler.packages = fake
+    t = package_target("io.t/tenjin", "npm:tenjin-cli")
+    world["targets"].append(t)
+    fake.latest["npm:tenjin-cli"] = "2.0.0"
+    fake.tools[("npm:tenjin-cli", "2.0.0")] = [tool("t", "A tool.")]
+    s.crawler.run()
+    world["clock"].advance(days=1)
+    s.crawler.run()
+    assert fake.configs == [{}, {"runtime": "node24"}]
+    record = json.loads(s.store.target(t.id)["package_signals"])
+    assert s.store.target(t.id)["last_status"] == "ok" and record["conditions"]["imageTag"] == "node:24-alpine"
+    world["clock"].advance(days=1)
+    s.crawler.run()
+    assert len(fake.runs) == 2, "an ok run on node 24 is not repeated"

@@ -32,7 +32,30 @@ KEY_WORDS = re.compile(
     r"|\b(?:set|define|export|provide)\s+`?[A-Z][A-Z0-9]*_[A-Z0-9_]+|環境變數|环境变量|未設定|未设置)",
     re.I,
 )
+# Asking for an account or a setup it does not name: still a configuration, not a crash.
+AUTH_OR_SETUP = re.compile(
+    r"\b(?:session cookie|not authenticated|unauthenticated|authentication (?:is )?required|log ?in required"
+    r"|please (?:log|sign) ?in|no (?:valid )?credentials|configuration error|invalid configuration"
+    r"|config(?:uration)? (?:file )?(?:is )?(?:missing|not found)|expected string, received undefined"
+    r"|isn't set up yet|is not set up|run [`'\"]?\S+ init[`'\"]? first)",
+    re.I,
+)
+# "Node 24+ required, found 22.23.3", "requires Node.js >= 24", npm's EBADENGINE.
+NODE_NEEDED = re.compile(
+    r"node(?:\.js)?\s*(?:version\s*)?v?(\d{2})(?:\.\d+)*\s*(?:\+|or (?:newer|higher|later|above))\s*(?:is\s*)?required"
+    r"|requires? node(?:\.js)?\s*(?:version\s*)?(?:>=?\s*)?v?(\d{2})"
+    r"|engine \"node\" is incompatible[^\n]{0,80}?(\d{2})",
+    re.I,
+)
+# The newest Node major the sandbox has an image for (histor_observe.RUNTIMES["npm"]["node24"]).
+NODE_RUNTIMES = {24: "node24"}
+SANDBOX_NODE = 22  # the default npm image, node:22-alpine
+# The package itself says how to start it: "Run 'xcodebuildmcp mcp' to start the MCP server".
+RUN_HINT = re.compile(r"""(?:run|use|try|start (?:it )?with)\s+[`'"]?(?:npx\s+(?:-y\s+)?)?[@\w./-]+\s+(stdio|mcp|serve|server|start)\b[`'"]?""", re.I)
+# "You must specify one of --stdio, --sse, or --streamableHttp", "--transport stdio".
+FLAG_HINT = re.compile(r"(?:specify|pass|use|choose|requires?|needs?|one of)[^.\n]{0,60}?(--stdio)\b|(--transport)[ =]stdio\b", re.I)
 USAGE = re.compile(r"(^|\s)usage:|the following arguments are required|missing argument|missing command|no such command"
+                   r"|command[- ]line argument|required option '--"
                    r"|requires a subcommand|specify a (sub)?command|子命令", re.I)
 OTHER_OS = re.compile(r"\b(comtypes|pywin32|win32api|win32com|winreg|pythoncom|AppKit|pyobjc|Quartz)\b|only (?:supported|works|runs) on (?:Windows|macOS)"
                       r"|requires (?:Windows|macOS)|not supported on (?:Linux|this platform)", re.I)
@@ -43,6 +66,8 @@ NETWORK = re.compile(r"name resolution|ENOTFOUND|EAI_AGAIN|getaddrinfo|ECONNREFU
 START_WORDS = ("stdio", "mcp", "serve", "server", "start", "run")
 CHOICES = re.compile(r"(?:(--?[a-z][a-z0-9-]{0,30})[ =])?\{([a-z0-9][a-z0-9_-]*(?:,[a-z0-9][a-z0-9_-]*)+)\}")
 COMMAND_LINE = re.compile(r"^\s{2,}([a-z][a-z0-9_-]{1,30})\s{2,}\S", re.M)
+# yargs: "  index.js stdio   Start the server using stdio." — the program name, then the command.
+PROGRAM_COMMAND = re.compile(r"^\s*\S+\.(?:js|mjs|cjs)\s+(stdio|mcp|serve|server|start)\s{2,}\S", re.M)
 
 
 def env_names(text: str) -> list[str]:
@@ -61,7 +86,15 @@ def env_names(text: str) -> list[str]:
 def start_argument(text: str) -> str | None:
     """The subcommand (``serve``) or option (``--transport=stdio``) a usage text offers that would
     start the server over stdio, if it names one."""
+    hint = RUN_HINT.search(text)
+    if hint:
+        return hint.group(1).lower()
+    flag = FLAG_HINT.search(text)
+    if flag:
+        return "--stdio" if flag.group(1) else "--transport=stdio"
     offered: dict[str, str] = {}
+    for word in PROGRAM_COMMAND.findall(text):
+        offered.setdefault(word, word)
     for option, group in CHOICES.findall(text):
         for choice in group.split(","):
             offered.setdefault(choice, f"{option}={choice}" if option.startswith("--") else choice)
@@ -78,7 +111,8 @@ def classify(status: str, detail: str | None) -> dict[str, Any] | None:
 
     kind: needs-config (a key or setting it names, or does not), needs-arguments (a usage text),
     sdk-incompatible (built against the MCP SDK 1.x and run with 2.x), needs-other-os (Windows- or
-    macOS-only libraries; the sandbox is Linux), needs-network (it reached
+    macOS-only libraries; the sandbox is Linux), needs-newer-node (with the major it named),
+    needs-network (it reached
     for the internet while starting; the sandbox has none), silent, crashed.
     """
     if status != "exited":
@@ -90,12 +124,17 @@ def classify(status: str, detail: str | None) -> dict[str, Any] | None:
         return {"kind": "sdk-incompatible"}
     if OTHER_OS.search(text):
         return {"kind": "needs-other-os"}
+    node = NODE_NEEDED.search(text)
+    major = int(next(g for g in node.groups() if g)) if node else 0
+    if major > SANDBOX_NODE:
+        # Below that it is not "newer": a Python package that shells out to npx wants Node at all.
+        return {"kind": "needs-newer-node", "node": major}
     names = env_names(text) if KEY_WORDS.search(text) else []
     arg = start_argument(text)
     extra = {**({"env": names} if names else {}), **({"args": [arg]} if arg else {})}
     if USAGE.search(text) or (arg and not names):
         return {"kind": "needs-arguments", **extra}
-    if names or KEY_WORDS.search(text):
+    if names or KEY_WORDS.search(text) or AUTH_OR_SETUP.search(text):
         return {"kind": "needs-config", **extra}
     if NETWORK.search(text):
         return {"kind": "needs-network"}

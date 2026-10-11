@@ -461,11 +461,11 @@ async function serverView(id, done) {
       const named = exit.kind === "needs-config" && env.length ? key + "_named"
         : exit.kind === "needs-arguments" && args.length ? key + "_named"
         : exit.kind === "sdk-incompatible" && sig?.legacy ? key + "_seen" : key;
-      root.append(el("p", { class: "warn-t", text: t(named, { env: env.join(", "), args: args.join(" ") }) }));
+      root.append(el("p", { class: "warn-t", text: t(named, { env: env.join(", "), args: args.join(" "), node: String(exit.node ?? "") }) }));
     }
     const given = sig?.supplied;
     if (given && typeof given === "object") {
-      const what = [...(given.env || []), ...(given.args || [])].filter((x) => typeof x === "string");
+      const what = [...(given.env || []), ...(given.args || []), ...(typeof given.runtime === "string" ? [given.runtime] : [])].filter((x) => typeof x === "string");
       if (what.length) root.append(el("p", { class: "faint", text: t("js_supplied", { what: what.join(", ") }) }));
     }
     const look = data.packageLookalike;

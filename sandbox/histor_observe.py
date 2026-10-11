@@ -41,7 +41,8 @@ The package is a stranger's code and some packages are hostile, so:
   ``histor-envkey-<run>`` for a key, an address on ``histor-trap.invalid`` for a URL, the working
   directory for a path — and, when its registry entry or its usage text names one, a start
   argument such as ``serve``; for PyPI, a dependency pin from a fixed list (``mcp<2``: how a
-  server written for MCP SDK 1.x ran before 2.0). HISTOR never sends a value. The traps record where a placeholder
+  server written for MCP SDK 1.x ran before 2.0); for npm, a runtime from a fixed list
+  (``node24``: the current LTS image, for a package that requires it). HISTOR never sends a value. The traps record where a placeholder
   key was sent, so "sent the key to its own API" and "sent it somewhere else" can be told apart.
 * ``--memory-swap`` equals ``--memory``: Docker's default doubles the limit with swap, and a
   900 MB allocation passed a 512 MB container on a host with swap until it was set.
@@ -111,6 +112,9 @@ MAX_ARGS = 6
 # Dependency pins HISTOR may ask for, by registry: a fixed list, never a requirement string from
 # outside. mcp<2 is how a server written for the MCP SDK 1.x ran before 2.0 renamed FastMCP.
 PINS = {"pypi": ("mcp<2",)}
+# Runtimes HISTOR may ask for, by registry: a package that exits with "Node 24+ required" runs
+# again on the current LTS image. The image a run used is always in its report (image).
+RUNTIMES = {"npm": {"node24": "node:24-alpine"}}
 
 
 class Refused(Exception):
@@ -125,6 +129,13 @@ def out(doc: dict[str, Any]) -> None:
 def tail(text: str, limit: int = 400) -> str:
     text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", " ", text).strip()
     return text[-limit:]
+
+
+def head_tail(text: str, head: int = 600, end: int = 600) -> str:
+    """What a process printed as it failed: the first lines (where the error says what it is)
+    and the last (the stack's end). Keeping only the tail lost the message under a stack trace."""
+    text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", " ", text).strip()
+    return text if len(text) <= head + end + 5 else f"{text[:head]} … {text[-end:]}"
 
 
 def docker(*args: str, timeout: float = 60, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -177,13 +188,20 @@ def env_value(name: str, tag: str) -> str:
     return f"histor-envkey-{tag}"
 
 
-def check_config(env: Any, args: Any, pins: Any = None, registry: str = "pypi") -> tuple[list[str], list[str], list[str]]:
+def image_for(registry: str, runtime: str | None = None) -> str:
+    return RUNTIMES[registry][runtime] if runtime else IMAGES[registry]
+
+
+def check_config(env: Any, args: Any, pins: Any = None, registry: str = "pypi",
+                 runtime: Any = None) -> tuple[list[str], list[str], list[str], str | None]:
     """The configuration HISTOR asked for, or Refused: names only, bounded, nothing that steers the runtime."""
     env = list(env or [])
     args = list(args or [])
     pins = list(pins or [])
     if any(p not in PINS.get(registry, ()) for p in pins):
         raise Refused("pin not on the list")
+    if runtime is not None and (not isinstance(runtime, str) or runtime not in RUNTIMES.get(registry, {})):
+        raise Refused("runtime not on the list")
     if len(env) > MAX_ENV or len(args) > MAX_ARGS:
         raise Refused("too much configuration")
     for name in env:
@@ -192,7 +210,7 @@ def check_config(env: Any, args: Any, pins: Any = None, registry: str = "pypi") 
     for arg in args:
         if not isinstance(arg, str) or not ARG_TOKEN.match(arg):
             raise Refused("bad start argument")
-    return sorted(set(env)), args, sorted(set(pins))
+    return sorted(set(env)), args, sorted(set(pins)), runtime
 
 
 def plant_decoys(work: Path, tag: str) -> None:
@@ -536,7 +554,8 @@ def base_flags(run_id: str, runtime: str = RUNTIME) -> list[str]:
             "--label", "histor-sandbox=1"]
 
 
-def install(registry: str, name: str, version: str, work: Path, run_id: str, pins: list[str] | None = None) -> tuple[bool, str]:
+def install(registry: str, name: str, version: str, work: Path, run_id: str, pins: list[str] | None = None,
+            image: str | None = None) -> tuple[bool, str]:
     # On a user-defined network Docker points resolv.conf at its embedded DNS (127.0.0.11), which
     # lives in iptables rules gVisor's own network stack never sees: name the resolvers instead.
     flags = [*base_flags(run_id + "-i"), "--network", FETCH_NETWORK, "--memory", "1g", "--memory-swap", "1g", "--cpus", "1",
@@ -549,7 +568,7 @@ def install(registry: str, name: str, version: str, work: Path, run_id: str, pin
         cmd = ["pip", "install", "--disable-pip-version-check", "--no-cache-dir", "--only-binary=:all:",
                "--no-compile", "--target", "/work/pkg", f"{name}=={version}", *(pins or [])]
     try:
-        res = docker("run", *flags, IMAGES[registry], *cmd, timeout=INSTALL_TIMEOUT_S)
+        res = docker("run", *flags, image or IMAGES[registry], *cmd, timeout=INSTALL_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         docker("rm", "-f", f"histor-{run_id}-i")
         return False, "install timed out"
@@ -712,7 +731,7 @@ def container_ip(cidfile: Path, wait_s: float = 30) -> tuple[str | None, str | N
     return cid or None, None
 
 
-def run_scripts(work: Path, run_id: str, packages: list[str]) -> dict[str, Any]:
+def run_scripts(work: Path, run_id: str, packages: list[str], image: str | None = None) -> dict[str, Any]:
     """npm install scripts, run on their own under the trace: what installing would have done."""
     cidfile = work / "cid-scripts"
     flags = [*sandbox_flags(run_id + "-s", work, True, cidfile, package_rw=True), "-w", "/work/pkg"]
@@ -721,7 +740,7 @@ def run_scripts(work: Path, run_id: str, packages: list[str]) -> dict[str, Any]:
     # the decoy at HOME/.npmrc and all its reads remain observable.
     flags += ["-e", "NPM_CONFIG_USERCONFIG=/dev/null", "-e", "NPM_CONFIG_UPDATE_NOTIFIER=false"]
     since = time.time()
-    proc = subprocess.Popen([DOCKER, "run", *flags, IMAGES["npm"], "npm", "rebuild", "--foreground-scripts", "--no-audit", "--no-fund"],
+    proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES["npm"], "npm", "rebuild", "--foreground-scripts", "--no-audit", "--no-fund"],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     cid, ip = None, None
     timed_out = False
@@ -741,7 +760,7 @@ def run_scripts(work: Path, run_id: str, packages: list[str]) -> dict[str, Any]:
 
 
 def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool = False,
-        env: list[str] | None = None, args: list[str] | None = None) -> dict[str, Any]:
+        env: list[str] | None = None, args: list[str] | None = None, image: str | None = None) -> dict[str, Any]:
     cidfile = work / "cid-run"
     flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile), "-i", "-w", APP_IN]
     for name in env or []:
@@ -750,7 +769,7 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
     if registry == "pypi":
         flags += ["-e", "PYTHONPATH=/work/pkg", "-e", "PYTHONDONTWRITEBYTECODE=1"]
     start, wall = time.monotonic(), time.time()
-    proc = subprocess.Popen([DOCKER, "run", *flags, IMAGES[registry], *entry],
+    proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES[registry], *entry],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     cid, ip = None, None
     marks: dict[str, Any] = {}
@@ -855,7 +874,7 @@ def stderr_of(proc: subprocess.Popen[bytes]) -> str:
         _, err = proc.communicate(timeout=5)
     except (OSError, subprocess.TimeoutExpired, ValueError):
         return ""
-    return tail((err or b"").decode("utf-8", "replace"))
+    return head_tail((err or b"").decode("utf-8", "replace"))
 
 
 # -- one observation ----------------------------------------------------------------------------
@@ -876,21 +895,23 @@ def slot():
         time.sleep(2)
 
 
-def image_digest(registry: str) -> str | None:
-    res = docker("image", "inspect", "--format", "{{index .RepoDigests 0}}", IMAGES[registry])
+def image_digest(registry: str, image: str | None = None) -> str | None:
+    res = docker("image", "inspect", "--format", "{{index .RepoDigests 0}}", image or IMAGES[registry])
     return res.stdout.strip() or None
 
 
 def observe(registry: str, name: str, version: str | None, env: list[str] | None = None,
-            args: list[str] | None = None, pins: list[str] | None = None) -> dict[str, Any]:
+            args: list[str] | None = None, pins: list[str] | None = None, runtime: str | None = None) -> dict[str, Any]:
+    image = image_for(registry, runtime)
     doc: dict[str, Any] = {"type": "histor.package-observation/v1", "observer": VERSION, "registry": registry,
                            "name": name, "runtime": RUNTIME, "observedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                           "supplied": {"env": list(env or []), "args": list(args or []), "pins": list(pins or [])}}
+                           "supplied": {"env": list(env or []), "args": list(args or []), "pins": list(pins or []),
+                                        **({"runtime": runtime} if runtime else {})}}
     try:
         meta = resolve(registry, name, version)
     except Exception as exc:  # noqa: BLE001 - every failure is a status, never a crash
         return {**doc, "status": "not-found", "detail": tail(f"{type(exc).__name__}: {exc}")}
-    doc.update(version=meta["version"], integrity=meta.get("integrity"), image=image_digest(registry))
+    doc.update(version=meta["version"], integrity=meta.get("integrity"), image=image_digest(registry, image), imageTag=image)
     if registry == "pypi" and not meta.get("has_wheel"):
         return {**doc, "status": "no-wheel", "detail": "only an sdist: building it would run the package's code"}
     lock = slot()
@@ -900,14 +921,14 @@ def observe(registry: str, name: str, version: str | None, env: list[str] | None
         (work / "pkg").mkdir(parents=True)
         (work / ".home").mkdir()
         plant_decoys(work, run_id)
-        ok, log = install(registry, name, meta["version"], work, run_id, pins)
+        ok, log = install(registry, name, meta["version"], work, run_id, pins, image)
         if not ok:
             return {**doc, "status": "install-failed", "detail": log}
         traced = traced_available()
         pkgs = lifecycle_packages(work) if registry == "npm" else []
-        scripts = (run_scripts(work, run_id, pkgs) if traced else {"complete": False, "incompleteReasons": ["trace-unavailable"]}) if pkgs else {"complete": True, "status": "not-applicable", "packages": []}
+        scripts = (run_scripts(work, run_id, pkgs, image) if traced else {"complete": False, "incompleteReasons": ["trace-unavailable"]}) if pkgs else {"complete": True, "status": "not-applicable", "packages": []}
         entry = npm_entry(work, name) if registry == "npm" else pypi_entry(work, name)
-        result = run(registry, work, entry, run_id, traced, env, args) if entry else {"status": "no-entry-point", "detail": "the package declares no command to start"}
+        result = run(registry, work, entry, run_id, traced, env, args, image) if entry else {"status": "no-entry-point", "detail": "the package declares no command to start"}
         behaviour = result.setdefault("behaviour", {})
         behaviour["installScripts"] = scripts
         behaviour["observer"] = "gvisor-trace/2"
@@ -927,7 +948,8 @@ def selftest() -> dict[str, Any]:
             "kernel": probe.stdout.strip(), "gvisor": "gvisor" in probe.stdout,
             "trace": TRACE_RUNTIME in info, "dnsLogger": DNS is not None,
             "observeNetwork": docker("network", "inspect", OBSERVE_NETWORK).returncode == 0,
-            "images": {k: image_digest(k) for k in IMAGES}}
+            "images": {k: image_digest(k) for k in IMAGES},
+            "runtimeImages": {f"{r}:{n}": image_digest(r, img) for r, by in RUNTIMES.items() for n, img in by.items()}}
 
 
 MAX_REQUESTS = 2 * SLOTS  # in flight; SLOTS observe at once, the rest wait for a slot
@@ -1011,7 +1033,7 @@ def serve() -> None:
                     argv = ["observe", str(body["registry"]), str(body["name"]),
                             *([str(body["version"])] if body.get("version") else [])]
                     req = parse(argv)
-                    config = check_config(body.get("env"), body.get("args"), body.get("pins"), req[1])
+                    config = check_config(body.get("env"), body.get("args"), body.get("pins"), req[1], body.get("runtime"))
             except (ValueError, KeyError, TypeError, Refused) as exc:
                 self.reply(400, {"status": "refused", "detail": str(exc)[:200]})
                 return

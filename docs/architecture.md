@@ -116,7 +116,7 @@ usage text offers one), `sdk-incompatible` (written for MCP SDK 1.x and run with
 placeholders for those names — and, from the first run, for the variables its registry entry marks
 `isRequired`. HISTOR sends names only; the observer refuses names that steer the runtime (`PATH`,
 `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) and makes the values: `histor-envkey-<run>` for a key, an
-address on `histor-trap.invalid` for a URL, the working directory for a path. Where a placeholder key
+address on `histor-trap.invalid` for a URL, the working directory for a path. A package that exits asking for a newer Node (`needs-newer-node`) runs again on `node:24-alpine`, the current LTS, and its page says so. Where a placeholder key
 was sent is recorded (`envKeyDestinations`): to its own API, or somewhere else.
 
 **Servers broken by MCP SDK 2.0.** A PyPI server written for `mcp` 1.x (`from mcp.server.fastmcp import

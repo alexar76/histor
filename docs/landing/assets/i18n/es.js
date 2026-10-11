@@ -53,7 +53,7 @@ export default {
   c1t: "Sistema",
   c1p: "Linux x86_64, dentro de gVisor (runsc): el paquete habla con un núcleo escrito para el aislamiento, no con el del host. Usuario sin privilegios, sin capabilities, raíz de solo lectura.",
   c2t: "Entornos de ejecución",
-  c2p: "Paquetes npm en node:22-alpine, paquetes PyPI en python:3.12-slim. Los hosts del sandbox descargan esas etiquetas al instalarse; el digest exacto de la imagen en la que se ejecutó un paquete figura en su página.",
+  c2p: "Paquetes npm en node:22-alpine, paquetes PyPI en python:3.12-slim. Los hosts del sandbox descargan esas etiquetas al instalarse; el digest exacto de la imagen en la que se ejecutó un paquete figura en su página. Un paquete que requiere un Node más reciente se ejecuta de nuevo en node:24-alpine.",
   c3t: "Instalación",
   c3p: "npm con --ignore-scripts, y luego los scripts de instalación en una etapa trazada propia. PyPI: solo wheels; un paquete que solo publica código fuente se señala, nunca se compila.",
   c4t: "Red",
@@ -332,4 +332,5 @@ export default {
   js_legacy_matches: "Patrones de WARDEN en esas herramientas: {block} de nivel block, {advise} de nivel advise.",
   js_legacy_failed: "Con la restricción sigue sin responder. Estado: {status}.",
   js_exit_sdk_incompatible_seen: "Falló al importar: escrito para MCP SDK 1.x (mcp.server.fastmcp), mientras su dependencia sin fijar instaló la 2.x. Le pasa a cualquiera que lo instale hoy.",
+  js_exit_needs_newer_node: "Terminó pidiendo Node {node} o posterior; el sandbox usa Node 22 por defecto. La próxima ejecución usa node:24-alpine, la LTS actual.",
 };

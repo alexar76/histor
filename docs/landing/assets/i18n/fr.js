@@ -53,7 +53,7 @@ export default {
   c1t: "Système",
   c1p: "Linux x86_64, dans gVisor (runsc) : le paquet parle à un noyau écrit pour l’isolation, pas à celui de l’hôte. Utilisateur non privilégié, aucune capability, racine en lecture seule.",
   c2t: "Environnements d’exécution",
-  c2p: "Paquets npm dans node:22-alpine, paquets PyPI dans python:3.12-slim. Les hôtes du bac à sable récupèrent ces étiquettes à leur installation ; le digest exact de l’image où un paquet a tourné figure sur sa page.",
+  c2p: "Paquets npm dans node:22-alpine, paquets PyPI dans python:3.12-slim. Les hôtes du bac à sable récupèrent ces étiquettes à leur installation ; le digest exact de l’image où un paquet a tourné figure sur sa page. Un paquet qui exige un Node plus récent est relancé sur node:24-alpine.",
   c3t: "Installation",
   c3p: "npm avec --ignore-scripts, puis les scripts d’installation dans une étape tracée à part. PyPI : wheels uniquement ; un paquet qui ne publie que ses sources est signalé, jamais compilé.",
   c4t: "Réseau",
@@ -332,4 +332,5 @@ export default {
   js_legacy_matches: "Motifs WARDEN dans ces outils : {block} de niveau block, {advise} de niveau advise.",
   js_legacy_failed: "Même avec la contrainte, il n’a pas répondu. Statut : {status}.",
   js_exit_sdk_incompatible_seen: "Échec à l’import : écrit pour le SDK MCP 1.x (mcp.server.fastmcp), alors que sa dépendance non épinglée a installé la 2.x. C’est ce qu’obtient quiconque l’installe aujourd’hui.",
+  js_exit_needs_newer_node: "Arrêté en réclamant Node {node} ou plus récent ; le bac à sable utilise Node 22 par défaut. Le prochain lancement se fait sur node:24-alpine, la LTS actuelle.",
 };

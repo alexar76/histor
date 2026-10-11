@@ -117,7 +117,7 @@ valores de relleno para esos nombres — y, desde la primera ejecución, para la
 en el registro marca `isRequired`. HISTOR envía solo nombres; el observador rechaza los que controlan el
 entorno de ejecución (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) y crea los valores:
 `histor-envkey-<run>` para una clave, una dirección en `histor-trap.invalid` para una URL, el directorio
-de trabajo para una ruta. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
+de trabajo para una ruta. Un paquete que termina pidiendo un Node más reciente (`needs-newer-node`) se ejecuta de nuevo en `node:24-alpine`, la LTS actual, y su página lo indica. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
 propia API o a otro sitio.
 
 **Servidores rotos por MCP SDK 2.0.** Un servidor PyPI escrito para `mcp` 1.x (`from mcp.server.fastmcp import

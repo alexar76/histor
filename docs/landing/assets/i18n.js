@@ -204,6 +204,7 @@ export const JS_EN = {
   js_legacy_matches: "WARDEN patterns in those tools: {block} block-tier, {advise} advise-tier.",
   js_legacy_failed: "With the pin it still did not answer. Status: {status}.",
   js_exit_sdk_incompatible_seen: "Exited at import: written for MCP SDK 1.x (mcp.server.fastmcp), while its unpinned dependency installed 2.x. Anyone installing it today gets this.",
+  js_exit_needs_newer_node: "Exited asking for Node {node} or newer; the sandbox's default is Node 22. The next run uses node:24-alpine, the current LTS.",
 };
 
 export const DICT = { ru, es, fr, zh };

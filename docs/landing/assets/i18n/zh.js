@@ -53,7 +53,7 @@ export default {
   c1t: "系统",
   c1p: "Linux x86_64，运行在 gVisor（runsc）内：软件包面对的是为沙箱编写的内核，而不是宿主机的内核。非特权用户，无 capabilities，只读根文件系统。",
   c2t: "运行环境",
-  c2p: "npm 软件包在 node:22-alpine 中，PyPI 软件包在 python:3.12-slim 中。沙箱主机在安装时拉取这些标签；软件包运行所在镜像的确切 digest 记录在其页面上。",
+  c2p: "npm 软件包在 node:22-alpine 中，PyPI 软件包在 python:3.12-slim 中。沙箱主机在安装时拉取这些标签；软件包运行所在镜像的确切 digest 记录在其页面上。需要更新版本 Node 的软件包会在 node:24-alpine 上再运行一次。",
   c3t: "安装",
   c3p: "npm 使用 --ignore-scripts，随后在单独的受跟踪阶段运行安装脚本。PyPI：只用 wheel；只发布源代码的软件包会被记录，从不构建。",
   c4t: "网络",
@@ -332,4 +332,5 @@ export default {
   js_legacy_matches: "这些工具中的 WARDEN 模式：block 级 {block} 个，advise 级 {advise} 个。",
   js_legacy_failed: "加上限定后它仍未应答。状态：{status}。",
   js_exit_sdk_incompatible_seen: "导入时失败：为 MCP SDK 1.x（mcp.server.fastmcp）编写，而未固定版本的依赖安装了 2.x。今天安装它的任何人都会遇到这种情况。",
+  js_exit_needs_newer_node: "退出时要求 Node {node} 或更新版本；沙箱默认是 Node 22。下一次运行将使用当前 LTS 版本 node:24-alpine。",
 };

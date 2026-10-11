@@ -171,7 +171,7 @@ class PackageReader:
                 "dependencySpecs": {k: sorted(v) for k, v in dependency_specs.items()}}
 
     def observe(self, registry: str, name: str, version: str | None, *, env: list[str] | None = None,
-                args: list[str] | None = None, pins: list[str] | None = None) -> Observation:
+                args: list[str] | None = None, pins: list[str] | None = None, runtime: str | None = None) -> Observation:
         body: dict[str, Any] = {"registry": registry, "name": name}
         if version:
             body["version"] = version
@@ -181,6 +181,8 @@ class PackageReader:
             body["args"] = list(args)
         if pins:
             body["pins"] = list(pins)
+        if runtime:
+            body["runtime"] = runtime
         try:
             code, doc = self._post("/observe", body)
         except (OSError, ssl.SSLError, http.client.HTTPException, ValueError) as exc:
@@ -191,13 +193,17 @@ class PackageReader:
         observed = doc.get("version") if isinstance(doc.get("version"), str) else (version or "")
         observer = str(doc.get("observer") or "")[:20]
         behaviour = doc.get("behaviour") if isinstance(doc.get("behaviour"), dict) else None
-        conditions = {k: str(doc[k])[:200] for k in ("image", "runtime") if isinstance(doc.get(k), str) and doc[k]} or None
+        conditions = {k: str(doc[k])[:200] for k in ("image", "imageTag", "runtime") if isinstance(doc.get(k), str) and doc[k]} or None
         given = doc.get("supplied") if isinstance(doc.get("supplied"), dict) else {}
         supplied = {k: [str(v)[:100] for v in given.get(k) or [] if isinstance(v, str)][:8] for k in ("env", "args", "pins")}
+        if isinstance(given.get("runtime"), str) and given["runtime"]:
+            supplied["runtime"] = given["runtime"][:20]  # type: ignore[assignment]
         supplied = {k: v for k, v in supplied.items() if v} or None
         extra = {"package_conditions": conditions, "package_supplied": supplied}
         if status != "ok":
-            return Observation(status=status[:40], detail=str(doc.get("detail") or "")[:300],
+            # The head says what failed, the tail where: both reach the exit-reason reader (stored
+            # last_detail is still cut to 300).
+            return Observation(status=status[:40], detail=str(doc.get("detail") or "")[:1300],
                                package_version=observed, package_observer=observer, behaviour=behaviour, **extra)
         tools = doc.get("tools")
         info = doc.get("serverInfo") if isinstance(doc.get("serverInfo"), dict) else {}

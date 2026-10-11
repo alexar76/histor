@@ -37,7 +37,7 @@ from urllib.parse import urlsplit
 from histor import diffing
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
-from histor.exit_reasons import classify
+from histor.exit_reasons import NODE_RUNTIMES, classify
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
@@ -124,14 +124,21 @@ SETTLED = frozenset({"exited", "no-entry-point", "no-wheel", "not-found", "proto
 LEGACY_PINS = {"sdk-incompatible": ["mcp<2"]}
 
 
-def _config_for(t: Target, record: dict[str, Any]) -> dict[str, list[str]]:
+def _config_for(t: Target, record: dict[str, Any]) -> dict[str, Any]:
     """Variable names and start arguments to start a package with: what its registry entry
     declares, plus what it named when it last exited without them."""
     declared = t.needs or {}
     asked = record.get("exit") if isinstance(record.get("exit"), dict) else {}
     env = sorted({str(n) for n in [*(declared.get("env") or []), *(asked.get("env") or [])]})[:8]
     args = list(declared.get("args") or asked.get("args") or [])[:6]
-    return {k: v for k, v in (("env", env), ("args", args)) if v}
+    plan: dict[str, Any] = {k: v for k, v in (("env", env), ("args", args)) if v}
+    # "Node 24+ required": the current LTS image, the one such a package's users run it on.
+    major = asked.get("node") if asked.get("kind") == "needs-newer-node" else None
+    if isinstance(major, int) and t.endpoint.startswith("npm:"):
+        runtime = next((name for m, name in sorted(NODE_RUNTIMES.items()) if m >= major), None)
+        if runtime:
+            plan["runtime"] = runtime
+    return plan
 
 
 def _parse_ts(value: str | None) -> datetime | None:
@@ -660,7 +667,7 @@ class Crawler:
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
                 "tool_count, pages, protocol, server_name, server_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
-                 clean_text(p.obs.detail if not p.subject_error else p.subject_error.code, 300),
+                 clean_text(p.obs.detail if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
                  len(p.obs.tools) if p.obs.tools is not None else None, p.obs.pages,
                  clean_text(p.obs.protocol_version, 40),

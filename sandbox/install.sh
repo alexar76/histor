@@ -102,6 +102,7 @@ docker network inspect "$NETWORK" >/dev/null 2>&1 || \
 
 docker pull -q node:22-alpine >/dev/null
 docker pull -q python:3.12-slim >/dev/null
+docker pull -q node:24-alpine >/dev/null   # RUNTIMES["npm"]["node24"]
 
 if [ -n "$PUBKEY" ]; then
   case "$PUBKEY" in ssh-ed25519\ *) ;; *) echo "expected an ssh-ed25519 public key" >&2; exit 1 ;; esac

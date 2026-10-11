@@ -103,7 +103,7 @@ sequenceDiagram
 
 **软件包为何退出。** 以 `exited` 结束的运行会根据软件包打印的内容进行分类（`histor/exit_reasons.py`），并保存为 `packageSignals.exit`：`needs-config`（附带它给出的变量名）、`needs-arguments`（当其用法文本提供时，附带 `serve` 或 `--transport=stdio` 之类的启动参数）、`sdk-incompatible`（为 MCP SDK 1.x 编写却在 2.x 下运行）、`needs-other-os`、`needs-network`、`silent`、`crashed`。
 
-**按它要求的再启动一次。** 下一次抓取会用这些名称的占位值再次启动同一版本——对于注册表条目标为 `isRequired` 的变量，则从第一次运行起就提供。HISTOR 只发送名称；观察器会拒绝控制运行环境的名称（`PATH`、`NODE_OPTIONS`、`LD_*`、`PYTHON*` 等），并自行生成值：密钥为 `histor-envkey-<run>`，URL 为 `histor-trap.invalid` 上的地址，路径为工作目录。占位密钥被发送到哪里会被记录（`envKeyDestinations`）：发往它自己的 API，还是别处。
+**按它要求的再启动一次。** 下一次抓取会用这些名称的占位值再次启动同一版本——对于注册表条目标为 `isRequired` 的变量，则从第一次运行起就提供。HISTOR 只发送名称；观察器会拒绝控制运行环境的名称（`PATH`、`NODE_OPTIONS`、`LD_*`、`PYTHON*` 等），并自行生成值：密钥为 `histor-envkey-<run>`，URL 为 `histor-trap.invalid` 上的地址，路径为工作目录。退出时要求更新版本 Node 的软件包（`needs-newer-node`）会在当前 LTS 版本 `node:24-alpine` 上再运行一次，其页面会注明这一点。占位密钥被发送到哪里会被记录（`envKeyDestinations`）：发往它自己的 API，还是别处。
 
 **被 MCP SDK 2.0 破坏的服务器。** 为 `mcp` 1.x 编写（`from mcp.server.fastmcp import FastMCP`）、且依赖未限定在 2 以下的 PyPI 服务器，自 `mcp` 2.0.0（2026-07-28）重命名 FastMCP 以来会在导入时失败。它的状态保持为全新安装得到的结果（`exited`、`sdk-incompatible`）；下一次抓取会把同一版本再启动一次，并将 pip 限定为 `mcp<2`（观察器的固定限定列表——HISTOR 从不发送需求字符串），结果作为 `packageSignals.legacy` 保存在记录旁：状态、工具、WARDEN 模式匹配以及沙箱中的行为。它不签发任何标签，也永远不会成为目标的工具集。新版本会先按全新安装运行。
 

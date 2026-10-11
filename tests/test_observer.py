@@ -184,7 +184,7 @@ def test_configuration_is_names_and_plain_arguments_only(env, args):
 
 def test_placeholders_are_made_here_and_recognisable():
     assert obs.check_config(["HASDATA_API_KEY", "HASDATA_API_KEY"], ["serve", "--transport=stdio"]) == (
-        ["HASDATA_API_KEY"], ["serve", "--transport=stdio"], [])
+        ["HASDATA_API_KEY"], ["serve", "--transport=stdio"], [], None)
     assert obs.env_value("HASDATA_API_KEY", "r1") == "histor-envkey-r1"
     assert obs.env_value("ACME_BASE_URL", "r1").endswith(".histor-trap.invalid")
     assert obs.env_value("NOTES_DIR", "r1") == obs.APP_IN
@@ -217,3 +217,20 @@ def test_the_mcp_1x_pin_goes_to_pip_next_to_the_package(tmp_path, monkeypatch):
     obs.install("pypi", "model-radar-mcp", "0.12.0", tmp_path, "r1", ["mcp<2"])
     cmd = seen[0]
     assert cmd[-2:] == ("model-radar-mcp==0.12.0", "mcp<2") and "--only-binary=:all:" in cmd
+
+
+@pytest.mark.parametrize("runtime,registry", [("node25", "npm"), ("node24", "pypi"), ("../node", "npm"), (["node24"], "npm")])
+def test_only_listed_runtimes(runtime, registry):
+    with pytest.raises(obs.Refused):
+        obs.check_config([], [], [], registry, runtime)
+
+
+def test_a_node24_run_uses_the_lts_image_and_says_so():
+    assert obs.check_config([], [], [], "npm", "node24")[3] == "node24"
+    assert obs.image_for("npm", "node24") == "node:24-alpine" and obs.image_for("npm") == obs.IMAGES["npm"]
+
+
+def test_a_failure_keeps_the_message_above_the_stack():
+    text = "Error: Node 24+ required, found 22.23.3\n" + "    at frame (file:///x.js:1:1)\n" * 200
+    kept = obs.head_tail(text)
+    assert kept.startswith("Error: Node 24+ required") and " … " in kept and len(kept) < 1300

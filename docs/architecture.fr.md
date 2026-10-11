@@ -117,7 +117,7 @@ factices pour ces noms — et, dès le premier lancement, pour les variables que
 marque `isRequired`. HISTOR n’envoie que des noms ; l’observateur refuse ceux qui pilotent
 l’environnement d’exécution (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) et fabrique les valeurs :
 `histor-envkey-<run>` pour une clé, une adresse sur `histor-trap.invalid` pour une URL, le répertoire de
-travail pour un chemin. L’endroit où une clé factice a été envoyée est enregistré
+travail pour un chemin. Un paquet qui s’arrête en réclamant un Node plus récent (`needs-newer-node`) est relancé sur `node:24-alpine`, la LTS actuelle, et sa page l’indique. L’endroit où une clé factice a été envoyée est enregistré
 (`envKeyDestinations`) : sa propre API, ou ailleurs.
 
 **Serveurs cassés par le SDK MCP 2.0.** Un serveur PyPI écrit pour `mcp` 1.x (`from mcp.server.fastmcp import
