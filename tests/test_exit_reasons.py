@@ -76,6 +76,7 @@ class KeyedPackages(FakePackages):
         self.configs = []
 
     def observe(self, registry, name, version, **config):
+        version = version or self.latest.get(f"{registry}:{name}")
         self.runs.append((registry, name, version))
         self.configs.append(config)
         if "HASDATA_API_KEY" not in (config.get("env") or []):
@@ -110,8 +111,12 @@ def test_a_package_that_asks_for_a_key_is_run_again_with_a_placeholder_once(worl
 def test_a_settled_failure_is_not_run_again_until_something_changes(world):
     s = world["services"]
     fake = KeyedPackages()
-    fake.observe = lambda registry, name, version, **config: (fake.runs.append((registry, name, version)) or Observation(
-        status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer="3"))
+    def observe(registry, name, version, **config):
+        version = version or fake.latest.get(f"{registry}:{name}")
+        fake.runs.append((registry, name, version))
+        return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer="3")
+
+    fake.observe = observe
     s.crawler.packages = fake
     world["targets"].append(package_target())
     fake.latest["npm:@a/mem"] = "1.0.0"
@@ -144,6 +149,7 @@ class SdkPackages(FakePackages):
         self.configs = []
 
     def observe(self, registry, name, version, **config):
+        version = version or self.latest.get(f"{registry}:{name}")
         self.runs.append((registry, name, version))
         self.configs.append(config)
         if "mcp<2" not in (config.get("pins") or []):
@@ -189,6 +195,25 @@ def test_a_server_broken_by_mcp_2_is_also_read_with_mcp_1_beside_the_record(worl
     assert "legacy" not in json.loads(s.store.target(t.id)["package_signals"])
 
 
+def test_a_pinned_run_that_lists_no_tools_still_says_how_many(world):
+    """An empty tool set cannot be a subject (MTL-SUBJ-002); the record said nothing where 0 was the finding."""
+    s = world["services"]
+    fake = SdkPackages()
+    s.crawler.packages = fake
+    t = package_target("io.r/empty", "pypi:empty-mcp")
+    world["targets"].append(t)
+    fake.latest["pypi:empty-mcp"] = "1.0.0"
+    fake.tools[("pypi:empty-mcp", "1.0.0")] = []
+    s.crawler.run()
+    world["clock"].advance(days=1)
+    s.crawler.run()
+    legacy = json.loads(s.store.target(t.id)["package_signals"])["legacy"]
+    assert legacy["status"] == "ok"
+    assert legacy["toolCount"] == 0 and legacy["tools"] == []
+    assert legacy["subjectError"] == "MTL-SUBJ-002"
+    assert "toolSetDigest" not in legacy
+
+
 def test_a_rerun_with_what_it_asked_for_goes_before_never_observed_packages(world, monkeypatch):
     import histor.crawler as crawler_mod
 
@@ -210,7 +235,8 @@ def test_a_rerun_with_what_it_asked_for_goes_before_never_observed_packages(worl
     fake.runs.clear()
     world["clock"].advance(days=1)
     stats = s.crawler.run()
-    assert [r[1] for r in fake.runs] == ["keyed", "p0"], "the configured rerun first, then the most popular new package"
+    # Both fit the cap of two; they run side by side in the package lane, so the set is what is chosen.
+    assert {r[1] for r in fake.runs} == {"keyed", "p0"}, "the configured rerun and the most popular new package"
     assert stats["packages"]["withConfig"] == 1
 
 
@@ -218,6 +244,7 @@ class NodePackages(KeyedPackages):
     """An npm server that needs Node 24 and starts once it gets it."""
 
     def observe(self, registry, name, version, **config):
+        version = version or self.latest.get(f"{registry}:{name}")
         self.runs.append((registry, name, version))
         self.configs.append(config)
         if config.get("runtime") != "node24":
@@ -246,3 +273,42 @@ def test_a_package_that_needs_node_24_runs_again_on_the_lts_image(world):
     world["clock"].advance(days=1)
     s.crawler.run()
     assert len(fake.runs) == 2, "an ok run on node 24 is not repeated"
+
+
+def test_an_exit_recorded_before_reasons_were_read_is_read_from_the_stored_text(world):
+    s = world["services"]
+    fake = KeyedPackages()
+    s.crawler.packages = fake
+    t = package_target()
+    world["targets"].append(t)
+    fake.latest["npm:@a/mem"] = "1.0.0"
+    fake.tools[("npm:@a/mem", "1.0.0")] = [tool("search", "Search.")]
+    s.crawler.run()
+    with s.store.db.transaction() as tx:  # as an older HISTOR stored it: the text, no reason
+        signals = json.loads(s.store.target(t.id)["package_signals"])
+        signals.pop("exit")
+        tx.execute("UPDATE targets SET package_signals=?, last_detail=? WHERE id=?",
+                   (json.dumps(signals), "HASDATA_API_KEY is not set.", t.id))
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    assert fake.configs[-1] == {"env": ["HASDATA_API_KEY"]} and stats["packages"]["withConfig"] == 1
+    assert s.store.target(t.id)["last_status"] == "ok"
+
+
+def test_a_pinned_run_keeps_the_fresh_install_reason_even_when_it_was_read_late(world):
+    s = world["services"]
+    fake = SdkPackages()
+    s.crawler.packages = fake
+    t = package_target("io.r/radar", "pypi:model-radar-mcp")
+    world["targets"].append(t)
+    fake.latest["pypi:model-radar-mcp"] = "0.12.0"
+    fake.tools[("pypi:model-radar-mcp", "0.12.0")] = [tool("radar", "Find models.")]
+    s.crawler.run()
+    with s.store.db.transaction() as tx:  # stored before exit reasons existed
+        signals = json.loads(s.store.target(t.id)["package_signals"])
+        signals.pop("exit")
+        tx.execute("UPDATE targets SET package_signals=? WHERE id=?", (json.dumps(signals), t.id))
+    world["clock"].advance(days=1)
+    s.crawler.run()
+    record = json.loads(s.store.target(t.id)["package_signals"])
+    assert record["exit"]["kind"] == "sdk-incompatible" and record["legacy"]["status"] == "ok"

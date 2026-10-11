@@ -19,11 +19,13 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import os
 import re
 import ssl
 import threading
 import time
 import urllib.parse
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -60,6 +62,62 @@ def parse_package(key: str) -> tuple[str, str] | None:
     return registry, name
 
 
+class VersionCache:
+    """``url → (etag, version)`` for the latest-version lookups, kept across crawls and restarts.
+
+    PyPI has no "latest only" endpoint: ``/pypi/<name>/json`` carries every release, 0.7 MB on the
+    wire for a package like boto3, and the crawl asks for ~3 000 PyPI packages a day that mostly
+    did not change. Both registries answer ``If-None-Match`` with an empty 304, so an unchanged
+    package costs a few hundred bytes. A missing or unreadable file only means full answers again.
+    """
+
+    SAVE_EVERY = 200
+
+    def __init__(self, path: Path | None = None) -> None:
+        self.path = path
+        self._lock = threading.Lock()
+        self._dirty = 0
+        self._entries: dict[str, tuple[str, str]] = {}
+        if path is not None:
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                self._entries = {u: (e[0], e[1]) for u, e in raw.items()
+                                 if isinstance(e, list) and len(e) == 2 and all(isinstance(x, str) for x in e)}
+            except (OSError, ValueError, AttributeError):
+                self._entries = {}
+
+    def get(self, url: str) -> tuple[str, str] | None:
+        with self._lock:
+            return self._entries.get(url)
+
+    def put(self, url: str, etag: str, version: str) -> None:
+        with self._lock:
+            if self._entries.get(url) == (etag, version):
+                return
+            self._entries[url] = (etag, version)
+            self._dirty += 1
+            due = self._dirty >= self.SAVE_EVERY
+        if due:
+            self.save()
+
+    def save(self) -> None:
+        if self.path is None:
+            return
+        with self._lock:
+            if not self._dirty:
+                return
+            data = json.dumps({u: list(e) for u, e in self._entries.items()}, separators=(",", ":"))
+            self._dirty = 0
+        tmp = self.path.with_suffix(".tmp")
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(data)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass  # a cache that cannot be written only costs bandwidth
+
+
 class PackageReader:
     """Latest versions from the registries (cheap, every crawl) and observations from the sandbox."""
 
@@ -72,7 +130,8 @@ class PackageReader:
 
     def __init__(self, url: str, token: str, cert_sha256: str, *, timeout: float = 420.0,
                  registry_timeout: float = 20.0, transport: httpx.BaseTransport | None = None,
-                 sleep: Any = time.sleep, clock: Any = time.monotonic) -> None:
+                 sleep: Any = time.sleep, clock: Any = time.monotonic,
+                 versions: VersionCache | None = None) -> None:
         parts = urllib.parse.urlsplit(url)
         if parts.scheme != "https" or not parts.hostname:
             raise ValueError("the sandbox URL must be https://host:port")
@@ -89,11 +148,16 @@ class PackageReader:
         self._pace = threading.Lock()
         self._next_at = {r: 0.0 for r in REGISTRIES}
         self._blocked_until = {r: 0.0 for r in REGISTRIES}
+        self.versions = versions or VersionCache()
+
+    def save_versions(self) -> None:
+        self.versions.save()
 
     def close(self) -> None:
+        self.versions.save()
         self.registry.close()
 
-    def _registry_get(self, registry: str, url: str) -> httpx.Response:
+    def _registry_get(self, registry: str, url: str, etag: str | None = None) -> httpx.Response:
         """One registry request, paced per registry; a 429 is waited out (all threads), not read as an answer."""
         deadline = self._clock() + self.RATE_LIMIT_WAIT_S
         while True:
@@ -103,7 +167,7 @@ class PackageReader:
                 self._next_at[registry] = at + 1.0 / self.REGISTRY_RATE[registry]
             if at > now:
                 self._sleep(at - now)
-            res = self.registry.get(url)
+            res = self.registry.get(url, headers={"If-None-Match": etag} if etag else None)
             if res.status_code != 429:
                 return res
             try:
@@ -119,14 +183,23 @@ class PackageReader:
     def latest_version(self, registry: str, name: str) -> str | None:
         """The version ``npx -y`` / ``uvx`` would run today, or None when the registry does not say."""
         if registry == "npm":
-            res = self._registry_get(registry, f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/latest")
+            url = f"https://registry.npmjs.org/{urllib.parse.quote(name, safe='@/')}/latest"
         else:
-            res = self._registry_get(registry, f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json")
+            url = f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json"
+        cached = self.versions.get(url)
+        res = self._registry_get(registry, url, etag=cached[0] if cached else None)
+        if res.status_code == 304 and cached:
+            return cached[1]
         if res.status_code != 200:
             return None
         doc = res.json()
         version = doc.get("version") if registry == "npm" else (doc.get("info") or {}).get("version")
-        return version if isinstance(version, str) and 0 < len(version) <= 64 else None
+        if not (isinstance(version, str) and 0 < len(version) <= 64):
+            return None
+        etag = res.headers.get("etag")
+        if etag:
+            self.versions.put(url, etag, version)
+        return version
 
     def version_facts(self, registry: str, name: str, version: str) -> dict[str, Any] | None:
         """What the registry says about one published version: whether its build is attested, who
@@ -313,6 +386,11 @@ class SandboxPool:
     def latest_version(self, registry: str, name: str) -> str | None:
         return self.members[0][0].latest_version(registry, name)
 
+    def save_versions(self) -> None:
+        save = getattr(self.members[0][0], "save_versions", None)
+        if save is not None:
+            save()
+
     def version_facts(self, registry: str, name: str, version: str) -> dict[str, Any] | None:
         return self.members[0][0].version_facts(registry, name, version)
 
@@ -361,8 +439,11 @@ class SandboxPool:
 
 def sandbox_readers(settings: Any) -> list[tuple[PackageReader, int]]:
     """Every configured sandbox host with its slots, in configuration order (1, 2, …)."""
+    # Only the first reader answers latest-version lookups (SandboxPool delegates to it).
+    data_dir = getattr(settings, "data_dir", None)
     first = PackageReader(settings.sandbox_url, settings.sandbox_token, settings.sandbox_cert_sha256,
-                          timeout=settings.sandbox_timeout_s)
+                          timeout=settings.sandbox_timeout_s,
+                          versions=VersionCache(Path(data_dir) / "registry-versions.json" if data_dir else None))
     return [(first, settings.sandbox_concurrency)] + [
         (PackageReader(url, token, pin, timeout=settings.sandbox_timeout_s), slots)
         for url, token, pin, slots in settings.sandbox_extra]

@@ -246,6 +246,12 @@ class FakePackages:
     def observe(self, registry, name, version):
         from histor.mcpclient import Observation
 
+        if version is None:
+            # Like the real observer: no version asked for means the latest, and the report says which.
+            version = self.latest.get(f"{registry}:{name}")
+            if version is None:
+                self.runs.append((registry, name, None))
+                return Observation(status="not-found", detail="no such package")
         self.runs.append((registry, name, version))
         if self.fail:
             return Observation(status=SANDBOX_ERROR, detail="sandbox unreachable (ConnectionRefusedError)")
@@ -505,7 +511,7 @@ def test_registry_lookups_are_paced_per_registry():
     assert now[0] >= 8 / PackageReader.REGISTRY_RATE["npm"]
 
 
-def test_only_the_versions_a_crawl_can_run_are_asked_for(world, monkeypatch):
+def test_a_never_observed_package_is_not_asked_about_before_it_runs(world, monkeypatch):
     from dataclasses import replace
 
     import histor.crawler as crawler_mod
@@ -522,9 +528,55 @@ def test_only_the_versions_a_crawl_can_run_are_asked_for(world, monkeypatch):
     for n in names:
         world["targets"].append(package_target(f"io.x/{n}", f"npm:{n}"))
         fake.tools[(f"npm:{n}", "1.0.0")] = [tool("t", "A tool.")]
-        if n != "p000":  # the most popular one has no version today: the next in line takes its place
+        if n != "p000":  # unpublished since it was listed: the sandbox says so, the crawl moves on
             fake.latest[f"npm:{n}"] = "1.0.0"
     stats = s.crawler.run()
-    assert [r[1] for r in fake.runs] == ["p001", "p002"]
-    assert len(asked) < 100, "the registry is not asked about the whole list"
-    assert stats["packages"]["versionUnknownBy"] == {"npm": 1} and stats["packages"]["neverObserved"] == 200
+    assert asked == [], "the sandbox installs the latest itself; nobody asks the registry first"
+    assert {r[1] for r in fake.runs} == {"p000", "p001"}
+    assert stats["packages"]["neverObserved"] == 200 and stats["statuses"].get("not-found") == 1
+
+
+def test_an_unchanged_package_is_asked_with_its_etag_and_costs_no_download(tmp_path):
+    """PyPI's /json carries every release (0.7 MB for boto3); a 304 answers an unchanged one."""
+    from histor.packages import VersionCache
+
+    seen: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("if-none-match"))
+        if request.headers.get("if-none-match") == '"e1"':
+            return httpx.Response(304)
+        return httpx.Response(200, json={"info": {"version": "1.2.0"}}, headers={"etag": '"e1"'})
+
+    path = tmp_path / "registry-versions.json"
+    r = PackageReader("https://sandbox.test:9443", "t" * 40, PIN, transport=httpx.MockTransport(handler),
+                      versions=VersionCache(path))
+    assert r.latest_version("pypi", "boto3") == "1.2.0"
+    assert r.latest_version("pypi", "boto3") == "1.2.0"
+    assert seen == [None, '"e1"']
+    r.save_versions()
+    assert oct(path.stat().st_mode & 0o777) == "0o600"
+
+    # A restarted process starts from the saved ETags.
+    seen.clear()
+    r2 = PackageReader("https://sandbox.test:9443", "t" * 40, PIN, transport=httpx.MockTransport(handler),
+                       versions=VersionCache(path))
+    assert r2.latest_version("pypi", "boto3") == "1.2.0"
+    assert seen == ['"e1"']
+
+
+def test_a_304_without_a_cached_answer_is_not_a_version(tmp_path):
+    from histor.packages import VersionCache
+
+    r = PackageReader("https://sandbox.test:9443", "t" * 40, PIN,
+                      transport=httpx.MockTransport(lambda req: httpx.Response(304)),
+                      versions=VersionCache(tmp_path / "v.json"))
+    assert r.latest_version("pypi", "x") is None
+
+
+def test_an_unreadable_cache_file_only_costs_a_full_answer(tmp_path):
+    from histor.packages import VersionCache
+
+    path = tmp_path / "v.json"
+    path.write_text("{not json")
+    assert VersionCache(path).get("https://pypi.org/pypi/x/json") is None

@@ -144,6 +144,14 @@ class Store:
             row = tx.one("SELECT COUNT(*) AS n FROM targets WHERE delisted=0 AND current_toolset IS NOT NULL")
         return int((row or {}).get("n") or 0)
 
+    def package_states(self) -> dict[str, dict[str, Any]]:
+        """What a crawl needs to plan the package sandbox, for every package target, in one query.
+        Asking target by target cost a round trip each — ~47 000 of them — before any package ran."""
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT id, package_version, package_signals, last_status, last_attempt, last_detail FROM targets "
+                              "WHERE transport = 'stdio'")
+        return {r["id"]: r for r in rows}
+
     def all_targets(self) -> list[dict[str, Any]]:
         with self.db.read() as tx:
             return tx.execute("SELECT * FROM targets ORDER BY name, endpoint")

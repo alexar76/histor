@@ -48,7 +48,7 @@ flowchart TB
 | `histor/scanner.py` + `scanner/scan.mjs` | 运行**已发布的** WARDEN 门控。边车（sidecar）在启动时描述自己的模式集和记录集，因此标签写明的是实际运行的那套规则的摘要。 |
 | `histor/labels.py` | 四种标签方法，每种产出一份签名的 AWR/2 文档。MTL/1 的裁定规则在代码中强制执行（`MTL-METH-002`）。 |
 | `histor/logbook.py` + `histor/merkle.py` | 叶子追加、树头、包含证明与一致性证明。只存储完整子树，因此每个证明只需 O(log n) 次读取。 |
-| `histor/crawler.py` | 一次抓取：收集 → 观测（线程池，按主机限流，主机交错）→ 扫描新工具集 → 每个目标一个事务，按 `HISTOR_CRAWL_BATCH` 分批，每批保存后才读取下一批 → 签发树头。 |
+| `histor/crawler.py` | 一次抓取：收集 → 观测（线程池，按主机限流，主机交错）→ 扫描新工具集 → 每个目标一个事务，按 `HISTOR_CRAWL_BATCH` 分批，每批保存后才读取下一批 → 签发树头。npm 和 PyPI 软件包从抓取一开始就走单独的通道，同时运行的数量等于沙箱的槽位数，每个完成后立即写入。 |
 | `histor/check.py` | `/check`：把客户端的工具集与观测结果比对；可选的、选择加入的摘要计数。 |
 | `histor/app.py` | HTTP 接口：网页端、API、徽章、Atom 订阅源、运营方路由，以及 AIMarket 联邦 peer。 |
 | `histor/db.py` + `histor/migrations.py` + `histor/store.py` | 与后端无关的存储：SQLite 与 Postgres 共用一种 SQL 方言，编号迁移，启动时检查列契约。 |

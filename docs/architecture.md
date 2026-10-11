@@ -49,7 +49,7 @@ flowchart TB
 | `histor/scanner.py` + `scanner/scan.mjs` | Runs the **published** WARDEN gates. The sidecar describes its own pattern set and record set at startup, so a label names the digest of the rules that actually ran. |
 | `histor/labels.py` | Four label methods, each one signed AWR/2 document. The verdict rules of MTL/1 are enforced in code (`MTL-METH-002`). |
 | `histor/logbook.py` + `histor/merkle.py` | Leaf append, tree heads, inclusion and consistency proofs. Only complete subtrees are stored, so every proof is O(log n) reads. |
-| `histor/crawler.py` | One crawl: harvest → observe (thread pool, per-host limit, hosts interleaved) → scan new tool sets → one transaction per target, in batches of `HISTOR_CRAWL_BATCH` saved before the next is read → sign a tree head. |
+| `histor/crawler.py` | One crawl: harvest → observe (thread pool, per-host limit, hosts interleaved) → scan new tool sets → one transaction per target, in batches of `HISTOR_CRAWL_BATCH` saved before the next is read → sign a tree head. npm and PyPI packages run in their own lane from the start of the crawl, as many at once as the sandboxes have slots, each committed as it finishes. |
 | `histor/check.py` | `/check`: compare a client's tool set with what was observed; optional opt-in digest count. |
 | `histor/app.py` | The HTTP surface: desk, API, badges, Atom feed, operator route, and the AIMarket federation peer. |
 | `histor/db.py` + `histor/migrations.py` + `histor/store.py` | Backend-neutral storage: one SQL dialect for SQLite and Postgres, numbered migrations, a column contract checked at startup. |

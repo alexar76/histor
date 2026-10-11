@@ -26,10 +26,11 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from collections import Counter, defaultdict, deque
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
@@ -147,6 +148,21 @@ def _parse_ts(value: str | None) -> datetime | None:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
+@dataclass
+class _Tally:
+    """A crawl's counts, shared by the endpoint batches and the package lane."""
+
+    classify_budget: int
+    statuses: Counter[str] = field(default_factory=Counter)
+    issued: Counter[str] = field(default_factory=Counter)
+    internal: Counter[str] = field(default_factory=Counter)
+    legacy_statuses: Counter[str] = field(default_factory=Counter)
+    changes: int = 0
+    classified: int = 0
+    lock: threading.Lock = field(default_factory=threading.Lock)
+    classify_lock: threading.Lock = field(default_factory=threading.Lock)
+
+
 class Crawler:
     def __init__(self, settings: Settings, store: Store, issuer: LabelIssuer, logbook: Logbook,
                  scanner: Scanner, *, reader: McpReader | None = None,
@@ -194,6 +210,11 @@ class Crawler:
         finally:
             self.running_since = None
             self.progress = None
+            # The registry ETags this crawl learned, so the next one (or the next process) asks
+            # with If-None-Match instead of downloading every unchanged package again.
+            save = getattr(self.packages, "save_versions", None)
+            if save is not None:
+                save()
             self._lock.release()
 
     def _run(self) -> dict[str, Any]:
@@ -224,53 +245,51 @@ class Crawler:
             if packages:
                 due = self._packages_due(packages, stats)
                 dialable = [t for t in dialable if not parse_package(t.endpoint)] + due
+            # Packages run in their own lane, started now: the sandboxes work from the first minute
+            # instead of after a round over 15 000 endpoint hosts, and each result is committed as
+            # soon as it is in, not when the slowest member of a 400-target batch is.
+            lane_targets = [t for t in dialable if parse_package(t.endpoint)]
+            endpoints = [t for t in dialable if not parse_package(t.endpoint)]
             # Interleave once over the whole list, so every batch carries its share of each host
             # instead of one batch spending an hour on a single host's 2 000 endpoints.
-            dialable = _interleave_by_host(dialable)
-            stats["attempted"] = len(dialable)
-            statuses: Counter[str] = Counter()
-            issued: Counter[str] = Counter()
-            changes = 0
-            classified = 0
-            classify_budget = self.settings.classifier_max_per_crawl if self.classifier else 0
+            endpoints = _interleave_by_host(endpoints)
+            stats["attempted"] = len(endpoints) + len(lane_targets)
+            tally = _Tally(self.settings.classifier_max_per_crawl if self.classifier else 0)
             step = self.settings.crawl_batch
-            internal: Counter[str] = Counter()
-            legacy_statuses: Counter[str] = Counter()
             take_counts = getattr(self.packages, "take_counts", None)
             if take_counts:
                 take_counts()  # count this crawl only
-            for start in range(0, len(dialable), step):
-                prepared = self._observe(dialable[start : start + step])
-                statuses.update(p.obs.status for p in prepared)
-                scans, scan_failed = self._scan(prepared, sets)
-                classifications, classify_budget = self._classify(prepared, classify_budget)
-                for item in prepared:
-                    # One target must never take the crawl down: whatever a stranger's server made
-                    # us do, it is recorded against that target and the crawl moves on.
-                    if item.obs.status == SANDBOX_ERROR:
-                        # Our sandbox failed, not the package: no label may say the package did.
-                        internal["sandbox"] += 1
-                        self._commit_internal(item, run_id, item.obs.detail or "the package sandbox failed")
-                        continue
-                    if item.target.id in self._due_legacy:
-                        legacy_statuses[item.obs.status] += 1
-                        self._commit_legacy(item, scans)
-                        continue
-                    if item.target.id in scan_failed:
-                        internal["scan-failed"] += 1
-                        self._commit_internal(item, run_id, "the WARDEN sidecar failed on this tool set")
-                        continue
+            self._lane_done = 0
+            self._endpoints_done = 0
+            total = len(endpoints) + len(lane_targets)
+            lane_error: list[BaseException] = []
+            lane = None
+            if lane_targets:
+                def run_lane() -> None:
                     try:
-                        result = self._commit(item, run_id, rulesets, scans, sets, classifications)
-                    except Exception as exc:  # noqa: BLE001
-                        log.exception("commit failed for target %s", item.target.id)
-                        internal[type(exc).__name__] += 1
-                        self._commit_internal(item, run_id, f"internal error ({type(exc).__name__})")
-                        continue
-                    issued.update(result["labels"])
-                    changes += result["changed"]
-                    classified += result.get("classified", 0)
-                self.progress = {"done": start + len(prepared), "of": len(dialable)}
+                        self._package_lane(lane_targets, run_id, rulesets, sets, tally, total)
+                    except BaseException as exc:  # noqa: BLE001 - surfaced by the crawl below
+                        lane_error.append(exc)
+                lane = threading.Thread(target=run_lane, name="histor-package-lane", daemon=True)
+                lane.start()
+            for start in range(0, len(endpoints), step):
+                prepared = self._observe(endpoints[start : start + step])
+                scans, scan_failed = self._scan(prepared, sets)
+                with tally.classify_lock:
+                    classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
+                for item in prepared:
+                    self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+                with tally.lock:
+                    self._endpoints_done = start + len(prepared)
+                    self.progress = {"done": self._endpoints_done + self._lane_done, "of": total,
+                                     **({"packages": {"done": self._lane_done, "of": len(lane_targets)}} if lane_targets else {})}
+            if lane is not None:
+                lane.join()
+            if lane_error:
+                raise lane_error[0]
+            self.progress = {"done": total, "of": total}
+            statuses, issued, internal, legacy_statuses = tally.statuses, tally.issued, tally.internal, tally.legacy_statuses
+            changes, classified = tally.changes, tally.classified
             if internal:
                 stats["internal_errors"] = dict(internal)
             if legacy_statuses:
@@ -351,7 +370,10 @@ class Crawler:
             with ThreadPoolExecutor(max_workers=16) as pool:
                 return list(pool.map(latest, batch))
 
-        states = {t.id: self.store.target(t.id) or {} for t in targets}
+        clock = time.monotonic()
+        known_states = self.store.package_states()
+        states = {t.id: known_states.get(t.id) or {} for t in targets}
+        state_seconds = round(time.monotonic() - clock)
         attempted_at = {t.id: str(states[t.id].get("last_attempt") or "") for t in targets}
         known = [t for t in targets if states[t.id].get("package_version")]
         never = [t for t in targets if not states[t.id].get("package_version")]
@@ -365,7 +387,11 @@ class Crawler:
         unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = 0
         legacy_ids: set[str] = set()
         # A package observed before is looked up every crawl: a new version of it goes first.
-        for t, version in lookup(known):
+        clock = time.monotonic()
+        known_versions = lookup(known)
+        known_seconds = round(time.monotonic() - clock)
+        clock = time.monotonic()
+        for t, version in known_versions:
             if version is None:
                 continue
             state = states[t.id]
@@ -380,6 +406,12 @@ class Crawler:
                     signals = {}
             if not isinstance(signals, dict):
                 signals = {}
+            if not isinstance(signals.get("exit"), dict) and state.get("last_status") == "exited":
+                # Recorded before exits were read: read the stored text now, so a package that has been
+                # asking for a key (or for mcp<2, or Node 24) since then is rerun with it, not settled.
+                reason = classify("exited", state.get("last_detail"))
+                if reason:
+                    signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
             if seen == version and state.get("last_status") == "ok" and complete and observer == self.settings.sandbox_observer:
                 unchanged += 1
@@ -426,24 +458,15 @@ class Crawler:
         # Unobserved entries come first; retries rotate by oldest attempt, with popularity as a tie-breaker.
         order = sorted([(t, v) for t, v in first] + [(t, None) for t in never],
                        key=lambda tv: (attempted_at[tv[0].id], rank.get(tv[0].endpoint, len(rank))))
-        # A never-observed package's version is asked for only when it is next in line: asking
-        # the registries about every one of ~45 000 packages each crawl is what got npm to refuse.
+        # A never-observed package is not asked about at all: the sandbox installs the latest version
+        # and reports which one it ran. Asking first cost ~16 minutes of npm's pace per crawl, every
+        # crawl, while the sandboxes waited (and a burst of it once got npm to refuse us).
         configured.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
         configured = configured[: max(0, cap - len(updates))]
         room = max(0, cap - len(updates) - len(configured))
-        chosen: list[tuple[Target, str]] = []
+        chosen: list[tuple[Target, str | None]] = [(t, v) for t, v in order[:room]]
         looked_up = 0
-        i = 0
-        while i < len(order) and len(chosen) < room:
-            batch = order[i : i + max(32, room - len(chosen))]
-            i += len(batch)
-            pending = [t for t, v in batch if v is None]
-            looked_up += len(pending)
-            found = dict((t.id, v) for t, v in lookup(pending)) if pending else {}
-            for t, v in batch:
-                version = v or found.get(t.id)
-                if version and len(chosen) < room:
-                    chosen.append((t, version))
+        never_seconds = round(time.monotonic() - clock)
         for t in never:
             if t.needs:
                 config[t.id] = _config_for(t, {})
@@ -459,7 +482,10 @@ class Crawler:
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
-                             "versionsAsked": len(known) + looked_up}
+                             "versionsAsked": len(known) + looked_up,
+                             "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}
+        log.warning("package versions: state %d s, %d known in %d s, %d more in %d s; %d due", state_seconds,
+                    len(known), known_seconds, looked_up, never_seconds, len(due))
         return [t for t, _ in due]
 
     def _signals(self, package: tuple[str, str], version: str, previous: str | None) -> dict[str, Any] | None:
@@ -485,32 +511,89 @@ class Crawler:
         guard = threading.Lock()
 
         def one(t: Target) -> Prepared:
-            with guard:
-                sem = per_host[_host_of(t.endpoint)]
-            package = parse_package(t.endpoint)
-            try:
-                with sem:
-                    if package and self.packages is not None:
-                        obs = self.packages.observe(*package, self._due_versions.get(t.id), **self._due_config.get(t.id, {}))
-                    else:
-                        obs = self.reader.list_tools(t.endpoint)
-            except Exception as exc:  # noqa: BLE001 - the reader promises not to raise; belt and braces
-                obs = Observation(status=SANDBOX_ERROR if package else "client-error", detail=type(exc).__name__)
-            item = Prepared(target=t, obs=obs, observed_at=self.clock())
-            if package and self.packages is not None and obs.status != SANDBOX_ERROR and obs.package_version:
-                item.signals = self._signals(package, obs.package_version, self._seen_versions.get(t.id))
-            if obs.status == "ok":
-                try:
-                    item.subject = build_subject(server_name=t.name, registry=t.registry, tools=obs.tools or [],
-                                                 **_artifact(t))
-                except MtlError as exc:
-                    item.subject_error = exc
-                except Exception as exc:  # noqa: BLE001 - hostile input the canonicalizer chokes on
-                    item.subject_error = MtlError(MTL_SUBJ_001, f"the tool set cannot be processed ({type(exc).__name__})")
-            return item
+            return self._observe_one(t, per_host, guard)
 
         with ThreadPoolExecutor(max_workers=self.settings.crawl_workers) as pool:
             return list(pool.map(one, targets))
+
+    def _observe_one(self, t: Target, per_host: Any, guard: threading.Lock) -> Prepared:
+        with guard:
+            sem = per_host[_host_of(t.endpoint)]
+        package = parse_package(t.endpoint)
+        try:
+            with sem:
+                if package and self.packages is not None:
+                    obs = self.packages.observe(*package, self._due_versions.get(t.id), **self._due_config.get(t.id, {}))
+                else:
+                    obs = self.reader.list_tools(t.endpoint)
+        except Exception as exc:  # noqa: BLE001 - the reader promises not to raise; belt and braces
+            obs = Observation(status=SANDBOX_ERROR if package else "client-error", detail=type(exc).__name__)
+        item = Prepared(target=t, obs=obs, observed_at=self.clock())
+        if package and self.packages is not None and obs.status != SANDBOX_ERROR and obs.package_version:
+            item.signals = self._signals(package, obs.package_version, self._seen_versions.get(t.id))
+        if obs.status == "ok":
+            try:
+                item.subject = build_subject(server_name=t.name, registry=t.registry, tools=obs.tools or [],
+                                             **_artifact(t))
+            except MtlError as exc:
+                item.subject_error = exc
+            except Exception as exc:  # noqa: BLE001 - hostile input the canonicalizer chokes on
+                item.subject_error = MtlError(MTL_SUBJ_001, f"the tool set cannot be processed ({type(exc).__name__})")
+        return item
+
+    def _settle(self, item: Prepared, run_id: int, rulesets: RuleSets, scans: dict[str, dict[str, Any]],
+                scan_failed: set[str], sets: str, classifications: dict[str, dict[str, Any]], tally: _Tally) -> None:
+        """Record one observation. One target must never take the crawl down: whatever a stranger's
+        server made us do, it is recorded against that target and the crawl moves on."""
+        with tally.lock:
+            tally.statuses[item.obs.status] += 1
+        if item.obs.status == SANDBOX_ERROR:
+            # Our sandbox failed, not the package: no label may say the package did.
+            with tally.lock:
+                tally.internal["sandbox"] += 1
+            self._commit_internal(item, run_id, item.obs.detail or "the package sandbox failed")
+            return
+        if item.target.id in self._due_legacy:
+            with tally.lock:
+                tally.legacy_statuses[item.obs.status] += 1
+            self._commit_legacy(item, scans)
+            return
+        if item.target.id in scan_failed:
+            with tally.lock:
+                tally.internal["scan-failed"] += 1
+            self._commit_internal(item, run_id, "the WARDEN sidecar failed on this tool set")
+            return
+        try:
+            result = self._commit(item, run_id, rulesets, scans, sets, classifications)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("commit failed for target %s", item.target.id)
+            with tally.lock:
+                tally.internal[type(exc).__name__] += 1
+            self._commit_internal(item, run_id, f"internal error ({type(exc).__name__})")
+            return
+        with tally.lock:
+            tally.issued.update(result["labels"])
+            tally.changes += result["changed"]
+            tally.classified += result.get("classified", 0)
+
+    def _package_lane(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,
+                      tally: _Tally, total: int) -> None:
+        """Every due package, as many at once as the sandboxes have slots, each committed when done."""
+        capacity = max(1, int(getattr(self.packages, "capacity", self.settings.sandbox_concurrency)))
+        per_host: dict[str, threading.Semaphore] = {PACKAGE_SANDBOX: threading.Semaphore(capacity)}
+        guard = threading.Lock()
+        with ThreadPoolExecutor(max_workers=capacity, thread_name_prefix="histor-sandbox") as pool:
+            futures = [pool.submit(self._observe_one, t, per_host, guard) for t in targets]
+            for future in as_completed(futures):
+                item = future.result()
+                scans, scan_failed = self._scan([item], sets)
+                with tally.classify_lock:
+                    classifications, tally.classify_budget = self._classify([item], tally.classify_budget)
+                self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+                with tally.lock:
+                    self._lane_done += 1
+                    self.progress = {"done": self._endpoints_done + self._lane_done, "of": total,
+                                     "packages": {"done": self._lane_done, "of": len(targets)}}
 
     def _scan(self, prepared: list[Prepared], sets: str) -> tuple[dict[str, dict[str, Any]], set[str]]:
         """Scan results by target id, and the targets whose scan failed.
@@ -616,12 +699,17 @@ class Crawler:
         t = p.target
         try:
             with self.store.db.transaction() as tx:
-                state = tx.one("SELECT package_signals FROM targets WHERE id=?", (t.id,)) or {}
+                state = tx.one("SELECT package_signals, last_status, last_detail FROM targets WHERE id=?", (t.id,)) or {}
                 try:
                     previous = json.loads(state.get("package_signals") or "{}")
                 except ValueError:
                     previous = {}
                 record = dict(previous) if isinstance(previous, dict) else {}
+                if not isinstance(record.get("exit"), dict) and state.get("last_status") == "exited":
+                    # The fresh install's reason is what the page and WARDEN show this pinned run under.
+                    reason = classify("exited", state.get("last_detail"))
+                    if reason:
+                        record["exit"] = reason
                 legacy: dict[str, Any] = {"version": p.obs.package_version or None, "observedAt": p.observed_at,
                                           "status": p.obs.status, "supplied": p.obs.package_supplied or {}}
                 if p.obs.package_conditions:
@@ -642,6 +730,15 @@ class Crawler:
                         legacy["patternMatches"] = {"block": sum(1 for m in matches if m.get("tier") == "block"),
                                                     "advise": sum(1 for m in matches if m.get("tier") == "advise"),
                                                     "matches": matches[:20]}
+                elif p.obs.status == "ok":
+                    # A run that started but has no subject still has a count. An empty tool set is
+                    # refused as a subject (MTL-SUBJ-002), and without this the record said nothing
+                    # where "0 tools" was the finding; the code says which case it was.
+                    listed = [e for e in (p.obs.tools or []) if isinstance(e, dict)]
+                    legacy.update(toolCount=len(listed),
+                                  tools=[clean_text(str(e.get("name", "")), 100) for e in listed][:200])
+                    if p.subject_error is not None:
+                        legacy["subjectError"] = p.subject_error.code
                 if p.obs.behaviour is not None:
                     legacy["behaviour"] = p.obs.behaviour
                 record["legacy"] = legacy
