@@ -96,11 +96,11 @@ each package record carries the exact image digest and any configuration the pac
 | | |
 |---|---|
 | System | Linux x86_64, inside gVisor (`runsc`); unprivileged user, no capabilities, read-only root |
-| Runtimes | npm: `node:22-alpine`; PyPI: `python:3.12-slim` — tags pulled when a sandbox host is installed; the exact digest is recorded per observation |
+| Runtimes | npm: `histor-node:22`; PyPI: `histor-python:3.12` (`3.13`, `3.14` when Requires-Python excludes 3.12) — the official `node:22-bookworm-slim` and `python:3.12-slim` plus bash, git, Python 3 or Node 22 and a Java 21 runtime (never Docker), built when a sandbox host is installed; the image id is recorded per observation |
 | Install | npm `--ignore-scripts`, then install scripts in their own traced stage; PyPI wheels only (an sdist is reported, never built) |
 | Network | no route out; every name resolves to HISTOR's traps, which record and forward nothing |
 | Secrets | none real: decoy credentials in HOME, a decoy `.env`; a variable the package needs gets a placeholder |
-| Limits | 512 MB, 1 CPU, 64 MB `/tmp`; 240 s to install, 150 s to start and answer; ≤ 15 tools called once, 8 s each |
+| Limits | 512 MB, 1 CPU, 64 MB `/tmp`; 360 s to install, 150 s to start and answer; ≤ 15 tools called once, 8 s each |
 | Configuration | names only (below); the observer makes every value |
 
 The numbers are the observer's own constants (`sandbox/histor_observe.py`); a test fails the build
@@ -110,13 +110,16 @@ when the published ones drift from them.
 (`histor/exit_reasons.py`) and kept as `packageSignals.exit`: `needs-config` (with the variable names
 it gave), `needs-arguments` (with a start argument such as `serve` or `--transport=stdio` when its
 usage text offers one), `sdk-incompatible` (written for MCP SDK 1.x and run with 2.x),
-`needs-other-os`, `needs-network`, `silent`, `crashed`.
+`needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
+`broken-package`, `not-a-server` (exit code 0), `silent`, `crashed`. A run that times out serving HTTP
+instead of stdio is `starts-http`, and the next one passes `--transport=stdio`. Since observer 4 the
+report keeps the exit code and the stdout that was not protocol: a CLI prints its usage there.
 
 **Starting it again with what it asked for.** The next crawl starts the same version once more with
 placeholders for those names — and, from the first run, for the variables its registry entry marks
 `isRequired`. HISTOR sends names only; the observer refuses names that steer the runtime (`PATH`,
 `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) and makes the values: `histor-envkey-<run>` for a key, an
-address on `histor-trap.invalid` for a URL, the working directory for a path. A package that exits asking for a newer Node (`needs-newer-node`) runs again on `node:24-alpine`, the current LTS, and its page says so. Where a placeholder key
+address on `histor-trap.invalid` for a URL, the working directory for a path. A package that exits asking for a newer Node (`needs-newer-node`) runs again on `histor-node:24`, the current LTS, and its page says so. Where a placeholder key
 was sent is recorded (`envKeyDestinations`): to its own API, or somewhere else.
 
 **Servers broken by MCP SDK 2.0.** A PyPI server written for `mcp` 1.x (`from mcp.server.fastmcp import

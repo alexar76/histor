@@ -21,8 +21,9 @@ The package is a stranger's code and some packages are hostile, so:
 * Install stage: network on (a bridge with inter-container traffic off), but no package code
   runs — npm with ``--ignore-scripts``, pip with ``--only-binary=:all:`` (a wheel is unpacked,
   never built). Packages that only ship an sdist are reported, not built.
-* Run stage: an internal network with no route out, read-only root and package, no environment
-  beyond PATH/HOME, an unprivileged uid, no capabilities, no new privileges, memory/CPU/PID
+* Run stage: an internal network with no route out, a read-only root (the package directory is
+  the run's own writable copy, as an install on a user's machine is), no environment
+  beyond PATH/HOME/USER, an unprivileged uid named in its own /etc/passwd, no capabilities, no new privileges, memory/CPU/PID
   limits. The server speaks MCP over the container's stdin/stdout to this script, which sends
   ``initialize`` and ``tools/list``, then calls up to CALL_LIMIT tools once each with canary
   arguments built from their schemas (an address on ``histor-trap.invalid``, a path to a decoy
@@ -72,15 +73,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-VERSION = "3"  # explicit coverage, independent lifecycle and bounded canary calls
+VERSION = "4"  # Python by Requires-Python, `python -m`, the mcp-named command, stdout and exit code kept
 STATE = Path(os.environ.get("HISTOR_SANDBOX_STATE", "/var/lib/histor-sandbox"))
 DOCKER = shutil.which("docker") or "/usr/bin/docker"
 RUNTIME = "runsc"
 FETCH_NETWORK = "histor-fetch"
-IMAGES = {"npm": "node:22-alpine", "pypi": "python:3.12-slim"}
+# Built on the sandbox host by install.sh from images/*.Dockerfile: node:22-bookworm-slim and
+# python:3.12-slim plus bash, git, Python 3 or Node 22, and a Java 21 runtime.
+IMAGES = {"npm": "histor-node:22", "pypi": "histor-python:3.12"}
 SLOTS = int(os.environ.get("HISTOR_SANDBOX_SLOTS", "2"))  # parallel observations on this host
 SLOT_WAIT_S = 600
-INSTALL_TIMEOUT_S = 240
+INSTALL_TIMEOUT_S = 360
 RUN_TIMEOUT_S = 150            # from container start to the last canary call
 SCRIPTS_TIMEOUT_S = 120        # npm install scripts, in their own traced stage
 CALL_LIMIT = 15                # tools called with canary arguments, once each
@@ -114,7 +117,13 @@ MAX_ARGS = 6
 PINS = {"pypi": ("mcp<2",)}
 # Runtimes HISTOR may ask for, by registry: a package that exits with "Node 24+ required" runs
 # again on the current LTS image. The image a run used is always in its report (image).
-RUNTIMES = {"npm": {"node24": "node:24-alpine"}}
+RUNTIMES = {"npm": {"node24": "histor-node:24"},
+            "pypi": {"py313": "histor-python:3.13", "py314": "histor-python:3.14"}}
+# The Python images, oldest first, by the version each runs: a package whose Requires-Python
+# excludes the default runs on the oldest one it accepts (pip refuses it on 3.12 with
+# "from versions: none"), without HISTOR asking — it is what pip itself would have needed.
+PYTHONS = ((None, (3, 12)), ("py313", (3, 13)), ("py314", (3, 14)))
+MAX_NOISE = 4096               # bytes of non-protocol stdout kept to say why a server exited
 
 
 class Refused(Exception):
@@ -164,7 +173,54 @@ def resolve(registry: str, name: str, version: str | None) -> dict[str, Any]:
     return {"version": meta["info"]["version"],
             "integrity": f"sha256:{pick['digests']['sha256']}" if pick else None,
             "published": (pick or {}).get("upload_time_iso_8601"),
-            "has_wheel": bool(wheels)}
+            "has_wheel": bool(wheels), "requires_python": meta["info"].get("requires_python")}
+
+
+def _release(text: str) -> tuple[int, ...]:
+    out: list[int] = []
+    for part in text.split("."):
+        m = re.match(r"\d+", part)
+        if not m:
+            break
+        out.append(int(m.group()))
+    return tuple(out)
+
+
+def python_accepts(spec: Any, version: tuple[int, int]) -> bool | None:
+    """Whether a Requires-Python specifier admits CPython ``version`` (at a late patch release);
+    None when it cannot be read here, and pip decides. Stdlib only, so a subset of PEP 440:
+    the clauses Requires-Python is written with."""
+    if not isinstance(spec, str) or not spec.strip():
+        return True
+    have = (*version, 99)
+    for clause in spec.split(","):
+        m = re.fullmatch(r"\s*(~=|==|!=|<=|>=|<|>)\s*v?([0-9]+(?:\.[0-9]+)*)(\.\*)?\s*", clause)
+        if not m:
+            return None
+        op, want, star = m.group(1), _release(m.group(2)), bool(m.group(3))
+        padded = (want + (0, 0, 0))[:3]
+        if op in ("==", "!="):
+            same = have[:len(want)] == want if star else have == padded
+            ok = same if op == "==" else not same
+        elif op == "~=":
+            ok = len(want) >= 2 and have >= padded and have[:len(want) - 1] == want[:-1]
+        else:
+            ok = {">=": have >= padded, "<=": have <= padded, ">": have > padded, "<": have < padded}[op]
+        if not ok:
+            return False
+    return True
+
+
+def python_for(spec: Any) -> tuple[str | None, bool]:
+    """(runtime, runnable): the oldest Python image a package's Requires-Python admits — the
+    default first — or (None, False) when it admits none of them."""
+    for runtime, version in PYTHONS:
+        verdict = python_accepts(spec, version)
+        if verdict is None:
+            return None, True  # unreadable here: the default image, and pip says what it thinks
+        if verdict:
+            return runtime, True
+    return None, False
 
 
 # -- decoys ---------------------------------------------------------------------------------------
@@ -575,7 +631,22 @@ def install(registry: str, name: str, version: str, work: Path, run_id: str, pin
     return res.returncode == 0, tail(res.stderr or res.stdout)
 
 
-def npm_entry(work: Path, name: str) -> list[str] | None:
+AVOID_COMMAND = re.compile(r"setup|install|config|init|login|logout|auth|doctor|inspect|upgrade|update|migrate")
+
+
+def pick_command(names: list[str], own: set[str]) -> str:
+    """Of the commands a package declares, the one that starts its server: one named for MCP
+    before a plain CLI of the package's own name (``memory-mcp`` over ``memory``), the package's
+    own name before anything else, never a setup or login helper."""
+    def score(name: str) -> int:
+        low = re.sub(r"[-_.]+", "-", name).lower()
+        return (4 * ("mcp" in low) + 3 * (low in own) + 2 * any(w in low for w in ("server", "serve", "stdio"))
+                - 5 * bool(AVOID_COMMAND.search(low)))
+    return max(names, key=lambda n: (score(n), -names.index(n)))
+
+
+def npm_entry(work: Path, name: str) -> tuple[list[str], str] | None:
+    """(command, what it is) for the package's bin, or None when it declares none."""
     manifest = work / "pkg" / "node_modules" / name / "package.json"
     try:
         pkg = json.loads(manifest.read_text(encoding="utf-8"))
@@ -584,25 +655,48 @@ def npm_entry(work: Path, name: str) -> list[str] | None:
     bins = pkg.get("bin")
     short = name.split("/")[-1]
     if isinstance(bins, str):
-        target = bins
-    elif isinstance(bins, dict) and bins:
-        target = bins.get(short) or bins.get(name) or next(
-            (v for k, v in bins.items() if "mcp" in k.lower()), next(iter(bins.values())))
+        target, label = bins, short
+    elif isinstance(bins, dict) and bins and all(isinstance(v, str) for v in bins.values()):
+        label = pick_command(list(bins), {short.lower(), name.lower()})
+        target = bins[label]
     else:
         return None
     rel = os.path.normpath(target)
     if rel.startswith("..") or os.path.isabs(rel):
         return None  # a bin pointing outside its own package
-    return ["node", f"/work/pkg/node_modules/{name}/{rel}"]
+    return ["node", f"/work/pkg/node_modules/{name}/{rel}"], f"bin {label}"
 
 
-def pypi_entry(work: Path, name: str) -> list[str] | None:
+def main_module(info: Path, want: str) -> str | None:
+    """A top-level package with a ``__main__.py`` in the distribution's RECORD: how a package that
+    declares no command is started (``python -m name``, as its README and ``uvx --from`` say)."""
+    try:
+        lines = (info / "RECORD").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    found: list[str] = []
+    for line in lines:
+        parts = line.split(",", 1)[0].split("/")
+        if len(parts) == 2 and parts[1] == "__main__.py" and re.fullmatch(r"[A-Za-z_]\w{0,99}", parts[0]) and parts[0] not in found:
+            found.append(parts[0])
+    if not found:
+        return None
+    own = want.replace("-", "_")
+    return max(found, key=lambda m: (m.lower() == own, "mcp" in m.lower(), -found.index(m)))
+
+
+def pypi_entry(work: Path, name: str) -> tuple[list[str], str] | None:
+    """(command, what it is): the package's console script, or ``python -m`` its own module."""
     want = re.sub(r"[-_.]+", "-", name).lower()
     scripts: dict[str, str] = {}
+    module_info: Path | None = None
     for info in (work / "pkg").glob("*.dist-info"):
         dist = re.sub(r"[-_.]+", "-", info.name.removesuffix(".dist-info").rsplit("-", 1)[0]).lower()
+        if dist != want:
+            continue
+        module_info = info
         ep = info / "entry_points.txt"
-        if dist != want or not ep.is_file():
+        if not ep.is_file():
             continue
         section = None
         for line in ep.read_text(encoding="utf-8").splitlines():
@@ -613,15 +707,17 @@ def pypi_entry(work: Path, name: str) -> list[str] | None:
                 key, value = (p.strip() for p in line.split("=", 1))
                 scripts[key] = value.split()[0]
     if not scripts:
-        return None
-    target = scripts.get(want) or scripts.get(name) or next(
-        (v for k, v in scripts.items() if "mcp" in k.lower()), next(iter(scripts.values())))
-    module, _, attr = target.partition(":")
+        module = main_module(module_info, want) if module_info else None
+        if not module:
+            return None
+        return ["python", "-c", f"import runpy; runpy.run_module({module!r}, run_name='__main__', alter_sys=True)"], f"python -m {module}"
+    label = pick_command(list(scripts), {want, name.lower()})
+    module, _, attr = scripts[label].partition(":")
     if not re.fullmatch(r"[A-Za-z_][\w.]*", module) or (attr and not re.fullmatch(r"[A-Za-z_][\w.]*", attr)):
         return None
     call = f"import sys, importlib; m = importlib.import_module({module!r})"
     call += f"; f = m\nfor p in {attr!r}.split('.'):\n    f = getattr(f, p)\nsys.exit(f())" if attr else ""
-    return ["python", "-c", call]
+    return ["python", "-c", call], f"script {label}"
 
 
 class Session:
@@ -632,6 +728,7 @@ class Session:
         self.deadline = deadline
         self.buf = b""
         self.read = 0
+        self.noise = b""  # what it printed on stdout that is not the protocol: often why it exits
         self.sel = selectors.DefaultSelector()
         assert proc.stdout is not None
         os.set_blocking(proc.stdout.fileno(), False)
@@ -660,14 +757,20 @@ class Session:
                 raise OverflowError
             self.buf += chunk
 
+    def keep(self, raw: bytes) -> None:
+        if len(self.noise) < MAX_NOISE and raw.strip():
+            self.noise = (self.noise + raw[:MAX_NOISE] + b"\n")[:MAX_NOISE]
+
     def call(self, rid: int, method: str, params: dict[str, Any], wait_s: float) -> dict[str, Any]:
         self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
         for raw in self._lines(time.monotonic() + wait_s):
             try:
                 msg = json.loads(raw)
             except ValueError:
+                self.keep(raw)
                 continue  # a server that logs to stdout: not a protocol message
             if not isinstance(msg, dict):
+                self.keep(raw)
                 continue
             if msg.get("id") == rid and ("result" in msg or "error" in msg):
                 return msg
@@ -692,8 +795,22 @@ def traced_available() -> bool:
         return False
 
 
+def identity(work: Path) -> list[str]:
+    """/etc/passwd and /etc/group that name the run's uid. Without an entry, Node's os.userInfo()
+    throws (uv_os_get_passwd ENOENT) and Python's getpass fails: a user's own machine always has
+    one, so a package that asks who is running it must not die here for it."""
+    uid, gid = os.getuid(), os.getgid()
+    etc = work / "etc"
+    etc.mkdir(exist_ok=True)
+    (etc / "passwd").write_text(f"root:x:0:0:root:/root:/sbin/nologin\nhistor:x:{uid}:{gid}:histor:{HOME_IN}:/bin/sh\n"
+                                "nobody:x:65534:65534:nobody:/nonexistent:/sbin/nologin\n", encoding="utf-8")
+    (etc / "group").write_text(f"root:x:0:\nhistor:x:{gid}:\nnogroup:x:65534:\n", encoding="utf-8")
+    return ["-v", f"{etc / 'passwd'}:/etc/passwd:ro", "-v", f"{etc / 'group'}:/etc/group:ro",
+            "-e", "USER=histor", "-e", "LOGNAME=histor"]
+
+
 def sandbox_flags(run_id: str, work: Path, traced: bool, cidfile: Path, *, package_rw: bool = False) -> list[str]:
-    flags = [*base_flags(run_id, TRACE_RUNTIME if traced else RUNTIME), "--read-only", "--memory", "512m", "--memory-swap", "512m",
+    flags = [*base_flags(run_id, TRACE_RUNTIME if traced else RUNTIME), *identity(work), "--read-only", "--memory", "512m", "--memory-swap", "512m",
              "--cpus", "1", "--tmpfs", "/tmp:rw,size=64m", "-v", f"{work}/pkg:/work/pkg" + ("" if package_rw else ":ro"),
              "-v", f"{work}/home:{HOME_IN}", "-v", f"{work}/app:{APP_IN}", "-e", f"HOME={HOME_IN}", "-e", "NODE_ENV=production", "-e", f"HISTOR_CANARY_RECIPIENT=canary-{work.name}@histor-trap.invalid"]
     if traced:
@@ -762,7 +879,9 @@ def run_scripts(work: Path, run_id: str, packages: list[str], image: str | None 
 def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool = False,
         env: list[str] | None = None, args: list[str] | None = None, image: str | None = None) -> dict[str, Any]:
     cidfile = work / "cid-run"
-    flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile), "-i", "-w", APP_IN]
+    # The package directory is writable, as an install on a user's machine is: servers keep logs
+    # and state next to their code, and it is this run's own copy, deleted with it.
+    flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile, package_rw=True), "-i", "-w", APP_IN]
     for name in env or []:
         flags += ["-e", f"{name}={env_value(name, run_id)}"]
     entry = [*entry, *(args or [])]
@@ -860,12 +979,31 @@ def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: boo
             marks["callsComplete"] = coverage["successful"] == coverage["total"]
         return {**result, "status": "ok", "tools": tools}
     except TimeoutError:
-        return {**result, "status": "timeout", "detail": stderr_of(proc)}
+        return {**result, "status": "timeout", "detail": ended_with(proc, session, exited=False)}
     except EOFError:
         # Exited before answering: most often a server that needs an API key or a path to start.
-        return {**result, "status": "exited", "detail": stderr_of(proc)}
+        return {**result, "status": "exited", "detail": ended_with(proc, session, exited=True)}
     except OverflowError:
         return {**result, "status": "too-large", "detail": f"more than {MAX_OUTPUT} bytes on stdout"}
+
+
+def ended_with(proc: subprocess.Popen[bytes], session: Any, *, exited: bool) -> str:
+    """What a server that did not answer left behind: its exit code (when it exited on its own),
+    stderr, and the stdout that was not protocol — a CLI prints its usage there, and a server
+    that logs to stdout says there why it stopped. Without stdout, those read as "silent"."""
+    if exited and proc is not None:
+        try:
+            proc.wait(timeout=5)  # stdout closes a moment before docker run reports the exit
+        except subprocess.TimeoutExpired:
+            pass
+    err = stderr_of(proc)
+    noise = getattr(session, "noise", b"") + (getattr(session, "buf", b"") if exited else b"")
+    out = head_tail(noise.decode("utf-8", "replace"), 300, 300) if noise.strip() else ""
+    code = proc.returncode if exited and proc is not None else None
+    parts = [f"[exit code {code}]"] if isinstance(code, int) and code >= 0 else []
+    parts += [err] if err else []
+    parts += [f"stdout: {out}"] if out else []
+    return " ".join(parts)
 
 
 def stderr_of(proc: subprocess.Popen[bytes]) -> str:
@@ -896,13 +1034,22 @@ def slot():
 
 
 def image_digest(registry: str, image: str | None = None) -> str | None:
-    res = docker("image", "inspect", "--format", "{{index .RepoDigests 0}}", image or IMAGES[registry])
-    return res.stdout.strip() or None
+    """The image a run used: its registry digest, or — for an image built on this host, which has
+    none — its tag and content id."""
+    tag = image or IMAGES[registry]
+    res = docker("image", "inspect", "--format", "{{json .RepoDigests}} {{.Id}}", tag)
+    try:
+        digests, _, ident = res.stdout.strip().partition(" ")
+        repo = json.loads(digests) if digests else []
+    except ValueError:
+        return None
+    if repo:
+        return repo[0]
+    return f"{tag}@{ident}" if ident.startswith("sha256:") else None
 
 
 def observe(registry: str, name: str, version: str | None, env: list[str] | None = None,
             args: list[str] | None = None, pins: list[str] | None = None, runtime: str | None = None) -> dict[str, Any]:
-    image = image_for(registry, runtime)
     doc: dict[str, Any] = {"type": "histor.package-observation/v1", "observer": VERSION, "registry": registry,
                            "name": name, "runtime": RUNTIME, "observedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                            "supplied": {"env": list(env or []), "args": list(args or []), "pins": list(pins or []),
@@ -911,6 +1058,13 @@ def observe(registry: str, name: str, version: str | None, env: list[str] | None
         meta = resolve(registry, name, version)
     except Exception as exc:  # noqa: BLE001 - every failure is a status, never a crash
         return {**doc, "status": "not-found", "detail": tail(f"{type(exc).__name__}: {exc}")}
+    if registry == "pypi" and runtime is None:
+        runtime, runnable = python_for(meta.get("requires_python"))
+        if not runnable:
+            return {**doc, "version": meta["version"], "status": "install-failed",
+                    "detail": tail(f"Requires-Python {meta.get('requires_python')}: none of the sandbox's Python images "
+                                   f"({', '.join('.'.join(map(str, v)) for _, v in PYTHONS)}) is admitted")}
+    image = image_for(registry, runtime)
     doc.update(version=meta["version"], integrity=meta.get("integrity"), image=image_digest(registry, image), imageTag=image)
     if registry == "pypi" and not meta.get("has_wheel"):
         return {**doc, "status": "no-wheel", "detail": "only an sdist: building it would run the package's code"}
@@ -927,8 +1081,11 @@ def observe(registry: str, name: str, version: str | None, env: list[str] | None
         traced = traced_available()
         pkgs = lifecycle_packages(work) if registry == "npm" else []
         scripts = (run_scripts(work, run_id, pkgs, image) if traced else {"complete": False, "incompleteReasons": ["trace-unavailable"]}) if pkgs else {"complete": True, "status": "not-applicable", "packages": []}
-        entry = npm_entry(work, name) if registry == "npm" else pypi_entry(work, name)
-        result = run(registry, work, entry, run_id, traced, env, args, image) if entry else {"status": "no-entry-point", "detail": "the package declares no command to start"}
+        found = npm_entry(work, name) if registry == "npm" else pypi_entry(work, name)
+        if found:
+            entry, doc["entry"] = found
+        result = run(registry, work, entry, run_id, traced, env, args, image) if found else {
+            "status": "no-entry-point", "detail": "the package declares no command to start" + ("" if registry == "npm" else ", and has no __main__ module")}
         behaviour = result.setdefault("behaviour", {})
         behaviour["installScripts"] = scripts
         behaviour["observer"] = "gvisor-trace/2"

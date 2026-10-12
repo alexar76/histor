@@ -173,12 +173,33 @@ async function verifyConsistency(first, second, proof, firstRoot, secondRoot) {
   }
   return sn === 0 && eq(fr, firstRoot) && eq(sr, secondRoot);
 }
+// Ed25519 points of small order (orders 1, 2, 4, 8; sign bit cleared). OpenSSL, tweetnacl and
+// WebCrypto accept, under such a key, a signature valid for EVERY message, and no secret exists
+// for it — so a key or R among them is refused before verifying (AWR/2 section 6.3.1 rule 3). 2026-10-12.
+var ED25519_SMALL_ORDER = [
+  '0000000000000000000000000000000000000000000000000000000000000000',
+  '0100000000000000000000000000000000000000000000000000000000000000',
+  '26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05',
+  'c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a',
+  'ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  'edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f',
+  'eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f'
+];
+function ed25519SmallOrder(b) {
+  if (!b || b.length !== 32) return false;
+  var h = '';
+  for (var i = 0; i < 32; i++) h += (((i === 31 ? b[i] & 0x7f : b[i]) + 0x100).toString(16)).slice(1);
+  return ED25519_SMALL_ORDER.indexOf(h) !== -1;
+}
+
 /** "ok" | "bad" | "unsupported" */
 async function verifySigned(doc, did) {
   try {
     const { signature, ...body } = doc;
-    const key = await crypto.subtle.importKey("raw", didKeyRaw(did), { name: "Ed25519" }, false, ["verify"]);
-    return (await crypto.subtle.verify({ name: "Ed25519" }, key, b64u(signature.value), enc.encode(jcs(body)))) ? "ok" : "bad";
+    const raw = didKeyRaw(did), sig = b64u(signature.value);
+    if (ed25519SmallOrder(raw) || ed25519SmallOrder(sig.subarray(0, 32))) return "bad";
+    const key = await crypto.subtle.importKey("raw", raw, { name: "Ed25519" }, false, ["verify"]);
+    return (await crypto.subtle.verify({ name: "Ed25519" }, key, sig, enc.encode(jcs(body)))) ? "ok" : "bad";
   } catch (e) {
     return e && /Ed25519|algorithm|NotSupported/i.test(String(e.name || e.message)) ? "unsupported" : "bad";
   }

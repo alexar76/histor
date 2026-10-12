@@ -259,11 +259,50 @@ def manifest_canonical(manifest: dict) -> str:
     )
 
 
+_P = 2**255 - 19
+_L = 2**252 + 27742317777372353535851937790883648493
+# Points of order dividing 8, sign bit cleared (canonical + the two y >= p encodings of 0 and 1).
+_SMALL_ORDER = frozenset(bytes.fromhex(h) for h in (
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+))
+
+
+def strict_ed25519(public_key: bytes, signature: bytes, message: bytes) -> bool:
+    """Ed25519 under AWR/2 section 6.3.1's four rules, for keys HISTOR did not choose.
+
+    Owner keys and issuer did:keys come from whoever presents them. `cryptography` (OpenSSL)
+    accepts, under the identity key, a signature that is valid for EVERY message, so a key with
+    no secret behind it would let anybody "sign" as that owner or issuer. Canonical encodings
+    (y < p), canonical S (< L) and no small-order A or R are checked here; the equation by the
+    library. The `awr` package on PyPI (2.0.0) does not apply rules 1-3 yet. 2026-10-12.
+    """
+    if len(public_key) != 32 or len(signature) != 64:
+        return False
+    r, s = signature[:32], signature[32:]
+    for point in (public_key, r):
+        masked = point[:31] + bytes([point[31] & 0x7F])
+        if int.from_bytes(masked, "little") >= _P or masked in _SMALL_ORDER:
+            return False
+    if int.from_bytes(s, "little") >= _L:
+        return False
+    try:
+        Ed25519PublicKey.from_public_bytes(public_key).verify(signature, message)
+    except (InvalidSignature, ValueError):
+        return False
+    return True
+
+
 def verify_owner_signature(*, public_key_b64: str, message: bytes, signature_b64: str) -> None:
     try:
         raw = base64.b64decode(public_key_b64, validate=True)
         sig = base64.b64decode(signature_b64, validate=True)
-        key = Ed25519PublicKey.from_public_bytes(raw)
-        key.verify(sig, message)
-    except (InvalidSignature, ValueError, TypeError) as exc:
+    except (ValueError, TypeError) as exc:
         raise ValueError("owner signature is invalid") from exc
+    if not strict_ed25519(raw, sig, message):
+        raise ValueError("owner signature is invalid")

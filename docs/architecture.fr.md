@@ -96,11 +96,11 @@ l’enregistrement de chaque paquet conserve le digest exact de l’image et la 
 | | |
 |---|---|
 | Système | Linux x86_64, dans gVisor (`runsc`) ; utilisateur non privilégié, aucune capability, racine en lecture seule |
-| Environnements d’exécution | npm : `node:22-alpine` ; PyPI : `python:3.12-slim` — étiquettes récupérées à l’installation d’un hôte du bac à sable ; le digest exact est enregistré à chaque observation |
+| Environnements d’exécution | npm : `histor-node:22` ; PyPI : `histor-python:3.12` (`3.13`, `3.14` si Requires-Python exclut 3.12) — les images officielles `node:22-bookworm-slim` et `python:3.12-slim` plus bash, git, Python 3 ou Node 22 et un environnement Java 21 (jamais Docker), construites à l’installation d’un hôte du bac à sable ; l’id de l’image est enregistré à chaque observation |
 | Installation | npm `--ignore-scripts`, puis les scripts d’installation dans une étape tracée à part ; PyPI wheels uniquement (un sdist est signalé, jamais compilé) |
 | Réseau | aucune route vers l’extérieur ; chaque nom pointe vers les pièges de HISTOR, qui enregistrent et ne transmettent rien |
 | Secrets | aucun réel : identifiants leurres dans HOME, un `.env` leurre ; une variable réclamée par le paquet reçoit une valeur factice |
-| Limites | 512 Mo, 1 CPU, 64 Mo de `/tmp` ; 240 s pour installer, 150 s pour démarrer et répondre ; ≤ 15 outils appelés une fois, 8 s chacun |
+| Limites | 512 Mo, 1 CPU, 64 Mo de `/tmp` ; 360 s pour installer, 150 s pour démarrer et répondre ; ≤ 15 outils appelés une fois, 8 s chacun |
 | Configuration | des noms seulement (ci-dessous) ; l’observateur fabrique toutes les valeurs |
 
 Les chiffres sont les constantes de l’observateur lui-même (`sandbox/histor_observe.py`) ; un test fait
@@ -110,14 +110,18 @@ Les chiffres sont les constantes de l’observateur lui-même (`sandbox/histor_o
 paquet a affiché (`histor/exit_reasons.py`) et conservée dans `packageSignals.exit` : `needs-config`
 (avec les noms de variables qu’il a donnés), `needs-arguments` (avec un argument de démarrage comme
 `serve` ou `--transport=stdio` quand son texte d’usage en propose un), `sdk-incompatible` (écrit pour
-le SDK MCP 1.x et lancé avec la 2.x), `needs-other-os`, `needs-network`, `silent`, `crashed`.
+le SDK MCP 1.x et lancé avec la 2.x), `needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
+`broken-package`, `not-a-server` (code de sortie 0), `silent`, `crashed`. Un lancement qui expire en
+servant HTTP au lieu de stdio est `starts-http`, et le suivant passe `--transport=stdio`. Depuis
+l’observateur 4, le rapport garde le code de sortie et la sortie standard qui n’était pas du protocole :
+une CLI y imprime son usage.
 
 **Le relancer avec ce qu’il a demandé.** Le crawl suivant relance la même version avec des valeurs
 factices pour ces noms — et, dès le premier lancement, pour les variables que son entrée de registre
 marque `isRequired`. HISTOR n’envoie que des noms ; l’observateur refuse ceux qui pilotent
 l’environnement d’exécution (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) et fabrique les valeurs :
 `histor-envkey-<run>` pour une clé, une adresse sur `histor-trap.invalid` pour une URL, le répertoire de
-travail pour un chemin. Un paquet qui s’arrête en réclamant un Node plus récent (`needs-newer-node`) est relancé sur `node:24-alpine`, la LTS actuelle, et sa page l’indique. L’endroit où une clé factice a été envoyée est enregistré
+travail pour un chemin. Un paquet qui s’arrête en réclamant un Node plus récent (`needs-newer-node`) est relancé sur `histor-node:24`, la LTS actuelle, et sa page l’indique. L’endroit où une clé factice a été envoyée est enregistré
 (`envKeyDestinations`) : sa propre API, ou ailleurs.
 
 **Serveurs cassés par le SDK MCP 2.0.** Un serveur PyPI écrit pour `mcp` 1.x (`from mcp.server.fastmcp import

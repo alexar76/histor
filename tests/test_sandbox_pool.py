@@ -154,7 +154,7 @@ def test_histor_sandboxes_checks_every_host_and_never_prints_a_token(clean, monk
 
     for k, v in {**sandbox_env(), **sandbox_env(2, slots="4")}.items():
         clean.setenv(k, v)
-    good = {"observer": "3", "gvisor": True, "trace": True, "observeNetwork": True}
+    good = {"observer": "4", "gvisor": True, "trace": True, "observeNetwork": True}
 
     def selftest(reader):
         if reader.host == "10.0.0.2":

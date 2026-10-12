@@ -38,7 +38,7 @@ from urllib.parse import urlsplit
 from histor import diffing
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
-from histor.exit_reasons import NODE_RUNTIMES, classify
+from histor.exit_reasons import NODE_RUNTIMES, classify, excerpt
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
@@ -119,6 +119,10 @@ def _interleave_by_host(targets: list[Target]) -> list[Target]:
 # A run that ended this way ends the same way next time unless something about it changes: a new
 # version, a new observer, or configuration the package asked for that it was not given yet.
 SETTLED = frozenset({"exited", "no-entry-point", "no-wheel", "not-found", "protocol"})
+# Failures a newer observer may start where an older one could not (observer 4: the Python a
+# package requires, ``python -m``, the mcp-named command, a passwd entry, a writable package):
+# run again ahead of the never-observed queue, with at least half of what is left of a crawl.
+RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", "protocol"})
 # A PyPI server written for MCP SDK 1.x crashes on import once pip resolves mcp 2.x. Its status
 # stays what a fresh install gets; a second run with this pin shows what it was before 2.0, kept
 # beside the record (``legacy``) and never in the label chain.
@@ -385,6 +389,11 @@ class Crawler:
         seen_by_id: dict[str, str] = {}
         config: dict[str, dict[str, list[str]]] = {}
         unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = 0
+        current = self.settings.sandbox_observer
+        # An ok, complete observation by an observer listed here stands: what changed since is how a
+        # failing package is started, not what a running one reports.
+        still_valid = {current, *self.settings.sandbox_observers_valid}
+        renewed: list[tuple[Target, str]] = []
         legacy_ids: set[str] = set()
         # A package observed before is looked up every crawl: a new version of it goes first.
         clock = time.monotonic()
@@ -413,12 +422,12 @@ class Crawler:
                 if reason:
                     signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
-            if seen == version and state.get("last_status") == "ok" and complete and observer == self.settings.sandbox_observer:
+            if seen == version and state.get("last_status") == "ok" and complete and observer in still_valid:
                 unchanged += 1
                 continue
             exit_kind = (signals.get("exit") or {}).get("kind") if isinstance(signals.get("exit"), dict) else None
             if (seen == version and state.get("last_status") == "exited" and exit_kind in LEGACY_PINS
-                    and observer == self.settings.sandbox_observer and t.endpoint.startswith("pypi:")):
+                    and observer in still_valid and t.endpoint.startswith("pypi:")):
                 legacy = signals.get("legacy") if isinstance(signals.get("legacy"), dict) else {}
                 lplan = {"pins": LEGACY_PINS[exit_kind], **_config_for(t, legacy if legacy.get("version") == version else {})}
                 if legacy.get("version") == version and lplan == (legacy.get("supplied") or {}):
@@ -432,7 +441,7 @@ class Crawler:
             plan = _config_for(t, signals)
             if plan:
                 config[t.id] = plan
-            if seen == version and state.get("last_status") in SETTLED and observer == self.settings.sandbox_observer:
+            if seen == version and state.get("last_status") in SETTLED and observer == current:
                 if not plan or plan == (signals.get("supplied") or {}):
                     settled += 1  # nothing new to try until the package or the observer changes
                     continue
@@ -441,8 +450,11 @@ class Crawler:
                 continue
             if seen == version:
                 refresh += 1
-                if observer != self.settings.sandbox_observer:
+                if observer != current:
                     outdated += 1
+                    if state.get("last_status") in RENEWABLE:
+                        renewed.append((t, version))
+                        continue
                 else:
                     incomplete_retries += 1
                 first.append((t, version))
@@ -463,14 +475,18 @@ class Crawler:
         # crawl, while the sandboxes waited (and a burst of it once got npm to refuse us).
         configured.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
         configured = configured[: max(0, cap - len(updates))]
-        room = max(0, cap - len(updates) - len(configured))
+        left = max(0, cap - len(updates) - len(configured))
+        renewable = len(renewed)
+        renewed.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
+        renewed = renewed[: min(renewable, max(left // 2, left - len(order)))]
+        room = left - len(renewed)
         chosen: list[tuple[Target, str | None]] = [(t, v) for t, v in order[:room]]
         looked_up = 0
         never_seconds = round(time.monotonic() - clock)
         for t in never:
             if t.needs:
                 config[t.id] = _config_for(t, {})
-        due = (updates + configured + chosen)[:cap]
+        due = (updates + configured + renewed + chosen)[:cap]
         unknown = sum(unknown_by.values())
         if unknown:
             log.warning("package versions unknown this crawl: %s", dict(unknown_by))
@@ -481,6 +497,7 @@ class Crawler:
         stats["packages"] = {"dialable": len(targets), "due": len(due), "newVersions": len(updates),
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
+                             "renewed": len(renewed), "renewable": renewable,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
                              "versionsAsked": len(known) + looked_up,
                              "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}
@@ -583,9 +600,15 @@ class Crawler:
         per_host: dict[str, threading.Semaphore] = {PACKAGE_SANDBOX: threading.Semaphore(capacity)}
         guard = threading.Lock()
         with ThreadPoolExecutor(max_workers=capacity, thread_name_prefix="histor-sandbox") as pool:
-            futures = [pool.submit(self._observe_one, t, per_host, guard) for t in targets]
-            for future in as_completed(futures):
+            # A set we discard from, not a list we keep: every finished Future holds its result —
+            # the tool set, the sandbox trace, the detail — and a list of all 8 000 kept every one
+            # of them alive until the lane ended. The process grew to its 1 GiB limit and was
+            # OOM-killed 26 h into crawl 33, near the end, losing the crawl (2026-10-12).
+            pending = {pool.submit(self._observe_one, t, per_host, guard) for t in targets}
+            for future in as_completed(pending):
+                pending.discard(future)
                 item = future.result()
+                del future
                 scans, scan_failed = self._scan([item], sets)
                 with tally.classify_lock:
                     classifications, tally.classify_budget = self._classify([item], tally.classify_budget)
@@ -715,7 +738,7 @@ class Crawler:
                 if p.obs.package_conditions:
                     legacy["conditions"] = p.obs.package_conditions
                 if p.obs.status != "ok":
-                    legacy["detail"] = clean_text(p.obs.detail or "", 300)
+                    legacy["detail"] = clean_text(excerpt(p.obs.detail, 300))
                     reason = classify(p.obs.status, p.obs.detail)
                     if reason:
                         legacy["exit"] = reason
@@ -764,7 +787,7 @@ class Crawler:
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
                 "tool_count, pages, protocol, server_name, server_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
-                 clean_text(p.obs.detail if not p.subject_error else p.subject_error.code, 1000),
+                 clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
                  len(p.obs.tools) if p.obs.tools is not None else None, p.obs.pages,
                  clean_text(p.obs.protocol_version, 40),
@@ -803,7 +826,7 @@ class Crawler:
                 return row
 
             if p.obs.status != "ok":
-                update.update(last_status=p.obs.status, last_detail=clean_text(p.obs.detail, 300))
+                update.update(last_status=p.obs.status, last_detail=clean_text(excerpt(p.obs.detail, 300)))
                 if state.get("chain_label") and not state.get("failure_reported"):
                     prior = self._label_doc(tx, state["chain_label"])
                     append(self.issuer.continuity(

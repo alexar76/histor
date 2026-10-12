@@ -193,7 +193,7 @@ def test_the_channel_sends_nothing_to_a_certificate_it_was_not_pinned_to(tmp_pat
 
         def do_GET(self):
             seen.append(self.headers.get("Authorization", ""))
-            body = json.dumps({"observer": "3", "gvisor": True, "path": self.path}).encode()
+            body = json.dumps({"observer": "4", "gvisor": True, "path": self.path}).encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -227,7 +227,7 @@ class FakePackages:
         self.tools: dict[tuple[str, str], list] = {}
         self.runs: list[tuple[str, str, str | None]] = []
         self.fail = False
-        self.observer = "3"
+        self.observer = "4"
 
     def latest_version(self, registry, name):
         return self.latest.get(f"{registry}:{name}")
@@ -262,7 +262,7 @@ class FakePackages:
             package_version=version,
             package_observer=self.observer,
             behaviour={"complete": True, "startup": {}, "calls": {"tools": 1, "lookups": ["api.example.com"]}}
-            if self.observer == "3"
+            if self.observer in ("3", "4")
             else None,
         )
 
@@ -376,14 +376,14 @@ def test_a_version_seen_by_an_older_observer_runs_again_and_keeps_what_it_did(wo
     fake.latest["npm:@a/mem"] = "1.0.0"
     fake.tools[("npm:@a/mem", "1.0.0")] = [tool("read_graph", "Read the graph.")]
     s.crawler.run()
-    fake.observer = "3"
+    fake.observer = "4"
     world["clock"].advance(days=1)
     stats = s.crawler.run()
     assert len(fake.runs) == 2 and stats["packages"]["olderObserver"] == 1, (
         "same version, older observer: run again"
     )
     record = json.loads(s.store.target(t.id)["package_signals"])
-    assert record["observer"] == "3" and record["behaviour"]["calls"]["lookups"] == ["api.example.com"]
+    assert record["observer"] == "4" and record["behaviour"]["calls"]["lookups"] == ["api.example.com"]
     world["clock"].advance(days=1)
     assert s.crawler.run()["packages"]["unchanged"] == 1 and len(fake.runs) == 2
 

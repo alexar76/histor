@@ -22,7 +22,6 @@ from typing import Any
 
 from awr import AwrError, SigningKey, canonical_sri, canonicalize, parse_did_key
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from histor import merkle
 from histor.db import Tx
@@ -63,9 +62,12 @@ def verify_document(document: dict[str, Any], did: str, expected_type: str) -> b
     sig = document.get("signature") or {}
     body = {k: v for k, v in document.items() if k != "signature"}
     try:
-        public = Ed25519PublicKey.from_public_bytes(parse_did_key(did))
-        public.verify(b64url_decode(str(sig.get("value", ""))), canonicalize(body))
-        return True
+        from histor.signing import strict_ed25519
+
+        # The issuer's did:key is the issuer's own choice: strict, or a small-order did:key
+        # would let anybody write documents "signed" by it.
+        return strict_ed25519(parse_did_key(did), b64url_decode(str(sig.get("value", ""))),
+                              canonicalize(body))
     except (InvalidSignature, AwrError, ValueError, TypeError):
         return False
 

@@ -100,9 +100,15 @@ systemctl enable --now histor-sandbox-trace-clean.timer >/dev/null 2>&1
 docker network inspect "$NETWORK" >/dev/null 2>&1 || \
   docker network create --driver bridge -o com.docker.network.bridge.enable_icc=false "$NETWORK" >/dev/null
 
-docker pull -q node:22-alpine >/dev/null
-docker pull -q python:3.12-slim >/dev/null
-docker pull -q node:24-alpine >/dev/null   # RUNTIMES["npm"]["node24"]
+# The images packages run in (histor_observe.IMAGES and RUNTIMES): the official Node and Python
+# images plus the programs MCP servers start (images/*.Dockerfile). --pull takes the current base
+# image each time this script runs; a run's report names the image it used by its id.
+build_image() { docker build -q --pull -t "$1" "${@:3}" -f "$HERE/images/$2.Dockerfile" "$HERE/images" >/dev/null; }
+build_image histor-node:22 node --build-arg NODE=22
+build_image histor-node:24 node --build-arg NODE=24          # RUNTIMES["npm"]["node24"]
+build_image histor-python:3.12 python --build-arg PYTHON=3.12
+build_image histor-python:3.13 python --build-arg PYTHON=3.13  # RUNTIMES["pypi"]["py313"]
+build_image histor-python:3.14 python --build-arg PYTHON=3.14  # RUNTIMES["pypi"]["py314"]
 
 if [ -n "$PUBKEY" ]; then
   case "$PUBKEY" in ssh-ed25519\ *) ;; *) echo "expected an ssh-ed25519 public key" >&2; exit 1 ;; esac

@@ -104,9 +104,14 @@ class Settings:
     # Observations in flight at once; match HISTOR_SANDBOX_SLOTS on the sandbox host.
     sandbox_concurrency: int = 2
     # The observer version an observation must come from to count: an older one is run again
-    # (histor/sandbox/histor_observe.py VERSION; 2 = behaviour).
-    sandbox_observer: str = "3"
-    sandbox_timeout_s: int = 420
+    # (histor/sandbox/histor_observe.py VERSION; 2 = behaviour, 4 = how a failing package is started).
+    sandbox_observer: str = "4"
+    # Older observers whose ok, complete observations still count (observer 4 changed nothing a
+    # running server reports); their failures are run again ahead of never-observed packages.
+    sandbox_observers_valid: tuple[str, ...] = ("3",)
+    # Seconds HISTOR waits for one observation: a free slot, install (360 s), install scripts
+    # (120 s), start and calls (150 s).
+    sandbox_timeout_s: int = 720
     # More sandbox hosts (HISTOR_SANDBOX_2_URL/_TOKEN/_CERT_SHA256/_CONCURRENCY, up to _8_): each is
     # (url, token, pin, concurrency 1..8). The crawl hands a package to whichever host has a free slot.
     sandbox_extra: tuple[tuple[str, str, str, int], ...] = field(default=(), repr=False)
@@ -206,8 +211,9 @@ def load_settings() -> Settings:
         sandbox_max_per_crawl=_int("HISTOR_SANDBOX_MAX_PER_CRAWL", 300, minimum=0),
         sandbox_concurrency=min(_int("HISTOR_SANDBOX_CONCURRENCY", 2, minimum=1), SANDBOX_SLOTS_PER_HOST),
         sandbox_max_slots=min(_int("HISTOR_SANDBOX_MAX_SLOTS", 12, minimum=1), 32),
-        sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "3").strip(),
-        sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 420, minimum=30),
+        sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "4").strip(),
+        sandbox_observers_valid=tuple(v.strip() for v in os.environ.get("HISTOR_SANDBOX_OBSERVERS_VALID", "3").split(",") if v.strip()),
+        sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
     )
     if settings.is_prod:

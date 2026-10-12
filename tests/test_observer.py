@@ -227,10 +227,139 @@ def test_only_listed_runtimes(runtime, registry):
 
 def test_a_node24_run_uses_the_lts_image_and_says_so():
     assert obs.check_config([], [], [], "npm", "node24")[3] == "node24"
-    assert obs.image_for("npm", "node24") == "node:24-alpine" and obs.image_for("npm") == obs.IMAGES["npm"]
+    assert obs.image_for("npm", "node24") == "histor-node:24" and obs.image_for("npm") == obs.IMAGES["npm"]
 
 
 def test_a_failure_keeps_the_message_above_the_stack():
     text = "Error: Node 24+ required, found 22.23.3\n" + "    at frame (file:///x.js:1:1)\n" * 200
     kept = obs.head_tail(text)
     assert kept.startswith("Error: Node 24+ required") and " … " in kept and len(kept) < 1300
+
+
+@pytest.mark.parametrize("spec,expected", [
+    (None, (None, True)), ("", (None, True)), (">=3.10", (None, True)), (">=3.13", ("py313", True)),
+    (">=3.14", ("py314", True)), ("<3.14,>=3.13", ("py313", True)), ("~=3.13", ("py313", True)),
+    ("==3.13.*", ("py313", True)), (">=3.12.4", (None, True)), ("!=3.12.*", ("py313", True)),
+    ("<3.11", (None, False)), (">=3.15", (None, False)), ("===weird", (None, True)),
+])
+def test_the_python_a_package_requires_is_the_image_it_runs_in(spec, expected):
+    assert obs.python_for(spec) == expected
+
+
+def test_a_package_that_admits_no_sandbox_python_says_so_without_installing(tmp_path, monkeypatch):
+    monkeypatch.setattr(obs, "STATE", tmp_path)
+    monkeypatch.setattr(obs, "resolve", lambda *a: {"version": "1", "has_wheel": True, "requires_python": ">=3.15"})
+    monkeypatch.setattr(obs, "slot", lambda: (_ for _ in ()).throw(AssertionError("no slot taken")))
+    result = obs.observe("pypi", "future-mcp", "1")
+    assert result["status"] == "install-failed" and "3.12, 3.13, 3.14" in result["detail"]
+
+
+def test_a_newer_python_package_installs_and_runs_in_its_image(tmp_path, monkeypatch):
+    monkeypatch.setattr(obs, "STATE", tmp_path)
+    monkeypatch.setattr(obs, "resolve", lambda *a: {"version": "1", "has_wheel": True, "requires_python": ">=3.13"})
+    monkeypatch.setattr(obs, "image_digest", lambda registry, image=None: f"{image}@sha256:x")
+    monkeypatch.setattr(obs, "slot", lambda: SimpleNamespace(close=lambda: None))
+    images = []
+    monkeypatch.setattr(obs, "install", lambda *a: images.append(a[-1]) or (False, "stop here"))
+    result = obs.observe("pypi", "steam-mcp", "1")
+    assert images == ["histor-python:3.13"] and result["imageTag"] == "histor-python:3.13"
+    assert result["supplied"] == {"env": [], "args": [], "pins": []}, "the observer's own choice is not a supplied runtime"
+
+
+@pytest.mark.parametrize("names,own,expected", [
+    (["memory", "memory-mcp"], {"memory"}, "memory-mcp"),
+    (["outrank-cli", "outrank-mcp"], {"outrank-cli"}, "outrank-mcp"),
+    (["foo-mcp", "foo-mcp-server"], {"foo-mcp"}, "foo-mcp"),
+    (["foo", "foo-mcp-setup"], {"foo"}, "foo"),
+    (["mcp"], {"mcp"}, "mcp"),
+    (["autonomous", "autonomousmcp", "autonomous-win"], {"autonomousmcp"}, "autonomousmcp"),
+    (["gh-mcp", "gh-mcp-auth"], {"gh"}, "gh-mcp"),
+])
+def test_the_command_that_starts_the_server_is_preferred(names, own, expected):
+    assert obs.pick_command(names, own) == expected
+
+
+def test_npm_runs_the_mcp_bin_and_says_which(tmp_path):
+    pkg = tmp_path / "pkg/node_modules/@aictx/memory"
+    pkg.mkdir(parents=True)
+    (pkg / "package.json").write_text('{"bin": {"memory": "dist/cli/main.js", "memory-mcp": "dist/mcp/server.js"}}')
+    assert obs.npm_entry(tmp_path, "@aictx/memory") == (
+        ["node", "/work/pkg/node_modules/@aictx/memory/dist/mcp/server.js"], "bin memory-mcp")
+
+
+def test_a_pypi_package_without_a_command_runs_as_python_m(tmp_path):
+    info = tmp_path / "pkg/vault_mcp-1.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "RECORD").write_text("vault_mcp/__init__.py,sha256=a,1\nvault_mcp/__main__.py,sha256=b,2\n"
+                                 "vault_mcp/sub/__main__.py,sha256=c,3\n../../bin/evil/__main__.py,sha256=d,4\n")
+    command, label = obs.pypi_entry(tmp_path, "vault-mcp")
+    assert label == "python -m vault_mcp" and command[:2] == ["python", "-c"] and "run_module('vault_mcp'" in command[2]
+    (info / "RECORD").write_text("vault_mcp/__init__.py,sha256=a,1\n")
+    assert obs.pypi_entry(tmp_path, "vault-mcp") is None
+
+
+def test_a_pypi_console_script_still_wins(tmp_path):
+    info = tmp_path / "pkg/vault_mcp-1.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "RECORD").write_text("vault_mcp/__main__.py,sha256=b,2\n")
+    (info / "entry_points.txt").write_text("[console_scripts]\nvault = vault_mcp.cli:main\nvault-mcp = vault_mcp.server:run\n")
+    command, label = obs.pypi_entry(tmp_path, "vault-mcp")
+    assert label == "script vault-mcp" and "'vault_mcp.server'" in command[2]
+
+
+def test_an_exit_keeps_its_code_stderr_and_stdout():
+    class Proc:
+        returncode = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+        def kill(self):
+            pass
+
+        def communicate(self, timeout=None):
+            return b"", b"warning: no config\n"
+
+    session = SimpleNamespace(noise=b"Usage: tool [OPTIONS] COMMAND\n", buf=b"  serve  Start the server.")
+    text = obs.ended_with(Proc(), session, exited=True)
+    assert text.startswith("[exit code 0] warning: no config stdout: Usage: tool") and "serve  Start the server." in text
+    assert not obs.ended_with(Proc(), SimpleNamespace(noise=b"", buf=b""), exited=False).startswith("[exit code")
+
+
+def test_the_session_keeps_non_protocol_stdout_bounded():
+    s = obs.Session.__new__(obs.Session)
+    s.noise = b""
+    for _ in range(1000):
+        s.keep(b"x" * 100)
+    assert len(s.noise) == obs.MAX_NOISE
+    s.noise = b""
+    s.keep(b"   ")
+    assert s.noise == b""
+
+
+def test_the_run_names_its_user_and_writes_only_its_own_package(tmp_path):
+    flags = obs.sandbox_flags("r1", tmp_path, False, tmp_path / "cid")
+    assert f"{tmp_path}/etc/passwd:/etc/passwd:ro" in flags and "USER=histor" in flags
+    passwd = (tmp_path / "etc/passwd").read_text()
+    assert f"histor:x:{obs.os.getuid()}:{obs.os.getgid()}:" in passwd and "--read-only" in flags
+    src = (Path(__file__).parents[1] / "sandbox/histor_observe.py").read_text(encoding="utf-8")
+    assert 'sandbox_flags(run_id + "-r", work, traced, cidfile, package_rw=True)' in src
+
+
+def test_an_image_built_on_the_host_is_named_by_its_id(monkeypatch):
+    monkeypatch.setattr(obs, "docker", lambda *a, **k: SimpleNamespace(returncode=0, stdout="[] sha256:abc\n", stderr=""))
+    assert obs.image_digest("npm") == "histor-node:22@sha256:abc"
+    monkeypatch.setattr(obs, "docker", lambda *a, **k: SimpleNamespace(returncode=0, stdout='["node@sha256:d"] sha256:abc\n', stderr=""))
+    assert obs.image_digest("npm") == "node@sha256:d"
+    monkeypatch.setattr(obs, "docker", lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="no such image"))
+    assert obs.image_digest("npm") is None
+
+
+def test_every_image_the_observer_names_is_built_by_install_sh():
+    script = (Path(__file__).parents[1] / "sandbox/install.sh").read_text(encoding="utf-8")
+    for image in [*obs.IMAGES.values(), *(i for by in obs.RUNTIMES.values() for i in by.values())]:
+        assert f"build_image {image} " in script, image
+    for name in ("node", "python"):
+        dockerfile = (Path(__file__).parents[1] / f"sandbox/images/{name}.Dockerfile").read_text(encoding="utf-8")
+        assert "git" in dockerfile and "temurin:21-jre" in dockerfile
+        assert not any(p in dockerfile for p in ("docker.io", "docker-ce", "docker.sock")), "never Docker in the sandbox"

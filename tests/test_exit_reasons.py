@@ -28,7 +28,7 @@ from tests.test_packages import FakePackages, package_target, reader
     ("import comtypes  # need 'pip install comtypes'", {"kind": "needs-other-os"}),
     ("getaddrinfo ENOTFOUND api.example.com", {"kind": "needs-network"}),
     ("error: Node 24+ required, found 22.23.3", {"kind": "needs-newer-node", "node": 24}),
-    ("story-vault-mcp requires Node.js >= 18 (with npx). Install Node.js", {"kind": "crashed"}),
+    ("story-vault-mcp requires Node.js >= 18 (with npx). Install Node.js", {"kind": "needs-program"}),
     ("Run 'xcodebuildmcp mcp' to start the MCP server", {"kind": "needs-arguments", "args": ["mcp"]}),
     ("[supergateway] Error: You must specify one of --stdio, --sse, or --streamableHttp", {"kind": "needs-arguments", "args": ["--stdio"]}),
     ("Commands:\n  index.js stdio   Start ArgoCD MCP server using stdio.\n  index.js sse     Start it using SSE.",
@@ -60,7 +60,7 @@ def test_registry_declares_required_variables_by_name_only():
 
 
 def test_the_sandbox_is_sent_names_and_reports_what_it_supplied():
-    r, calls = reader([(200, {"status": "ok", "version": "1.0.0", "observer": "3", "tools": [], "image": "node@sha256:ab",
+    r, calls = reader([(200, {"status": "ok", "version": "1.0.0", "observer": "4", "tools": [], "image": "node@sha256:ab",
                               "runtime": "runsc", "supplied": {"env": ["K_API_KEY"]}})])
     obs = r.observe("npm", "k", "1.0.0", env=["K_API_KEY"])
     assert calls[0]["env"] == ["K_API_KEY"] and "args" not in calls[0]
@@ -114,7 +114,7 @@ def test_a_settled_failure_is_not_run_again_until_something_changes(world):
     def observe(registry, name, version, **config):
         version = version or fake.latest.get(f"{registry}:{name}")
         fake.runs.append((registry, name, version))
-        return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer="3")
+        return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer="4")
 
     fake.observe = observe
     s.crawler.packages = fake
@@ -312,3 +312,102 @@ def test_a_pinned_run_keeps_the_fresh_install_reason_even_when_it_was_read_late(
     s.crawler.run()
     record = json.loads(s.store.target(t.id)["package_signals"])
     assert record["exit"]["kind"] == "sdk-incompatible" and record["legacy"]["status"] == "ok"
+
+
+class ObserverPackages(FakePackages):
+    """Packages named ``bad*`` exit with an error of their own under any observer."""
+
+    def observe(self, registry, name, version, **config):
+        version = version or self.latest.get(f"{registry}:{name}")
+        if name.startswith("bad"):
+            self.runs.append((registry, name, version))
+            return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version,
+                               package_observer=self.observer)
+        return FakePackages.observe(self, registry, name, version)
+
+
+def test_a_newer_observer_keeps_older_successes_and_runs_older_failures_first(world, monkeypatch):
+    import histor.crawler as crawler_mod
+
+    s = world["services"]
+    fake = ObserverPackages()
+    fake.observer = "3"
+    s.crawler.packages = fake
+    good, bad = package_target("io.g/good", "npm:good"), package_target("io.b/bad", "npm:bad")
+    for t in (good, bad):
+        world["targets"].append(t)
+        fake.latest[t.endpoint] = "1.0.0"
+        fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
+    s.crawler.run()
+    assert s.store.target(bad.id)["last_status"] == "exited"
+    fresh = [package_target(f"io.f/p{n}", f"npm:p{n}") for n in range(3)]
+    for t in fresh:
+        world["targets"].append(t)
+        fake.latest[t.endpoint] = "1.0.0"
+        fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
+    monkeypatch.setattr(crawler_mod, "curated_rank", lambda: {t.endpoint: n for n, t in enumerate(fresh)})
+    s.crawler.settings = replace(s.crawler.settings, sandbox_max_per_crawl=2)
+    fake.observer = "4"
+    fake.runs.clear()
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    # The success of observer 3 stands; its failure runs again, beside the most popular new package.
+    assert {r[1] for r in fake.runs} == {"bad", "p0"}
+    assert stats["packages"]["renewed"] == 1 and stats["packages"]["renewable"] == 1 and stats["packages"]["unchanged"] == 1
+    record = json.loads(s.store.target(bad.id)["package_signals"])
+    assert record["observer"] == "4" and record["exit"] == {"kind": "crashed"}
+    fake.runs.clear()
+    world["clock"].advance(days=1)
+    s.crawler.run()
+    assert "bad" not in {r[1] for r in fake.runs}, "a failure the current observer saw is settled"
+
+
+def test_renewed_failures_take_half_the_room_and_the_rest_when_nothing_new_waits():
+    from histor.crawler import RENEWABLE, SETTLED
+
+    assert {"install-failed", "timeout"} <= RENEWABLE and "no-wheel" not in RENEWABLE and "exited" in SETTLED
+    left = 10
+    assert min(8, max(left // 2, left - 3)) == 7, "three new packages waiting leave seven to renewed failures"
+    assert min(8, max(left // 2, left - 40)) == 5, "a long new queue gets half"
+
+
+@pytest.mark.parametrize("detail,expected", [
+    ("[exit code 0] ", {"kind": "silent", "code": 0}),
+    ("[exit code 0] stdout: dgmo - diagrams as code. Export PNG or SVG.", {"kind": "not-a-server", "code": 0}),
+    ("[exit code 2] stdout: Usage: tdnet [OPTIONS] COMMAND\n\nCommands:\n  latest  Get latest.\n  serve   Start the server.",
+     {"kind": "needs-arguments", "args": ["serve"], "code": 2}),
+    ("[exit code 1] Error relocating /work/pkg/node_modules/x/bin/x: __memcpy_chk: symbol not found", {"kind": "needs-glibc", "code": 1}),
+    ("Unsupported platform: linux-x64 (musl libc). Published Linux packages are glibc-only.", {"kind": "needs-glibc"}),
+    ("mcpsnoop: could not open a new TTY: open /dev/tty: no such device or address", {"kind": "needs-terminal"}),
+    ("Error: spawn git ENOENT at ChildProcess._handle.onexit", {"kind": "needs-program"}),
+    ("[vitaminmcp] No Java found. VitaminMCP runs on the JVM, so it needs Java 21 or later on this machine.", {"kind": "needs-program"}),
+    ("Error: connect ECONNREFUSED 127.0.0.1:5432", {"kind": "needs-service"}),
+    ("Error [ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING]: Stripping types is unsupported for files under node_modules",
+     {"kind": "broken-package"}),
+    ("SyntaxError: Unexpected token 'export'", {"kind": "broken-package"}),
+    ("Could not connect: unrecognized_keys: \"ErrorCode\", \"Message\", \"MessageID\", \"ok\"", {"kind": "needs-network"}),
+    ("AttributeError: 'Server' object has no attribute 'list_tools'", {"kind": "sdk-incompatible"}),
+    ('  File "/work/pkg/m/server.py", line 131, in <module>\n    @mcp.list_tools()\n', {"kind": "sdk-incompatible"}),
+    ("excel-mcp: ExcelMcp is Windows only.", {"kind": "needs-other-os"}),
+    ("[exit code 1] ⚠ Not logged in.", {"kind": "needs-config", "code": 1}),
+])
+def test_observer_4_exits(detail, expected):
+    assert classify("exited", detail) == expected
+
+
+def test_a_server_that_serves_http_is_asked_for_stdio_and_other_timeouts_are_not_read():
+    assert classify("timeout", "INFO: Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)") == {
+        "kind": "starts-http", "args": ["--transport=stdio"]}
+    assert classify("timeout", "") is None and classify("timeout", "loading model…") is None
+
+
+def test_the_stored_failure_leads_with_its_error_line():
+    from histor.exit_reasons import excerpt
+
+    trace = "Traceback (most recent call last):\n" + '  File "/work/pkg/x.py", line 1, in <module>\n' * 40 + "ValueError: MINIMAX_API_KEY is empty\n"
+    short = excerpt(trace, 300)
+    assert short.startswith("ValueError: MINIMAX_API_KEY is empty … Traceback") and len(short) <= 300
+    assert excerpt("[exit code 1] " + trace, 300).startswith("[exit code 1] ValueError: MINIMAX_API_KEY")
+    assert excerpt("short", 300) == "short"
+    node = "Error: GHOST_API_URL environment variable is not set.\n" + "    at f (file:///x.js:1:1)\n" * 50
+    assert excerpt(node, 300) == node[:300], "the error already comes first"

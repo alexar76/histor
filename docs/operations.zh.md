@@ -137,7 +137,7 @@ HISTOR 会表明身份（`User-Agent: histor/<version> (+https://histor.modelmar
 **一次观察做什么**（`histor/sandbox/histor_observe.py`，只用标准库）：
 
 1. 安装，在 gVisor 下：npm 使用 `--ignore-scripts`，pip 使用 `--only-binary=:all:`——不执行软件包的任何代码。只发布 sdist 的 PyPI 软件包记为 `no-wheel`，从不构建。
-2. 运行，在 gVisor 的跟踪运行时（`runsc-trace`）下：没有对外路由的内部网络，唯一的解析器是观察程序的 DNS 记录器；根文件系统和软件包只读，`/tmp` 为 64 MB 的 tmpfs，非特权 uid，无 capabilities、不允许提升权限，512 MB 内存且关闭 swap，一个 CPU，256 个进程，环境中只有 `PATH`/`HOME`。HOME 中放着诱饵凭据（SSH 密钥、云/注册表/Git 令牌、钱包、shell 历史），工作目录中有诱饵 `.env`。观察程序通过标准输入输出说 MCP：`initialize`、`tools/list`，然后按每个工具的 schema 构造金丝雀参数（`histor-trap.invalid` 上的地址、指向诱饵笔记的路径），对最多 15 个工具各调用一次——在沙箱内，不作用于任何真实对象——然后杀掉容器。安装时跳过的 npm 安装脚本，会先在单独的、同样被跟踪的阶段运行。
+2. 运行，在 gVisor 的跟踪运行时（`runsc-trace`）下：没有对外路由的内部网络，唯一的解析器是观察程序的 DNS 记录器；根文件系统只读，软件包为可写的独立副本，`/tmp` 为 64 MB 的 tmpfs，非特权 uid，无 capabilities、不允许提升权限，512 MB 内存且关闭 swap，一个 CPU，256 个进程，环境中只有 `PATH`/`HOME`。HOME 中放着诱饵凭据（SSH 密钥、云/注册表/Git 令牌、钱包、shell 历史），工作目录中有诱饵 `.env`。观察程序通过标准输入输出说 MCP：`initialize`、`tools/list`，然后按每个工具的 schema 构造金丝雀参数（`histor-trap.invalid` 上的地址、指向诱饵笔记的路径），对最多 15 个工具各调用一次——在沙箱内，不作用于任何真实对象——然后杀掉容器。安装时跳过的 npm 安装脚本，会先在单独的、同样被跟踪的阶段运行。
 3. 应答：版本、其完整性哈希、镜像摘要、状态（`ok`；`exited`——多半是服务器启动需要密钥或路径——；`install-failed`、`no-entry-point`、`no-wheel`、`timeout`、`protocol`）以及工具。
 
 如果 `runsc` 不是 Docker 的运行时，它拒绝运行，而不是退回到普通的 `runc`。
@@ -225,4 +225,4 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
    每台主机一行：编号、地址、槽位、观察程序、`gvisor`、`trace`、`observeNetwork`、`ok`。只要有一台主机未就绪——不可达、指纹或令牌不符、观察程序版本不同——退出码就不为零。令牌从不打印。
 9. **关注第一次抓取。** `/api/v1/stats` 显示 `crawl.sandboxHosts`（已配置的主机数），抓取结束后显示 `lastRun.sandboxHosts`：按主机编号列出各自观察了多少个软件包、失败了多少次。在沙箱主机上：`journalctl -u histor-sandbox`。
 
-**观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。
+**观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。

@@ -96,11 +96,11 @@ el registro de cada paquete guarda el digest exacto de la imagen y la configurac
 | | |
 |---|---|
 | Sistema | Linux x86_64, dentro de gVisor (`runsc`); usuario sin privilegios, sin capabilities, raíz de solo lectura |
-| Entornos de ejecución | npm: `node:22-alpine`; PyPI: `python:3.12-slim` — etiquetas descargadas al instalar un host del sandbox; el digest exacto se registra en cada observación |
+| Entornos de ejecución | npm: `histor-node:22`; PyPI: `histor-python:3.12` (`3.13`, `3.14` si Requires-Python excluye 3.12) — las oficiales `node:22-bookworm-slim` y `python:3.12-slim` más bash, git, Python 3 o Node 22 y un entorno Java 21 (nunca Docker), construidas al instalar un host del sandbox; el id de la imagen se registra en cada observación |
 | Instalación | npm `--ignore-scripts`, luego los scripts de instalación en su propia etapa trazada; PyPI solo wheels (un sdist se señala, nunca se compila) |
 | Red | sin ruta hacia fuera; cada nombre resuelve a las trampas de HISTOR, que registran y no reenvían nada |
 | Secretos | ninguno real: credenciales señuelo en HOME, un `.env` señuelo; una variable que el paquete necesita recibe un valor de relleno |
-| Límites | 512 MB, 1 CPU, 64 MB de `/tmp`; 240 s para instalar, 150 s para arrancar y responder; ≤ 15 herramientas llamadas una vez, 8 s cada una |
+| Límites | 512 MB, 1 CPU, 64 MB de `/tmp`; 360 s para instalar, 150 s para arrancar y responder; ≤ 15 herramientas llamadas una vez, 8 s cada una |
 | Configuración | solo nombres (abajo); el observador crea todos los valores |
 
 Las cifras son constantes del propio observador (`sandbox/histor_observe.py`); una prueba hace fallar
@@ -110,14 +110,18 @@ la compilación si las publicadas se desvían de ellas.
 paquete (`histor/exit_reasons.py`) y se guarda como `packageSignals.exit`: `needs-config` (con los
 nombres de variables que dio), `needs-arguments` (con un argumento de arranque como `serve` o
 `--transport=stdio` cuando su texto de uso lo ofrece), `sdk-incompatible` (escrito para MCP SDK 1.x y
-ejecutado con 2.x), `needs-other-os`, `needs-network`, `silent`, `crashed`.
+ejecutado con 2.x), `needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
+`broken-package`, `not-a-server` (código de salida 0), `silent`, `crashed`. Una ejecución que agota el
+tiempo sirviendo HTTP en lugar de stdio es `starts-http`, y la siguiente pasa `--transport=stdio`. Desde
+el observador 4 el informe guarda el código de salida y la salida estándar que no era protocolo: una CLI
+imprime ahí su uso.
 
 **Arrancarlo de nuevo con lo que pidió.** El siguiente rastreo arranca la misma versión otra vez con
 valores de relleno para esos nombres — y, desde la primera ejecución, para las variables que su entrada
 en el registro marca `isRequired`. HISTOR envía solo nombres; el observador rechaza los que controlan el
 entorno de ejecución (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) y crea los valores:
 `histor-envkey-<run>` para una clave, una dirección en `histor-trap.invalid` para una URL, el directorio
-de trabajo para una ruta. Un paquete que termina pidiendo un Node más reciente (`needs-newer-node`) se ejecuta de nuevo en `node:24-alpine`, la LTS actual, y su página lo indica. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
+de trabajo para una ruta. Un paquete que termina pidiendo un Node más reciente (`needs-newer-node`) se ejecuta de nuevo en `histor-node:24`, la LTS actual, y su página lo indica. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
 propia API o a otro sitio.
 
 **Servidores rotos por MCP SDK 2.0.** Un servidor PyPI escrito para `mcp` 1.x (`from mcp.server.fastmcp import

@@ -192,7 +192,7 @@ export const JS_EN = {
   js_exit_needs_arguments: "Exited with a usage text: it needs a start argument HISTOR could not tell.",
   js_exit_sdk_incompatible: "Exited at import: written for MCP SDK 1.x (mcp.server.fastmcp), while its unpinned dependency installed 2.x. Anyone installing it today gets this; the next run also tries mcp<2.",
   js_exit_needs_other_os: "Exited at import: it needs Windows or macOS libraries, and the sandbox is Linux.",
-  js_exit_needs_network: "Exited reaching for the internet while starting; the sandbox has no route out.",
+  js_exit_needs_network: "Exited reaching for the internet while installing or starting; the sandbox has no route out.",
   js_exit_silent: "Exited without printing anything.",
   js_exit_crashed: "Exited with an error of its own; the last status shows its final lines.",
   js_supplied: "Started with placeholders for: {what}.",
@@ -204,7 +204,14 @@ export const JS_EN = {
   js_legacy_matches: "WARDEN patterns in those tools: {block} block-tier, {advise} advise-tier.",
   js_legacy_failed: "With the pin it still did not answer. Status: {status}.",
   js_exit_sdk_incompatible_seen: "Exited at import: written for MCP SDK 1.x (mcp.server.fastmcp), while its unpinned dependency installed 2.x. Anyone installing it today gets this.",
-  js_exit_needs_newer_node: "Exited asking for Node {node} or newer; the sandbox's default is Node 22. The next run uses node:24-alpine, the current LTS.",
+  js_exit_needs_newer_node: "Exited asking for Node {node} or newer; the sandbox's default is Node 22. The next run uses Node 24, the current LTS.",
+  js_exit_needs_glibc: "Exited loading native code built for glibc on Alpine's musl. Observer 4 runs packages on Debian (glibc), as most users' Linux is.",
+  js_exit_needs_terminal: "Exited asking for a terminal: an interactive program, and an MCP client gives it a pipe, not a keyboard.",
+  js_exit_needs_program: "Exited because a program it starts is not there (a desktop app, a CLI it wraps, a runtime such as Bun). The sandbox has git, bash, Python, Node and Java; never Docker.",
+  js_exit_needs_service: "Exited when the database or service it connects to on this machine was not there.",
+  js_exit_broken_package: "Exited because it cannot run as published: a file of its own or a dependency it did not declare is missing, or it ships source its runtime does not load.",
+  js_exit_starts_http: "Started an HTTP server instead of answering on stdin. The next run asks for --transport=stdio.",
+  js_exit_not_a_server: "Exited normally (code 0) without speaking MCP: the command it declares is not a stdio server as started.",
 };
 
 export const DICT = { ru, es, fr, zh };

@@ -92,18 +92,18 @@ sequenceDiagram
 | | |
 |---|---|
 | 系统 | Linux x86_64，运行在 gVisor（`runsc`）内；非特权用户，无 capabilities，只读根文件系统 |
-| 运行环境 | npm：`node:22-alpine`；PyPI：`python:3.12-slim`——沙箱主机安装时拉取这些标签；每次观察都记录确切的 digest |
+| 运行环境 | npm：`histor-node:22`；PyPI：`histor-python:3.12`（Requires-Python 排除 3.12 时用 `3.13`、`3.14`）——官方 `node:22-bookworm-slim` 和 `python:3.12-slim`，加上 bash、git、Python 3 或 Node 22 以及 Java 21 运行时（永远不含 Docker），在安装沙箱主机时构建；每次观察都记录镜像 id |
 | 安装 | npm 使用 `--ignore-scripts`，随后在单独的受跟踪阶段运行安装脚本；PyPI 只用 wheel（sdist 会被记录，从不构建） |
 | 网络 | 没有对外路由；每个域名都解析到 HISTOR 的陷阱，陷阱只记录，不转发任何东西 |
 | 机密 | 没有真实的：HOME 中有诱饵凭据，有诱饵 `.env`；软件包需要的变量会得到占位值 |
-| 限制 | 512 MB、1 个 CPU、64 MB `/tmp`；安装限时 240 秒，启动并应答限时 150 秒；最多 15 个工具各调用一次，每次 8 秒 |
+| 限制 | 512 MB、1 个 CPU、64 MB `/tmp`；安装限时 360 秒，启动并应答限时 150 秒；最多 15 个工具各调用一次，每次 8 秒 |
 | 配置 | 只有名称（见下文）；所有值都由观察器生成 |
 
 这些数字就是观察器自身的常量（`sandbox/histor_observe.py`）；公布的数字一旦与之不符，测试会让构建失败。
 
-**软件包为何退出。** 以 `exited` 结束的运行会根据软件包打印的内容进行分类（`histor/exit_reasons.py`），并保存为 `packageSignals.exit`：`needs-config`（附带它给出的变量名）、`needs-arguments`（当其用法文本提供时，附带 `serve` 或 `--transport=stdio` 之类的启动参数）、`sdk-incompatible`（为 MCP SDK 1.x 编写却在 2.x 下运行）、`needs-other-os`、`needs-network`、`silent`、`crashed`。
+**软件包为何退出。** 以 `exited` 结束的运行会根据软件包打印的内容进行分类（`histor/exit_reasons.py`），并保存为 `packageSignals.exit`：`needs-config`（附带它给出的变量名）、`needs-arguments`（当其用法文本提供时，附带 `serve` 或 `--transport=stdio` 之类的启动参数）、`sdk-incompatible`（为 MCP SDK 1.x 编写却在 2.x 下运行）、`needs-other-os`、`needs-glibc`、`needs-terminal`、`needs-program`、`needs-service`、`needs-network`、`broken-package`、`not-a-server`（退出码 0）、`silent`、`crashed`。以 HTTP 而非 stdio 提供服务而超时的运行记为 `starts-http`，下一次运行会传入 `--transport=stdio`。从观察器 4 起，报告保留退出码以及不属于协议的标准输出：CLI 会把用法打印在那里。
 
-**按它要求的再启动一次。** 下一次抓取会用这些名称的占位值再次启动同一版本——对于注册表条目标为 `isRequired` 的变量，则从第一次运行起就提供。HISTOR 只发送名称；观察器会拒绝控制运行环境的名称（`PATH`、`NODE_OPTIONS`、`LD_*`、`PYTHON*` 等），并自行生成值：密钥为 `histor-envkey-<run>`，URL 为 `histor-trap.invalid` 上的地址，路径为工作目录。退出时要求更新版本 Node 的软件包（`needs-newer-node`）会在当前 LTS 版本 `node:24-alpine` 上再运行一次，其页面会注明这一点。占位密钥被发送到哪里会被记录（`envKeyDestinations`）：发往它自己的 API，还是别处。
+**按它要求的再启动一次。** 下一次抓取会用这些名称的占位值再次启动同一版本——对于注册表条目标为 `isRequired` 的变量，则从第一次运行起就提供。HISTOR 只发送名称；观察器会拒绝控制运行环境的名称（`PATH`、`NODE_OPTIONS`、`LD_*`、`PYTHON*` 等），并自行生成值：密钥为 `histor-envkey-<run>`，URL 为 `histor-trap.invalid` 上的地址，路径为工作目录。退出时要求更新版本 Node 的软件包（`needs-newer-node`）会在当前 LTS 版本 `histor-node:24` 上再运行一次，其页面会注明这一点。占位密钥被发送到哪里会被记录（`envKeyDestinations`）：发往它自己的 API，还是别处。
 
 **被 MCP SDK 2.0 破坏的服务器。** 为 `mcp` 1.x 编写（`from mcp.server.fastmcp import FastMCP`）、且依赖未限定在 2 以下的 PyPI 服务器，自 `mcp` 2.0.0（2026-07-28）重命名 FastMCP 以来会在导入时失败。它的状态保持为全新安装得到的结果（`exited`、`sdk-incompatible`）；下一次抓取会把同一版本再启动一次，并将 pip 限定为 `mcp<2`（观察器的固定限定列表——HISTOR 从不发送需求字符串），结果作为 `packageSignals.legacy` 保存在记录旁：状态、工具、WARDEN 模式匹配以及沙箱中的行为。它不签发任何标签，也永远不会成为目标的工具集。新版本会先按全新安装运行。
 
