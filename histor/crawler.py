@@ -497,6 +497,9 @@ class Crawler:
         # failing package is started, not what a running one reports.
         still_valid = {current, *self.settings.sandbox_observers_valid}
         renewed: list[tuple[Target, str]] = []
+        # A record an older trace reader got wrong is a public mistake about someone else's
+        # package: it goes ahead of everything but new versions.
+        retrace: list[tuple[Target, str]] = []
         legacy_ids: set[str] = set()
         # A package observed before is looked up every crawl: a new version of it goes first.
         clock = time.monotonic()
@@ -526,8 +529,14 @@ class Crawler:
                     signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
             if seen == version and state.get("last_status") == "ok" and _unplaced_sends(signals.get("behaviour")):
+                # Traced again with what started it the last time (a placeholder key, a start
+                # argument): without it a server that needs a key exits, and a page that was right
+                # about its tools turns into a failure.
+                plan = _config_for(t, signals)
+                if plan:
+                    config[t.id] = plan
                 retraced += 1
-                renewed.append((t, version))
+                retrace.append((t, version))
                 continue
             if seen == version and state.get("last_status") == "ok" and complete and observer in still_valid:
                 unchanged += 1
@@ -581,8 +590,10 @@ class Crawler:
         # and reports which one it ran. Asking first cost ~16 minutes of npm's pace per crawl, every
         # crawl, while the sandboxes waited (and a burst of it once got npm to refuse us).
         configured.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
-        configured = configured[: max(0, cap - len(updates))]
-        left = max(0, cap - len(updates) - len(configured))
+        retrace.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
+        retrace = retrace[: max(0, cap - len(updates))]
+        configured = configured[: max(0, cap - len(updates) - len(retrace))]
+        left = max(0, cap - len(updates) - len(retrace) - len(configured))
         renewable = len(renewed)
         renewed.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
         renewed = renewed[: min(renewable, max(left // 2, left - len(order)))]
@@ -593,7 +604,7 @@ class Crawler:
         for t in never:
             if t.needs:
                 config[t.id] = _config_for(t, {})
-        due = (updates + configured + renewed + chosen)[:cap]
+        due = (updates + retrace + configured + renewed + chosen)[:cap]
         unknown = sum(unknown_by.values())
         if unknown:
             log.warning("package versions unknown this crawl: %s", dict(unknown_by))
@@ -604,7 +615,7 @@ class Crawler:
         stats["packages"] = {"dialable": len(targets), "due": len(due), "newVersions": len(updates),
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
-                             "renewed": len(renewed), "renewable": renewable, "retraced": retraced,
+                             "renewed": len(renewed), "renewable": renewable, "retraced": len(retrace), "retraceable": retraced,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
                              "versionsAsked": len(known) + looked_up,
                              "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}

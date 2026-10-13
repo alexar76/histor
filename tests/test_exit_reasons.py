@@ -495,3 +495,39 @@ def test_reobserve_runs_one_package_now_through_the_crawl_path(world):
         assert tx.one("SELECT count(*) AS n FROM observations WHERE target_id=?", (t.id,))["n"] == 2
     with pytest.raises(KeyError):
         s.crawler.reobserve(["npm:not-listed"])
+
+
+def test_a_wrong_old_record_is_traced_again_first_and_with_what_started_it(world, monkeypatch):
+    import histor.crawler as crawler_mod
+
+    s = world["services"]
+    fake = KeyedPackages()
+    s.crawler.packages = fake
+    keyed = package_target("io.k/keyed", "npm:keyed")
+    world["targets"].append(keyed)
+    fake.latest["npm:keyed"] = "1.0.0"
+    fake.tools[("npm:keyed", "1.0.0")] = [tool("t", "A tool.")]
+    s.crawler.run()
+    world["clock"].advance(days=1)
+    s.crawler.run()  # second run: started with the placeholder
+    assert s.store.target(keyed.id)["last_status"] == "ok"
+    # An older reader left an unplaced send in its startup evidence.
+    signals = json.loads(s.store.target(keyed.id)["package_signals"])
+    signals["behaviour"] = {"observer": "gvisor-trace/2", "complete": False,
+                            "startup": {"network": ["sendto(0x5 socket:[2], 0x7e, 0x1, 0x0, null, 0x0) = 1 (0x1)"]}}
+    with s.store.db.transaction() as tx:
+        tx.execute("UPDATE targets SET package_signals=? WHERE id=?", (json.dumps(signals), keyed.id))
+    fresh = [package_target(f"io.f/p{n}", f"npm:p{n}") for n in range(3)]
+    for t in fresh:
+        world["targets"].append(t)
+        fake.latest[t.endpoint] = "1.0.0"
+        fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
+    monkeypatch.setattr(crawler_mod, "curated_rank", lambda: {t.endpoint: n for n, t in enumerate(fresh)} | {"npm:keyed": 99})
+    s.crawler.settings = replace(s.crawler.settings, sandbox_max_per_crawl=1)
+    fake.runs.clear()
+    fake.configs.clear()
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    assert [r[1] for r in fake.runs] == ["keyed"], "the wrong record goes before every new package"
+    assert fake.configs == [{"env": ["HASDATA_API_KEY"]}], "and with the key that started it"
+    assert stats["packages"]["retraced"] == 1 and s.store.target(keyed.id)["last_status"] == "ok"
