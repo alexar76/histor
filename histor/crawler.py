@@ -134,9 +134,14 @@ def _config_for(t: Target, record: dict[str, Any]) -> dict[str, Any]:
     declares, plus what it named when it last exited without them."""
     declared = t.needs or {}
     asked = record.get("exit") if isinstance(record.get("exit"), dict) else {}
-    env = sorted({str(n) for n in [*(declared.get("env") or []), *(asked.get("env") or [])]})[:8]
-    args = list(declared.get("args") or asked.get("args") or [])[:6]
+    # What the last run was given goes on: a new version of a package that started with a
+    # placeholder key needs it too, and a name asked for later adds to the ones already given.
+    given = record.get("supplied") if isinstance(record.get("supplied"), dict) else {}
+    env = sorted({str(n) for n in [*(declared.get("env") or []), *(asked.get("env") or []), *(given.get("env") or [])]})[:8]
+    args = list(declared.get("args") or asked.get("args") or given.get("args") or [])[:6]
     plan: dict[str, Any] = {k: v for k, v in (("env", env), ("args", args)) if v}
+    if given.get("runtime") in NODE_RUNTIMES.values() and t.endpoint.startswith("npm:"):
+        plan["runtime"] = given["runtime"]
     # "Node 24+ required": the current LTS image, the one such a package's users run it on.
     major = asked.get("node") if asked.get("kind") == "needs-newer-node" else None
     if isinstance(major, int) and t.endpoint.startswith("npm:"):

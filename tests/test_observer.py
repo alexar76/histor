@@ -363,3 +363,17 @@ def test_every_image_the_observer_names_is_built_by_install_sh():
         dockerfile = (Path(__file__).parents[1] / f"sandbox/images/{name}.Dockerfile").read_text(encoding="utf-8")
         assert "git" in dockerfile and "temurin:21-jre" in dockerfile
         assert not any(p in dockerfile for p in ("docker.io", "docker-ce", "docker.sock")), "never Docker in the sandbox"
+
+
+@pytest.mark.parametrize("record,expected", [
+    ("store_mcp/__init__.py,a,1\nstore_mcp/server.py,b,2\nstore_mcp/main.py,c,3\n", "store_mcp.server"),
+    ("store_mcp.py,a,1\nstore_mcp/server.py,b,2\n", "store_mcp"),
+    ("store_mcp/__init__.py,a,1\nstore_mcp/main.py,c,3\n", "store_mcp.main"),
+    ("other/server.py,a,1\ntests/__main__.py,b,2\nstore_mcp/__init__.py,c,3\n", None),
+])
+def test_a_package_without_a_command_or_main_is_tried_by_its_own_module(tmp_path, record, expected):
+    info = tmp_path / "pkg/store_mcp-1.0.dist-info"
+    info.mkdir(parents=True)
+    (info / "RECORD").write_text(record)
+    found = obs.pypi_entry(tmp_path, "store-mcp")
+    assert (found[1] if found else None) == (f"python -m {expected}" if expected else None)

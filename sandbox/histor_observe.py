@@ -668,21 +668,30 @@ def npm_entry(work: Path, name: str) -> tuple[list[str], str] | None:
 
 
 def main_module(info: Path, want: str) -> str | None:
-    """A top-level package with a ``__main__.py`` in the distribution's RECORD: how a package that
-    declares no command is started (``python -m name``, as its README and ``uvx --from`` say)."""
+    """The module a package that declares no command is started as (``python -m``, as its README
+    and ``uvx --from`` say): a top-level package's ``__main__.py``, else a top-level module named
+    for the distribution, else that package's ``server.py`` or ``main.py`` — a server written with
+    ``if __name__ == "__main__": mcp.run()``. A library run this way imports and exits."""
     try:
         lines = (info / "RECORD").read_text(encoding="utf-8").splitlines()
     except OSError:
         return None
-    found: list[str] = []
+    ident = re.compile(r"[A-Za-z_]\w{0,99}")
+    own = want.replace("-", "_").lower()
+    mains: list[str] = []
+    modules: list[str] = []
     for line in lines:
         parts = line.split(",", 1)[0].split("/")
-        if len(parts) == 2 and parts[1] == "__main__.py" and re.fullmatch(r"[A-Za-z_]\w{0,99}", parts[0]) and parts[0] not in found:
-            found.append(parts[0])
-    if not found:
-        return None
-    own = want.replace("-", "_")
-    return max(found, key=lambda m: (m.lower() == own, "mcp" in m.lower(), -found.index(m)))
+        if len(parts) == 2 and ident.fullmatch(parts[0]) and parts[0] not in ("tests", "test"):
+            if parts[1] == "__main__.py" and parts[0] not in mains:
+                mains.append(parts[0])
+            elif parts[1] in ("server.py", "main.py") and parts[0].lower() == own:
+                modules.append(f"{parts[0]}.{parts[1][:-3]}")
+        elif len(parts) == 1 and parts[0].endswith(".py") and ident.fullmatch(parts[0][:-3]) and parts[0][:-3].lower() == own:
+            modules.insert(0, parts[0][:-3])
+    if mains:
+        return max(mains, key=lambda m: (m.lower() == own, "mcp" in m.lower(), -mains.index(m)))
+    return sorted(modules, key=lambda m: (m.count("."), not m.endswith(".server")))[0] if modules else None
 
 
 def pypi_entry(work: Path, name: str) -> tuple[list[str], str] | None:

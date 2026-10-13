@@ -107,6 +107,11 @@ CHOICES = re.compile(r"(?:(--?[a-z][a-z0-9-]{0,30})[ =])?\{([a-z0-9][a-z0-9_-]*(
 COMMAND_LINE = re.compile(r"^\s{2,}([a-z][a-z0-9_-]{1,30})\s{2,}\S", re.M)
 # yargs: "  index.js stdio   Start the server using stdio." — the program name, then the command.
 PROGRAM_COMMAND = re.compile(r"^\s*\S+\.(?:js|mjs|cjs)\s+(stdio|mcp|serve|server|start)\s{2,}\S", re.M)
+# A command with its description, as commander/click/argparse list them:
+# "  mcp-serve [options]   Start MCP server with stdio transport".
+COMMAND_DESC = re.compile(r"^\s{1,}([a-z][a-z0-9_-]{1,30})(?:\|[a-z][\w-]*)*(?: \[[^\]\n]*\]| <[^>\n]*>)*[ \t]{2,}(\S[^\n]*)$", re.M)
+# The package saying in prose which command is its server: '"troxy mcp" starts the MCP server'.
+SAYS_SERVER = re.compile(r"""[`'"](?:npx\s+(?:-y\s+)?)?[@\w./-]+\s+([a-z][a-z0-9-]{1,30})[`'"]\s+(?:starts?|runs?|launch(?:es)?)\s+(?:the|an?|your)\s+(?:stdio\s+)?MCP\s+server""", re.I)
 
 
 def env_names(text: str) -> list[str]:
@@ -128,6 +133,9 @@ def start_argument(text: str) -> str | None:
     hint = RUN_HINT.search(text)
     if hint:
         return hint.group(1).lower()
+    said = SAYS_SERVER.search(text)
+    if said:
+        return said.group(1).lower()
     flag = FLAG_HINT.search(text)
     if flag:
         return "--stdio" if flag.group(1) else "--transport=stdio"
@@ -142,7 +150,15 @@ def start_argument(text: str) -> str | None:
     for word in START_WORDS:
         if word in offered:
             return offered[word]
-    return None
+    # No plain start word: the listed command whose name or description is the MCP server.
+    best, score = None, 0
+    for name, desc in COMMAND_DESC.findall(text):
+        points = (3 * ("mcp" in name) + 3 * ("stdio" in name or re.search(r"\bstdio\b", desc, re.I) is not None)
+                  + 2 * (re.search(r"\bMCP\b", desc, re.I) is not None and re.search(r"\bserver?\b|\bstart", desc, re.I) is not None)
+                  - 4 * (re.search(r"install|setup|config|login|auth|doctor|inspect|proxy|add|remove|list", name) is not None))
+        if points > score:
+            best, score = name, points
+    return best if score >= 4 else None
 
 
 def classify(status: str, detail: str | None) -> dict[str, Any] | None:

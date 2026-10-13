@@ -411,3 +411,29 @@ def test_the_stored_failure_leads_with_its_error_line():
     assert excerpt("short", 300) == "short"
     node = "Error: GHOST_API_URL environment variable is not set.\n" + "    at f (file:///x.js:1:1)\n" * 50
     assert excerpt(node, 300) == node[:300], "the error already comes first"
+
+
+def test_a_new_version_gets_what_started_the_last_one():
+    from histor.crawler import _config_for
+
+    t = package_target("io.r/runbios", "npm:runbios-mcp")
+    assert _config_for(t, {"supplied": {"env": ["RUNBIOS_API_KEY"]}}) == {"env": ["RUNBIOS_API_KEY"]}
+    assert _config_for(t, {"supplied": {"env": ["A_KEY"]}, "exit": {"kind": "needs-config", "env": ["B_TOKEN"]}}) == {
+        "env": ["A_KEY", "B_TOKEN"]}, "a name asked for later adds to the ones given"
+    assert _config_for(t, {"supplied": {"args": ["--transport=stdio"]}, "exit": {"kind": "needs-arguments", "args": ["serve"]}}) == {
+        "args": ["serve"]}, "what it asks for now wins over what it was given"
+    assert _config_for(t, {"supplied": {"runtime": "node24", "pins": ["mcp<2"]}}) == {"runtime": "node24"}
+
+
+@pytest.mark.parametrize("detail,arg", [
+    ("[exit code 1] Usage: imagine [options] [command]\n\nOptions:\n  -V, --version  output the version number\n\nCommands:\n"
+     "  mcp-serve      Start MCP server with specified transport\n  help [command] display help for command\n", "mcp-serve"),
+    ("Commands:\n  mcp-serve [options]      Start MCP server with stdio transport\n  serve [options]          Start a modern-only MCP server over stdio or HTTP\n"
+     "  check [options] [paths...]  Batch review files\n", "mcp-serve"),
+    ('[exit code 0] stdout: Troxy: a secure control layer. "troxy mcp" starts the MCP server an AI agent connects to.', "mcp"),
+    ("Commands:\n  mcp-install   Add the server to Claude Desktop config\n  status        Show status\n", None),
+])
+def test_a_usage_text_names_its_server_command(detail, arg):
+    from histor.exit_reasons import start_argument
+
+    assert start_argument(detail) == arg
