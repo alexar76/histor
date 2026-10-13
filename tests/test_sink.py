@@ -103,3 +103,20 @@ def test_a_placeholder_key_is_traced_to_where_it_went_not_called_theft():
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_request_from_the_addresses_previous_holder_is_not_this_runs():
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location("sink_under_test", Path(__file__).parents[1] / "sandbox/histor_sink.py")
+    sink = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sink)
+    collector = sink.Collector() if hasattr(sink, "Collector") else None
+    if collector is None:
+        import pytest
+        pytest.skip("collector class not exposed")
+    collector.record("10.231.0.7", "smtp", "smtp", b"x", recipient_list=["canary-aaaaaaaaaaaa@histor-trap.invalid"], opened=100.0)
+    collector.records[-1]["at"] = 205.0  # finished after the next container got the address
+    assert collector.phase("10.231.0.7", 200.0, 300.0, "bbbbbbbbbbbb")["requests"] == []
+    assert collector.phase("10.231.0.7", 50.0, 150.0, "aaaaaaaaaaaa")["requests"]

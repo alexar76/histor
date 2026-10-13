@@ -437,3 +437,61 @@ def test_a_usage_text_names_its_server_command(detail, arg):
     from histor.exit_reasons import start_argument
 
     assert start_argument(detail) == arg
+
+
+def test_a_package_an_older_trace_reader_left_with_unplaced_sends_is_traced_again_once():
+    from histor.crawler import _unplaced_sends
+
+    old = {"observer": "gvisor-trace/2", "startup": {"network": ["sendto(0x5 socket:[2], 0x7e, 0x1, 0x0, null, 0x0) = 1 (0x1)"]}}
+    assert _unplaced_sends(old)
+    assert not _unplaced_sends({**old, "observer": "gvisor-trace/5"}), "the current reader's verdict stands"
+    assert not _unplaced_sends({"observer": "gvisor-trace/2", "startup": {"network": ["api.example.com:443"]}})
+    assert not _unplaced_sends(None)
+
+
+def test_a_relative_write_the_old_reader_called_persistence_is_traced_again():
+    from histor.crawler import _unplaced_sends
+
+    old = {"observer": "gvisor-trace/2", "installScripts": {"writes": ["buildcheck.gypi"]}}
+    assert _unplaced_sends(old)
+    assert not _unplaced_sends({"observer": "gvisor-trace/2", "startup": {"writes": ["/root/.bashrc"]}}), \
+        "an absolute persistence write stands"
+
+
+def test_evidence_that_cannot_be_the_runs_own_is_traced_again():
+    from histor.crawler import _unplaced_sends
+
+    foreign = {"observer": "gvisor-trace/3", "startup": {"unexpectedRecipients": ["canary-51bf4b4c645e@histor-trap.invalid"]}}
+    assert _unplaced_sends(foreign)
+    fixture = {"observer": "gvisor-trace/3", "startup": {"lookups": ["api.momus-trap.invalid"], "requests": []}}
+    assert _unplaced_sends(fixture)
+    real = {"observer": "gvisor-trace/3", "startup": {"unexpectedRecipients": ["ops@example.com"], "lookups": ["api.example.com"]}}
+    assert not _unplaced_sends(real), "a real extra recipient is a finding, not contamination"
+
+
+def test_a_run_that_could_not_place_its_start_is_traced_again():
+    from histor.crawler import _unplaced_sends
+
+    assert _unplaced_sends({"observer": "gvisor-trace/4", "startup": {"incompleteReasons": ["start-time-unknown"]}})
+
+
+def test_reobserve_runs_one_package_now_through_the_crawl_path(world):
+    s = world["services"]
+    fake = KeyedPackages()
+    s.crawler.packages = fake
+    t = package_target()
+    world["targets"].append(t)
+    fake.latest["npm:@a/mem"] = "1.0.0"
+    fake.tools[("npm:@a/mem", "1.0.0")] = [tool("search", "Search.")]
+    s.crawler.run()  # exits asking for HASDATA_API_KEY
+    assert s.store.target(t.id)["last_status"] == "exited"
+    fake.configs.clear()
+    world["clock"].advance(minutes=5)
+    rows = s.crawler.reobserve(["npm:@a/mem"])
+    assert fake.configs == [{"env": ["HASDATA_API_KEY"]}], "it is given what its record says it asked for"
+    assert rows[0]["before"]["status"] == "exited" and rows[0]["after"]["status"] == "ok"
+    assert rows[0]["run"] == s.store.last_run(finished_only=False)["id"], "no run of its own"
+    with s.store.db.read() as tx:
+        assert tx.one("SELECT count(*) AS n FROM observations WHERE target_id=?", (t.id,))["n"] == 2
+    with pytest.raises(KeyError):
+        s.crawler.reobserve(["npm:not-listed"])

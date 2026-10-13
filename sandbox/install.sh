@@ -42,7 +42,7 @@ import json
 p = "/etc/docker/daemon.json"
 d = json.load(open(p))
 want = {"path": "/usr/bin/runsc", "runtimeArgs": ["--strace",
-        "--strace-syscalls=socket,connect,openat,open,execve,execveat,sendto,sendmsg,sendmmsg,bind,unlinkat,renameat,mkdirat",
+        "--strace-syscalls=socket,connect,openat,open,execve,execveat,sendto,sendmsg,sendmmsg,bind,unlinkat,renameat,mkdirat,socketpair",
         "--strace-log-size=512", "--debug-log=/var/lib/histor-sandbox/trace/%ID%/"]}
 if d.setdefault("runtimes", {}).get("runsc-trace") != want:
     d["runtimes"]["runsc-trace"] = want
@@ -53,7 +53,9 @@ systemctl reload docker
 install -d -o "$USER_NAME" -g "$USER_NAME" -m 0755 "$STATE/trace"
 docker network inspect histor-observe >/dev/null 2>&1 || docker network create --internal --subnet 10.231.0.0/24 --gateway 10.231.0.1 \
   -o com.docker.network.bridge.name=br-histor-obs -o com.docker.network.bridge.enable_icc=false histor-observe >/dev/null
-printf 'nameserver 10.231.0.1\noptions timeout:2 attempts:1\n' > "$STATE/resolv-observe.conf"
+# glibc (the Debian images) gives up after one unanswered query; under load the logger can be
+# late, and a lost name is a connection the run never shows. Wait longer, ask again.
+printf 'nameserver 10.231.0.1\noptions timeout:5 attempts:3\n' > "$STATE/resolv-observe.conf"
 chmod 0644 "$STATE/resolv-observe.conf"
 # Mandatory independently verified firewall, regardless of UFW installation or state.
 install -o root -g root -m 0755 "$HERE/histor-firewall.sh" /usr/local/sbin/histor-firewall

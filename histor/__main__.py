@@ -56,6 +56,20 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
             print(json.dumps(services.crawler.run(), indent=2))
             return 0
+        if command == "reobserve":
+            keys = [a for a in args[1:] if not a.startswith("-")]
+            if not keys:
+                print("usage: histor reobserve <endpoint or target id> [...]   e.g. pypi:ipinfo-mcp-server",
+                      file=sys.stderr)
+                return 2
+            try:
+                rows = services.crawler.reobserve(keys)
+            except (KeyError, RuntimeError) as exc:
+                print(str(exc).strip("'\""), file=sys.stderr)
+                return 1
+            for row in rows:
+                print(json.dumps(row))
+            return 0
         if command == "census":
             from histor.security_events import census
             print(json.dumps(census(services.store, services.key), ensure_ascii=False))

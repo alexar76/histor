@@ -124,6 +124,10 @@ RUNTIMES = {"npm": {"node24": "histor-node:24"},
 # "from versions: none"), without HISTOR asking — it is what pip itself would have needed.
 PYTHONS = ((None, (3, 12)), ("py313", (3, 13)), ("py314", (3, 14)))
 MAX_NOISE = 4096               # bytes of non-protocol stdout kept to say why a server exited
+# The trace reader's own generation: 3 resolves relative opens and reads socketpair ends as local
+# (2 listed asyncio's self-pipe as a destination). HISTOR runs a package traced by an older
+# reader again when that left it with sends it could not place.
+TRACE_OBSERVER = "gvisor-trace/5"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs
 
 
 class Refused(Exception):
@@ -393,7 +397,9 @@ _STAMP = re.compile(r"^I(\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})\.(\d{6})")
 _PID = re.compile(r"\] \[\s*(\d+):\s*\d+\] ")
 _EXEC = re.compile(r" X execve\(0x[0-9a-f]+ ([^,]+), 0x[0-9a-f]+ \[([^\]]*)\].*\) = 0 ")
 _CONNECT = re.compile(r" X connect\(0x[0-9a-f]+ [^,]*, 0x[0-9a-f]+ \{Family: (AF_INET6?|AF_UNIX), Addr: ([^,}]+)(?:, Port: (\d+))?")
-_OPEN = re.compile(r" X open(?:at)?\((?:[^,]*, )?0x[0-9a-f]+ (.+?), (O_[A-Z_|0-9]+(?:\|0x[0-9a-f]+)*)")
+# gVisor prints openat's directory with the path it stands for — "AT_FDCWD /work/app", "0x3
+# /home/histor/.aws" — so a relative name is resolved from the trace itself, never guessed.
+_OPEN = re.compile(r" X (?:openat\((?:AT_FDCWD|0x[0-9a-f]+)(?: (/[^,]*))?, |open\()0x[0-9a-f]+ (.+?), (O_[A-Z_|0-9]+(?:\|0x[0-9a-f]+)*)")
 _SOCKET = re.compile(r" X socket\((AF_\w+), .*\) = (\d+) ")
 _SOCK_FD = re.compile(r" X (?:connect|sendto|sendmsg|sendmmsg)\((0x[0-9a-f]+) socket:\[(\d+)\]")
 _ADDRESS = re.compile(r"\{Family: (AF_\w+), Addr: ([^,}]*)(?:, Port: (\d+))?")
@@ -411,7 +417,7 @@ def _stamp(line: str, year: int) -> float | None:
 
 
 def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry: str, src_ip: str | None,
-               drop_pid1: bool = False) -> dict[str, Any]:
+               drop_pid1: bool = False, net: tuple[float, float] | None = None) -> dict[str, Any]:
     """Behaviour per phase from gVisor's own log of the container: written outside the sandbox.
 
     The entry exec chain is omitted, but PID 1 file/network activity remains evidence.
@@ -430,6 +436,12 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
     records = 0
     socket_families: dict[tuple[str, int], str] = {}
     socket_peers: dict[str, tuple[str, str, str | None]] = {}
+    # socketpair(2) is traced, but gVisor prints its result array as an address, not the two fds.
+    # A socket can leave the container only through a traced connect() or a send that names its
+    # destination, so a send that names none, on a socket socket() did not make and no connect()
+    # reached, is one end of an in-process pair — asyncio's self-pipe in every Python server.
+    pairs_made = False
+    dns_sent: set[str] = set()
     for log in logs:
         with log.open(encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -444,7 +456,9 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                     continue
                 records += 1
                 a = acts[phase]
-                if (m := _SOCKET.search(line)):
+                if " X socketpair(" in line:
+                    pairs_made = pairs_made or bool(re.search(r"\) = 0 ", line))
+                elif (m := _SOCKET.search(line)):
                     if pm:
                         socket_families[(pm.group(1), int(m.group(2)))] = m.group(1)
                 elif (m := _EXEC.search(line)):
@@ -463,6 +477,8 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                         addresses = [socket_peers[fd.group(2)]]
                     if not addresses and family == "AF_NETLINK":
                         continue  # kernel route/interface enumeration, never an external socket
+                    if not addresses and family is None and pairs_made and fd and " X connect(" not in line:
+                        continue  # one end of a socketpair: nothing leaves the container through it
                     if not addresses:
                         issues.add("socket-destination-unresolved")
                         a["network"].add(line.split(" X ", 1)[1].strip()[:200])
@@ -475,14 +491,19 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                         if family not in ("AF_INET", "AF_INET6"):
                             issues.add("socket-family-unparsed")
                             continue
-                        if (addr == OBSERVE_GATEWAY and port == "53") or addr.startswith(("127.", "0.0.0.0")) or addr in ("::1", "::"):
+                        if addr == OBSERVE_GATEWAY and port == "53":
+                            dns_sent.add(phase)
+                            continue
+                        if addr.startswith(("127.", "0.0.0.0")) or addr in ("::1", "::"):
                             continue
                         name = DNS.name_for(addr) if DNS else None
                         a["network"].add(f"{name or addr}:{port}")
                 elif (m := _OPEN.search(line)):
-                    path, flags = m.group(1).strip().strip('"'), m.group(2)
+                    base, path, flags = m.group(1), m.group(2).strip().strip('"'), m.group(3)
                     if not re.search(r"\) = (?:0x[0-9a-f]+|[0-9]+)(?: |$)", line):
                         continue  # failed opens are attempts, not opened credentials
+                    if not path.startswith("/") and base:
+                        path = os.path.join(base.strip(), path)
                     if not path.startswith("/"):
                         issues.add("relative-path-unresolved")
                         # Still flag known decoy names; never infer clean from an unresolved cwd/dirfd.
@@ -493,7 +514,10 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                     if (rel and rel.startswith(DECOYS)) or path == f"{APP_IN}/.env":
                         a["decoys"].add(rel or ".env (working directory)")
                     writing = any(f in flags for f in ("O_WRONLY", "O_RDWR", "O_CREAT"))
-                    if writing and ((rel and rel.startswith(PERSIST)) or not path.startswith(("/tmp", HOME_IN, "/work", "/dev/", "/proc/"))):
+                    # A path still relative here is unknown (and already makes the run incomplete),
+                    # not a write outside the sandbox: gvisor-trace/2 listed node-gyp's
+                    # buildcheck.gypi as persistence that way.
+                    if writing and path.startswith("/") and ((rel and rel.startswith(PERSIST)) or not path.startswith(("/tmp", HOME_IN, "/work", "/dev/", "/proc/"))):
                         a["writes"].add(path[:160])
                 elif any(f" X {call}(" in line for call in ("sendto", "sendmsg", "sendmmsg", "execveat", "unlinkat", "renameat", "mkdirat", "chdir", "fchdir")):
                     # Preserve unparsed activity without claiming successful or complete attribution.
@@ -504,11 +528,19 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
     for i, (name, since, until) in enumerate(phases):
         if DNS:
             # The last phase runs a little past its mark: the trace and the logger flush late.
-            lookups[name] = DNS.names(src_ip, since, until + (1 if i == len(phases) - 1 else 0))
+            # Names are matched by the container's address, which Docker gives to the next
+            # container once this one is gone: never before it started or after it was removed.
+            lo, hi = net if net else (since, until + 1)
+            lookups[name] = DNS.names(src_ip, max(since, lo), min(until + (1 if i == len(phases) - 1 else 0), hi))
     out: dict[str, Any] = {}
     for name, _, _ in phases:
         if any(len(v) > 40 for v in acts[name].values()) or len(lookups.get(name, [])) > 60:
             issues.add("trace-truncated")
+        if DNS and dns_sent and not any(lookups.values()):
+            # It asked the resolver and the logger has no name at all (phases compared together:
+            # a query at a phase's edge is logged a moment later): an answer that came too late,
+            # or a query lost. What it would have reached is unknown, so the run is not clean.
+            issues.add("dns-unrecorded")
         section = {k: sorted(v)[:40] for k, v in acts[name].items() if v}
         if lookups.get(name):
             section["lookups"] = lookups[name][:60]
@@ -839,6 +871,36 @@ def merge_sink(section: dict[str, Any], ip: str | None, since: float, until: flo
     section["complete"] = complete
 
 
+def container_started(cid: str | None) -> float | None:
+    """When the container actually started (Docker's State.StartedAt), as epoch seconds.
+
+    The traps and the DNS logger know a run only by its address on the internal network, and
+    Docker gives a freed address to the next container. A window that opened before `docker run`
+    once took in a red-team fixture's last request from the container that had the address a
+    moment earlier, and a real package was shown sending decoy data to an extra recipient."""
+    if not cid:
+        return None
+    try:
+        res = docker("inspect", "--format", "{{.State.StartedAt}}", cid, timeout=10)
+    except subprocess.TimeoutExpired:
+        return None
+    m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?Z", res.stdout.strip())
+    if res.returncode != 0 or not m:
+        return None
+    import calendar
+    return calendar.timegm(time.strptime(m.group(1), "%Y-%m-%dT%H:%M:%S")) + float("0" + (m.group(2) or "")[:7])
+
+
+def _attribution(started: float | None, fallback: float, sections: list[dict[str, Any]]) -> float:
+    """The earliest moment evidence can be this container's; without a start time, not clean."""
+    if started is None:
+        for section in sections:
+            section["complete"] = False
+            section["incompleteReasons"] = sorted({*section.get("incompleteReasons", []), "start-time-unknown"})
+        return fallback
+    return max(fallback, started)
+
+
 def container_ip(cidfile: Path, wait_s: float = 30) -> tuple[str | None, str | None]:
     """The run container's id and its address on the internal network, read while it runs."""
     deadline = time.monotonic() + wait_s
@@ -868,19 +930,21 @@ def run_scripts(work: Path, run_id: str, packages: list[str], image: str | None 
     since = time.time()
     proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES["npm"], "npm", "rebuild", "--foreground-scripts", "--no-audit", "--no-fund"],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    cid, ip = None, None
+    cid, ip, started = None, None, None
     timed_out = False
     try:
         cid, ip = container_ip(cidfile)
+        started = container_started(cid)  # while it exists: inspect knows nothing once it is removed
         proc.wait(timeout=SCRIPTS_TIMEOUT_S)
     except subprocess.TimeoutExpired:
         timed_out = True
     finally:
         docker("rm", "-f", f"histor-{run_id}-s", timeout=30)
         proc.wait(timeout=10)
-    until = time.time()
-    section = read_trace(cid, [("installScripts", since, until)], "npm", ip)["installScripts"] if cid else {"complete": False, "incompleteReasons": ["container-id-missing"]}
-    merge_sink(section, ip, since, until, run_id)
+    until = time.time()  # after `docker rm`: the address cannot be anyone else's before this
+    section = read_trace(cid, [("installScripts", since, until)], "npm", ip,
+                         net=(started or since, until))["installScripts"] if cid else {"complete": False, "incompleteReasons": ["container-id-missing"]}
+    merge_sink(section, ip, _attribution(started, since, [section]), until, run_id)
     return {"packages": packages, **section, "exitCode": proc.returncode, "timedOut": timed_out,
             "complete": section.get("complete") is True and not timed_out and proc.returncode == 0}
 
@@ -899,10 +963,11 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
     start, wall = time.monotonic(), time.time()
     proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES[registry], *entry],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    cid, ip = None, None
+    cid, ip, started = None, None, None
     marks: dict[str, Any] = {}
     try:
         cid, ip = container_ip(cidfile) if traced else (None, None)
+        started = container_started(cid)  # while it exists: inspect knows nothing once it is removed
         answer = talk(proc, start, run_id, traced, marks)
     finally:
         docker("rm", "-f", f"histor-{run_id}-r", timeout=30)
@@ -913,9 +978,11 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
     ended = time.time()
     if traced and cid:
         listed = marks.get("listed", ended)
-        answer["behaviour"] = read_trace(cid, [("startup", wall, listed), ("calls", listed, ended + 2)], entry[0], ip)
-        merge_sink(answer["behaviour"]["startup"], ip, wall, listed, run_id)
-        merge_sink(answer["behaviour"]["calls"], ip, listed, ended + 2, run_id)
+        answer["behaviour"] = read_trace(cid, [("startup", wall, listed), ("calls", listed, ended + 2)], entry[0], ip,
+                                         net=(started or wall, ended))
+        lo = _attribution(started, wall, [answer["behaviour"]["startup"], answer["behaviour"]["calls"]])
+        merge_sink(answer["behaviour"]["startup"], ip, lo, listed, run_id)
+        merge_sink(answer["behaviour"]["calls"], ip, listed, ended, run_id)
         calls = answer["behaviour"]["calls"]
         calls.update(marks.get("coverage", {"successful": 0, "skipped": len(answer.get("tools", []))}))
         calls["complete"] = calls.get("complete") is True and marks.get("callsComplete") is True
@@ -1097,7 +1164,7 @@ def observe(registry: str, name: str, version: str | None, env: list[str] | None
             "status": "no-entry-point", "detail": "the package declares no command to start" + ("" if registry == "npm" else ", and has no __main__ module")}
         behaviour = result.setdefault("behaviour", {})
         behaviour["installScripts"] = scripts
-        behaviour["observer"] = "gvisor-trace/2"
+        behaviour["observer"] = TRACE_OBSERVER
         behaviour["version"] = meta["version"]
         behaviour["integrity"] = meta.get("integrity")
         behaviour["complete"] = result.get("status") == "ok" and all(behaviour.get(p, {}).get("complete") is True for p in ("installScripts", "startup", "calls"))

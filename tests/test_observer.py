@@ -377,3 +377,87 @@ def test_a_package_without_a_command_or_main_is_tried_by_its_own_module(tmp_path
     (info / "RECORD").write_text(record)
     found = obs.pypi_entry(tmp_path, "store-mcp")
     assert (found[1] if found else None) == (f"python -m {expected}" if expected else None)
+
+
+def test_a_relative_open_is_resolved_from_the_directory_gvisor_prints(tmp_path, monkeypatch):
+    monkeypatch.setattr(obs, "TRACE_ROOT", tmp_path)
+    (tmp_path / "c").mkdir()
+    log = tmp_path / "c/runsc.log.fixture.boot.txt"
+    prefix = "I1010 12:00:00.000000 1 strace.go:607] [ 7: 7] python X "
+    log.write_text("\n".join(prefix + c for c in [
+        "openat(AT_FDCWD /work/app, 0x7ec666061870 ., O_RDONLY|O_CLOEXEC|O_DIRECTORY|O_NONBLOCK, 0o0) = 3 (0x3) (23µs)",
+        "openat(0x3 /home/histor/.aws, 0x7ec666061870 credentials, O_RDONLY|O_CLOEXEC, 0o0) = 4 (0x4) (9µs)",
+        "openat(AT_FDCWD /work/app, 0x7ec666061870 .env, O_RDONLY|O_CLOEXEC, 0o0) = 5 (0x5) (9µs)",
+    ]))
+    r = obs.read_trace("c", [("startup", 0, 9999999999)], "python", "1")["startup"]
+    assert r["complete"] and r["decoys"] == [".aws/credentials", ".env (working directory)"]
+    log.write_text(prefix + "openat(0x5, 0x7ec666061870 notes.txt, O_RDONLY, 0o0) = 6 (0x6) (9µs)")
+    r = obs.read_trace("c", [("startup", 0, 9999999999)], "python", "1")["startup"]
+    assert not r["complete"] and r["incompleteReasons"] == ["relative-path-unresolved"], "no printed directory: never clean"
+
+
+def _trace(tmp_path, monkeypatch, lines, pid="7"):
+    monkeypatch.setattr(obs, "TRACE_ROOT", tmp_path)
+    (tmp_path / "c").mkdir(exist_ok=True)
+    prefix = f"I1010 12:00:00.000000 1 strace.go:607] [ {pid}: {pid}] python X "
+    (tmp_path / "c/runsc.log.fixture.boot.txt").write_text("\n".join(prefix + line for line in lines))
+    return obs.read_trace("c", [("startup", 0, 9999999999)], "python", "1")["startup"]
+
+
+def test_asyncio_self_pipe_is_not_an_unresolved_destination(tmp_path, monkeypatch):
+    pair = "socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0x0, 0x7eab27a075d0) = 0 (0x0) (94µs)"
+    send = "sendto(0x5 socket:[2], 0x7ecb594aa650, 0x1, 0x0, null, 0x0) = 1 (0x1) (63µs)"
+    assert _trace(tmp_path, monkeypatch, [pair, send])["complete"]
+    r = _trace(tmp_path, monkeypatch, [send])
+    assert not r["complete"] and "socket-destination-unresolved" in r["incompleteReasons"], "no socketpair seen: never clean"
+    made = "socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_IP) = 5 (0x5) (9µs)"
+    r = _trace(tmp_path, monkeypatch, [pair, made, send])
+    assert not r["complete"], "a socket() socket with no traced peer stays unresolved, socketpair or not"
+    connected = "connect(0x6 socket:[3], 0xabc {Family: AF_INET, Addr: 203.0.113.9, Port: 443}, 0x10) = 0 (0x0) (9µs)"
+    later = "sendto(0x6 socket:[3], 0xabc, 0x10, 0x0, null, 0x0) = 16 (0x10) (9µs)"
+    assert _trace(tmp_path, monkeypatch, [pair, connected, later])["network"] == ["203.0.113.9:443"]
+
+
+def test_a_dns_query_the_logger_never_saw_is_not_clean(tmp_path, monkeypatch):
+    class Logger:
+        def __init__(self, names):
+            self._names = names
+
+        def names(self, src, since, until):
+            return self._names
+
+        def name_for(self, ip):
+            return None
+
+    query = "sendmmsg(0x3 socket:[3], 0xabc, 0x2, 0x4000) = 2 (0x2) (9µs)"
+    connect = "connect(0x3 socket:[3], 0xabc {Family: AF_INET, Addr: 10.231.0.1, Port: 53}, 0x10) = 0 (0x0) (9µs)"
+    monkeypatch.setattr(obs, "DNS", Logger([]))
+    r = _trace(tmp_path, monkeypatch, [connect, query])
+    assert not r["complete"] and r["incompleteReasons"] == ["dns-unrecorded"]
+    monkeypatch.setattr(obs, "DNS", Logger(["mail.momus-trap.invalid"]))
+    r = _trace(tmp_path, monkeypatch, [connect, query])
+    assert r["complete"] and r["lookups"] == ["mail.momus-trap.invalid"]
+
+
+def test_an_unresolved_relative_write_is_not_persistence(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, ["openat(0x9, 0x7e buildcheck.gypi, O_WRONLY|O_CREAT|O_TRUNC, 0o644) = 3 (0x3) (9µs)"])
+    assert not r.get("writes") and r["incompleteReasons"] == ["relative-path-unresolved"]
+    r = _trace(tmp_path, monkeypatch, ["openat(AT_FDCWD /home/histor, 0x7e .bashrc, O_WRONLY|O_APPEND, 0o644) = 3 (0x3) (9µs)"])
+    assert r["writes"] == ["/home/histor/.bashrc"]
+
+
+def test_a_containers_start_bounds_what_its_address_is_credited_with(monkeypatch):
+    monkeypatch.setattr(obs, "docker", lambda *a, **k: SimpleNamespace(returncode=0, stdout="2026-10-13T11:00:00.250000123Z\n", stderr=""))
+    assert abs(obs.container_started("c") - (1791889200 + 0.25)) < 1e-3
+    section = {"complete": True, "incompleteReasons": []}
+    assert obs._attribution(None, 5.0, [section]) == 5.0 and not section["complete"]
+    assert section["incompleteReasons"] == ["start-time-unknown"]
+    assert obs._attribution(10.0, 5.0, []) == 10.0
+
+
+def test_the_start_is_read_while_the_container_exists():
+    src = (Path(__file__).parents[1] / "sandbox/histor_observe.py").read_text(encoding="utf-8")
+    for stage in ('def run_scripts', 'def run('):
+        body = src[src.index(stage):]
+        body = body[:body.index("\ndef ", 10)]
+        assert body.index("container_started(cid)") < body.index('docker("rm", "-f"'), stage

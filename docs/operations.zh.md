@@ -225,4 +225,6 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
    每台主机一行：编号、地址、槽位、观察程序、`gvisor`、`trace`、`observeNetwork`、`ok`。只要有一台主机未就绪——不可达、指纹或令牌不符、观察程序版本不同——退出码就不为零。令牌从不打印。
 9. **关注第一次抓取。** `/api/v1/stats` 显示 `crawl.sandboxHosts`（已配置的主机数），抓取结束后显示 `lastRun.sandboxHosts`：按主机编号列出各自观察了多少个软件包、失败了多少次。在沙箱主机上：`journalctl -u histor-sandbox`。
 
+**立即重新观察单个目标：** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server`（一个或多个地址或目标 id）。它走与抓取相同的路径——沙箱或 MCP 客户端、WARDEN、提交、标签链、安全事件——并把观察结果挂到正在进行的抓取上，否则挂到最近一次抓取上，这样只含一个目标的抓取不会成为公开的“最近一次抓取”。软件包会得到其记录所示它曾要求的内容（占位值、启动参数、运行时）。用于立即替换一条现在错误的记录，而不必等抓取轮到它；旧的观察结果仍留在历史中。
+
 **观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。

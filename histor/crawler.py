@@ -24,6 +24,7 @@ continuity label would say "definitions changed" about definitions that did not.
 from __future__ import annotations
 
 import json
+import re
 import logging
 import threading
 import time
@@ -123,6 +124,32 @@ SETTLED = frozenset({"exited", "no-entry-point", "no-wheel", "not-found", "proto
 # package requires, ``python -m``, the mcp-named command, a passwd entry, a writable package):
 # run again ahead of the never-observed queue, with at least half of what is left of a crawl.
 RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", "protocol"})
+# The sandbox's trace reader (behaviour.observer). gvisor-trace/2 listed the byte asyncio writes
+# to its own socketpair as a send it could not place, which read as "reached out at startup" for
+# nearly every Python server; a package it left with such sends is traced again, once.
+TRACE_OBSERVER = "gvisor-trace/5"
+UNPLACED_SEND = ("sendto(", "sendmsg(", "sendmmsg(")
+# Evidence that cannot be this run's: another run's canary recipient, or a name only MOMUS's
+# red-team fixtures use. gvisor-trace/3 and older matched trap records by address from before
+# the container started, and once took in the previous holder's requests.
+FOREIGN_CANARY = re.compile(r"^canary-[0-9a-f]{12}@histor-trap\.invalid$")
+
+
+def _unplaced_sends(behaviour: Any) -> bool:
+    """An older reader's trace that holds what gvisor-trace/3 reads differently: a send it could
+    not place (asyncio's self-pipe), or a write it could not resolve — a relative path it
+    counted as outside the sandbox, which WARDEN shows as persistence (node-gyp's
+    buildcheck.gypi, a package's own cache)."""
+    if not isinstance(behaviour, dict) or behaviour.get("observer") == TRACE_OBSERVER:
+        return False
+    phases = [behaviour[p] for p in ("installScripts", "startup", "calls") if isinstance(behaviour.get(p), dict)]
+    return (any(isinstance(e, str) and e.startswith(UNPLACED_SEND) for ph in phases for e in ph.get("network") or [])
+            or any(isinstance(e, str) and not e.startswith("/") for ph in phases for e in ph.get("writes") or [])
+            or any(isinstance(e, str) and FOREIGN_CANARY.match(e) for ph in phases for e in ph.get("unexpectedRecipients") or [])
+            # gvisor-trace/4 read the container's start after removing it, so every run said so.
+            or any("start-time-unknown" in (ph.get("incompleteReasons") or []) for ph in phases)
+            or any(isinstance(e, str) and "momus-trap.invalid" in e for ph in phases
+                   for e in [*(ph.get("lookups") or []), *(str(r.get("destination")) for r in ph.get("requests") or [] if isinstance(r, dict))]))
 # A PyPI server written for MCP SDK 1.x crashes on import once pip resolves mcp 2.x. Its status
 # stays what a fresh install gets; a second run with this pin shows what it was before 2.0, kept
 # beside the record (``legacy``) and never in the label chain.
@@ -342,6 +369,77 @@ class Crawler:
             # Only after a successful harvest: a registry outage must not delist everything.
             tx.execute("UPDATE targets SET delisted=1 WHERE last_listed < ?", (now,))
 
+    def reobserve(self, keys: list[str]) -> list[dict[str, Any]]:
+        """Observe the named targets again now (``histor reobserve``), by endpoint or target id,
+        through the path a crawl takes: the sandbox (or the MCP client), WARDEN, the commit, the
+        label chain and a security event. Nothing is edited by hand, and the old observation
+        stays in the history beneath the new one.
+
+        It belongs to the crawl in progress, or else to the last one: a run row of its own would
+        become the public "last run" with one target in it. A package is given what its record
+        says it asked for (placeholders, start argument, runtime); its registry entry is not
+        re-read. Written after a red-team request was credited to a real package on 2026-10-13
+        and the only fix to hand was waiting for a crawl to reach it."""
+        rows: list[dict[str, Any]] = []
+        for key in keys:
+            found = self.store.targets_by(endpoint=key) or [r for r in [self.store.target(key)] if r]
+            if not found:
+                raise KeyError(f"no target with endpoint or id {key!r}")
+            rows.extend(r for r in found if r["id"] not in {x["id"] for x in rows})
+        run = self.store.last_run(finished_only=False)
+        if run is None:
+            raise RuntimeError("no crawl has run yet: there is no run to attach an observation to")
+        targets = [Target(id=r["id"], name=r["name"], endpoint=r["endpoint"], transport=r["transport"],
+                          registry=r["registry"], title=r.get("title"), description=r.get("description"),
+                          version=r.get("version"), repository=r.get("repository"), website=r.get("website"),
+                          skip_reason=None) for r in rows]
+        before = {r["id"]: (r.get("last_status"), r.get("last_attempt")) for r in rows}
+        rulesets = self.scanner.rulesets()
+        sets = self._register_rulesets(rulesets)
+        tally = _Tally(0)
+        self._endpoints_done = self._lane_done = 0
+        packages = [t for t in targets if parse_package(t.endpoint)]
+        endpoints = [t for t in targets if not parse_package(t.endpoint)]
+        if packages:
+            if self.packages is None:
+                raise RuntimeError("no package sandbox is configured")
+            states = self.store.package_states()
+            self._due_versions, self._due_config, self._due_legacy, self._seen_versions = {}, {}, set(), {}
+            for t in packages:
+                registry, name = parse_package(t.endpoint) or ("", "")
+                self._due_versions[t.id] = self.packages.latest_version(registry, name)
+                state = states.get(t.id) or {}
+                signals = state.get("package_signals") or {}
+                if isinstance(signals, str):
+                    try:
+                        signals = json.loads(signals)
+                    except ValueError:
+                        signals = {}
+                plan = _config_for(t, signals if isinstance(signals, dict) else {})
+                if plan:
+                    self._due_config[t.id] = plan
+                if state.get("package_version"):
+                    self._seen_versions[t.id] = state["package_version"]
+            self._package_lane(packages, int(run["id"]), rulesets, sets, tally, len(packages))
+        if endpoints:
+            prepared = self._observe(endpoints)
+            scans, scan_failed = self._scan(prepared, sets)
+            for item in prepared:
+                self._settle(item, int(run["id"]), rulesets, scans, scan_failed, sets, {}, tally)
+        out = []
+        for t in targets:
+            after = self.store.target(t.id) or {}
+            signals = after.get("package_signals")
+            try:
+                behaviour = (json.loads(signals) if isinstance(signals, str) else signals or {}).get("behaviour") or {}
+            except ValueError:
+                behaviour = {}
+            out.append({"endpoint": t.endpoint, "id": t.id, "run": int(run["id"]),
+                        "before": {"status": before[t.id][0], "at": before[t.id][1]},
+                        "after": {"status": after.get("last_status"), "at": after.get("last_attempt"),
+                                  "tracer": behaviour.get("observer")}})
+        return out
+
     def _register_rulesets(self, rulesets: RuleSets) -> str:
         """Publish both sets by digest; return the pair every target's scan labels are compared with."""
         with self.store.db.transaction() as tx:
@@ -393,7 +491,7 @@ class Crawler:
         configured: list[tuple[Target, str]] = []
         seen_by_id: dict[str, str] = {}
         config: dict[str, dict[str, list[str]]] = {}
-        unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = 0
+        unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = retraced = 0
         current = self.settings.sandbox_observer
         # An ok, complete observation by an observer listed here stands: what changed since is how a
         # failing package is started, not what a running one reports.
@@ -427,6 +525,10 @@ class Crawler:
                 if reason:
                     signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
+            if seen == version and state.get("last_status") == "ok" and _unplaced_sends(signals.get("behaviour")):
+                retraced += 1
+                renewed.append((t, version))
+                continue
             if seen == version and state.get("last_status") == "ok" and complete and observer in still_valid:
                 unchanged += 1
                 continue
@@ -502,7 +604,7 @@ class Crawler:
         stats["packages"] = {"dialable": len(targets), "due": len(due), "newVersions": len(updates),
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
-                             "renewed": len(renewed), "renewable": renewable,
+                             "renewed": len(renewed), "renewable": renewable, "retraced": retraced,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
                              "versionsAsked": len(known) + looked_up,
                              "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}

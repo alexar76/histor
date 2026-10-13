@@ -52,7 +52,7 @@ class Collector:
         self.lock = threading.Lock()
         self.lost_at = 0.0
 
-    def record(self, source, protocol, destination, body=b"", *, recipient_list=None, complete=True):
+    def record(self, source, protocol, destination, body=b"", *, recipient_list=None, complete=True, opened=None):
         if len(body) > LIMIT:
             complete = False
         payload = body[:LIMIT]
@@ -64,8 +64,12 @@ class Collector:
         if len(recipient_list) > 40:
             complete = False
         recipient_list = [str(value)[:320] for value in recipient_list[:40]]
+        now = time.time()
         record = {
-            "at": time.time(),
+            "at": now,
+            # When the connection was accepted: its sender was alive then. A record is finished a
+            # moment later, possibly after that container is gone and its address reused.
+            "opened": opened if opened is not None else now,
             "source": source,
             "protocol": protocol,
             "destination": str(destination)[:300],
@@ -88,13 +92,13 @@ class Collector:
         if not source:
             return {"complete": False, "incompleteReasons": ["sink-source-missing"]}
         with self.lock:
-            rows = [dict(r) for r in self.records if r["source"] == source and since <= r["at"] <= until]
+            rows = [dict(r) for r in self.records if r["source"] == source and since <= r.get("opened", r["at"]) <= until]
             lost = self.lost_at > 0 and self.lost_at >= since
         expected = f"canary-{tag}@histor-trap.invalid"
         unexpected = sorted({r for row in rows for r in row["recipients"] if r.lower() != expected})
         return {
             "complete": not lost and all(r["complete"] for r in rows),
-            "requests": [{k: v for k, v in row.items() if k not in ("source", "at")} for row in rows[:100]],
+            "requests": [{k: v for k, v in row.items() if k not in ("source", "at", "opened")} for row in rows[:100]],
             "unexpectedRecipients": unexpected[:40],
             "decoyTransmitted": any(r["decoyTransmitted"] for r in rows),
             "envKeyDestinations": sorted({row["destination"] for row in rows if row.get("envKeySent")})[:20],
@@ -130,6 +134,7 @@ class HTTPTrap(LimitedThreads, ThreadingHTTPServer):
 
 class HTTPHandler(BaseHTTPRequestHandler):
     def setup(self):
+        self.opened = time.time()
         self.request.settimeout(5)
         super().setup()
 
@@ -137,7 +142,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
         pass
 
     def send_error(self, code, message=None, explain=None):
-        self.server.collector.record(self.client_address[0], "http", "unsupported-request", complete=False)
+        self.server.collector.record(self.client_address[0], "http", "unsupported-request", complete=False,
+                                     opened=getattr(self, "opened", None))
         super().send_error(code, message, explain)
 
     def do_request(self):
@@ -154,6 +160,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.headers.get("Host", "") + self.path,
             body,
             complete=complete,
+            opened=getattr(self, "opened", None),
         )
         # Common Postmark success shape; other protocols are never represented as real provider service.
         response = (
@@ -176,6 +183,7 @@ class SMTPTrap(LimitedThreads, socketserver.ThreadingTCPServer):
 
 class SMTPHandler(socketserver.StreamRequestHandler):
     def handle(self):
+        opened = time.time()
         self.connection.settimeout(5)
         rcpts, data = [], b""
         self.wfile.write(b"220 histor synthetic SMTP\r\n")
@@ -202,7 +210,8 @@ class SMTPHandler(socketserver.StreamRequestHandler):
                         if not line or len(data) > LIMIT:
                             break
                     self.server.collector.record(
-                        self.client_address[0], "smtp", "smtp", data, recipient_list=rcpts, complete=complete
+                        self.client_address[0], "smtp", "smtp", data, recipient_list=rcpts, complete=complete,
+                        opened=opened,
                     )
                     self.wfile.write(b"250 queued synthetically\r\n")
                     rcpts, data = [], b""
@@ -213,11 +222,11 @@ class SMTPHandler(socketserver.StreamRequestHandler):
                     self.wfile.write(b"250 OK\r\n")
                 else:
                     self.server.collector.record(
-                        self.client_address[0], "smtp", "unsupported-command", complete=False
+                        self.client_address[0], "smtp", "unsupported-command", complete=False, opened=opened
                     )
                     self.wfile.write(b"502 unsupported\r\n")
         except OSError:
-            self.server.collector.record(self.client_address[0], "smtp", "incomplete", complete=False)
+            self.server.collector.record(self.client_address[0], "smtp", "incomplete", complete=False, opened=opened)
 
 
 class Certificates:
