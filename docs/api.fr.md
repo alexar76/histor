@@ -28,7 +28,7 @@ flowchart LR
 | Méthode | Chemin | Renvoie |
 |---|---|---|
 | GET | `/api/v1/servers?q=&state=&limit=&offset=` | des points de terminaison (endpoints) ; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` ; `q` cherche dans le nom, le point de terminaison et le titre |
-| GET | `/api/v1/servers/<id>` | un point de terminaison : ensemble d’outils actuel, correspondances WARDEN avec leurs positions, étiquettes, chronologie condensée, changements, signalements de clients sur 30 jours |
+| GET | `/api/v1/servers/<id>` | un point de terminaison : ensemble d’outils actuel, correspondances WARDEN avec leurs positions, étiquettes, chronologie condensée, changements, signalements de clients sur 30 jours, ensembles que déclare l’éditeur (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | badge pour README : `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` est formé des 16 premiers caractères hexadécimaux de `sha256(name + "\n" + endpoint)` —
@@ -123,11 +123,37 @@ décompte du jour pour cette empreinte n’est stocké.
 
 Pour un serveur stdio (un paquet npm ou PyPI que votre client lance), envoyez `package` — `npm:<nom>` ou `pypi:<nom>` — au lieu d’`endpoint` ; les noms PyPI sont normalisés pour vous. `target.packageVersion` est la dernière version qu’HISTOR a observée dans son [bac à sable des paquets](operations.fr.md#bac-à-sable-des-paquets). Un nom de paquet n’est jamais compté comme hôte inconnu. Deux réponses de plus pour un paquet. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), pour tout paquet demandé, listé ou non, nomme le paquet populaire auquel ce nom ressemble — à un caractère près, le même nom sous un autre scope, ou d’autres séparateurs — quand celui-ci est téléchargé au moins 100 fois plus ; les noms génériques comme `mcp-server` ne sont à personne. `target.packageSignals` est ce que dit le registre de la version qu’HISTOR a observée : `provenance` (une compilation attestée en CI), `publisher` (jamais un e-mail), `installScripts`, et `flags` pour ce qui a changé depuis la version observée avant : `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — les marques d’un jeton de publication volé.
 
+`declared` apparaît quand l’ensemble envoyé est un ensemble que l’éditeur du serveur déclare dans son entrée du registre (section suivante) : `toolSetDigest`, `toolCount`, `when` (la condition de l’éditeur, dans ses mots), `registryVersion`, `firstDeclared`, `lastDeclared`. `match` dit toujours ce qu’HISTOR a observé : un ensemble déclaré qu’HISTOR n’a jamais vu reste `different`, ou `not-observed` quand HISTOR n’a aucun ensemble, et la note ajoute que l’éditeur le déclare.
+
+## Déclarer des ensembles d’outils (éditeurs)
+
+Un serveur peut lister des outils différents sur des machines différentes. Un lanceur passe stdio à un programme installé à côté et, là où le programme manque (comme dans le bac à sable d’HISTOR), ne liste qu’un outil « installez-moi » ; une vraie clé peut débloquer des outils qu’une valeur factice ne débloque pas. HISTOR enregistre ce qu’il observe. Un éditeur qui connaît les autres ensembles peut les nommer dans le `server.json` qu’il publie au registre MCP officiel, dans le champ que le registre conserve pour les registres en aval :
+
+```json
+"_meta": {
+  "io.modelcontextprotocol.registry/publisher-provided": {
+    "dev.modelmarket.histor/tool-sets": {
+      "mtl": "1",
+      "sets": [
+        { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
+      ]
+    }
+  }
+}
+```
+
+- `digest` (obligatoire) : le condensé MTL/1 du résultat de `tools/list`. Sur une machine qui reçoit cet ensemble, `npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` l’affiche.
+- `count` (facultatif) : le nombre d’outils, pour l’affichage.
+- `when` (facultatif, 200 caractères au plus) : la condition, dans vos mots, affichée comme la vôtre. Les caractères de contrôle et invisibles sont supprimés.
+- 8 ensembles au plus. Une entrée qui enfreint ces règles est ignorée, et le passage dit pourquoi (`lastRun.declaredToolSets.ignored` dans `/api/v1/stats`).
+
+HISTOR lit la déclaration à chaque passage quotidien dans la dernière entrée du serveur au registre et l’applique à chaque endpoint et paquet de ce serveur. Il garde le premier et le dernier jour où il a lu chaque ensemble ; un ensemble que l’entrée cesse de nommer est marqué retiré, pas supprimé. Une déclaration est la parole de l’éditeur : le registre garantit qu’elle vient de qui contrôle l’espace de noms du serveur, et HISTOR ne la compte jamais comme une observation, n’émet aucun label à son sujet et ne voit jamais les outils derrière. WARDEN signale un ensemble déclaré comme `HISTOR_DECLARED_TOOLSET` (low ; info quand HISTOR n’a pas d’ensemble à lui) au lieu de `HISTOR_UNSEEN_TOOLSET`, et applique toujours toutes ses propres vérifications aux outils.
+
 ## Statistiques et badges en direct
 
 | Chemin | Renvoie |
 |---|---|
-| `/api/v1/stats` | la dernière exploration (crawl) — taille du registre, ce qu’ont répondu les points de terminaison, ce qui n’a pas été contacté, étiquettes émises —, les décomptes actuels, les changements des dernières 24 h / 7 j / 30 j, la taille du journal, les signalements de clients sur 7 j |
+| `/api/v1/stats` | la dernière exploration (crawl) — taille du registre, ce qu’ont répondu les points de terminaison, ce qui n’a pas été contacté, étiquettes émises —, les décomptes actuels, les changements des dernières 24 h / 7 j / 30 j, la taille du journal, les signalements de clients sur 7 j ; `lastRun.declaredToolSets` : serveurs qui déclarent des ensembles d’outils, et entrées ignorées avec la raison |
 | `/api/v1/stats/hosts?limit=` | points de terminaison par hôte, parmi ceux contactés |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | JSON au format [endpoint de shields.io](https://shields.io/badges/endpoint-badge) pour les badges de README |
 | `/health` | vivacité, backend de stockage, taille de l’arbre, exploration en cours ou non, dernière erreur d’exploration |

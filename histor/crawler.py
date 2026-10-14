@@ -269,7 +269,9 @@ class Crawler:
             stats["curated_endpoints"] = sum(1 for t in curated if not is_package(t))
             stats["curated_packages"] = sum(1 for t in curated if is_package(t))
             stats["not_attempted"] = dict(Counter(t.skip_reason for t in targets if t.skip_reason))
-            self._sync_targets(targets, started)
+            declared = self._sync_targets(targets, started)
+            if declared["servers"] or declared["withdrawn"] or declared.get("ignored"):
+                stats["declared_tool_sets"] = declared
 
             rulesets = self.scanner.rulesets()
             sets = self._register_rulesets(rulesets)
@@ -352,7 +354,7 @@ class Crawler:
             self.store.db.maintenance()
         return stats
 
-    def _sync_targets(self, targets: list[Target], now: str) -> None:
+    def _sync_targets(self, targets: list[Target], now: str) -> dict[str, Any]:
         with self.store.db.transaction() as tx:
             for t in targets:
                 tx.execute(
@@ -368,6 +370,8 @@ class Crawler:
                 )
             # Only after a successful harvest: a registry outage must not delist everything.
             tx.execute("UPDATE targets SET delisted=1 WHERE last_listed < ?", (now,))
+            # Curated targets have no registry entry, so nothing of theirs is declared.
+            return Store.sync_declarations(tx, [t for t in targets if t.registry != REGISTRY_CURATED], now)
 
     def reobserve(self, keys: list[str]) -> list[dict[str, Any]]:
         """Observe the named targets again now (``histor reobserve``), by endpoint or target id,
@@ -528,10 +532,12 @@ class Crawler:
                 if reason:
                     signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
-            if seen == version and state.get("last_status") == "ok" and _unplaced_sends(signals.get("behaviour")):
+            if seen == version and _unplaced_sends(signals.get("behaviour")):
                 # Traced again with what started it the last time (a placeholder key, a start
                 # argument): without it a server that needs a key exits, and a page that was right
-                # about its tools turns into a failure.
+                # about its tools turns into a failure. Whatever the run's status: a package that
+                # times out or exits still shows what it did before, and until 10-14 only "ok" pages
+                # were re-read — 31 failing ones kept 170 sends gvisor-trace/2 could not place.
                 plan = _config_for(t, signals)
                 if plan:
                     config[t.id] = plan

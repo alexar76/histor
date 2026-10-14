@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge
 from histor.check import MAX_MATCHES, CheckError
+from histor.declared import public as declared_public
 from histor.labels import SHORT
 from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
@@ -372,6 +373,8 @@ def create_app(services: Services) -> FastAPI:
                 "labelsIssued": s.get("labels_issued", {}),
                 "changes": s.get("changes"),
                 "sandboxHosts": s.get("sandbox_hosts"),
+                # Servers whose registry entry declares tool sets, and entries skipped with the reason.
+                "declaredToolSets": s.get("declared_tool_sets"),
                 "error": s.get("error"),
             }
         return out
@@ -461,6 +464,8 @@ def create_app(services: Services) -> FastAPI:
             "timeline": list(reversed(runs))[:100],
             "changes": store.changes(limit=20, target_id=target_id),
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
+            # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
+            "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
         }
         if t["transport"] == "stdio":
             try:

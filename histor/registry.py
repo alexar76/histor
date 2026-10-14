@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from histor.declared import declared_tool_sets
 from histor.exit_reasons import declared_needs
 from histor.mcpclient import USER_AGENT
 from histor.packages import REGISTRIES, package_key, parse_package
@@ -51,6 +52,9 @@ class Target:
     skip_reason: str | None  # set when HISTOR will not dial this endpoint
     # A package's registry entry: the variables and start arguments it says it needs (names only).
     needs: dict[str, list[str]] | None = field(default=None, compare=False)
+    # Tool sets the publisher declares in its server.json (histor.declared), and why any entry was not taken.
+    declared: tuple[dict[str, Any], ...] = field(default=(), compare=False)
+    declared_ignored: tuple[str, ...] = field(default=(), compare=False)
 
 
 def target_id(name: str, endpoint: str) -> str:
@@ -123,6 +127,8 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
     for name, (srv, _meta) in sorted(latest.items()):
         remotes = [r for r in (srv.get("remotes") or []) if isinstance(r, dict) and isinstance(r.get("url"), str)]
         repo = srv.get("repository") if isinstance(srv.get("repository"), dict) else {}
+        sets, ignored = declared_tool_sets(srv)
+        declared = {"declared": tuple(sets), "declared_ignored": tuple(ignored)}
         for remote in remotes[:MAX_REMOTES_PER_SERVER]:
             url = clean_text(remote["url"].strip(), 2000)
             transport = clean_text(remote.get("type") or "", 40)
@@ -148,6 +154,7 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
                 repository=_str(repo.get("url"), 500),
                 website=_str(srv.get("websiteUrl"), 500),
                 skip_reason=skip,
+                **declared,
             ))
         kinds: set[str] = set()
         for pkg in srv.get("packages") or []:
@@ -189,6 +196,7 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
                 website=_str(srv.get("websiteUrl"), 500),
                 skip_reason=skip,
                 needs=declared_needs(pkg) or None,
+                **declared,
             ))
     return out
 

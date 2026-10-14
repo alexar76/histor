@@ -571,6 +571,17 @@ async function serverView(id, done) {
       root.append(el("p", { class: "mono" }, el("span", { class: same ? "ok-t" : "warn-t", text: same ? t("js_same") : t("js_different") }), ` · ${short(r.toolset, 20)} · ${t("js_reports", { n: r.reports })} · ${r.first_day}…${r.last_day}`));
     }
   }
+  if (data.declaredToolSets?.length) {
+    // The publisher's word from its registry entry, shown as such: the condition is its text, not ours.
+    root.append(el("h3", { class: "block-h", text: t("js_h_declared") }), el("p", { class: "faint", text: t("js_declared_note") }));
+    for (const d of data.declaredToolSets) {
+      const seen = d.toolSetDigest === s.toolSetDigest;
+      const state = d.withdrawn ? t("js_declared_withdrawn", { at: fmt(d.withdrawn) }) : seen ? t("js_declared_observed") : t("js_declared_unobserved");
+      root.append(el("p", { class: "mono" }, el("span", { class: d.withdrawn ? "faint" : seen ? "ok-t" : "", text: state }),
+        ` · ${short(d.toolSetDigest, 20)}`, d.toolCount != null ? ` · ${t("js_declared_tools", { n: d.toolCount })}` : "",
+        ...(d.when ? [" · «", ...visible(d.when).nodes, "»"] : []), ` · ${fmt(d.firstDeclared)}…${fmt(d.lastDeclared)}`));
+    }
+  }
   root.append(el("h3", { class: "block-h", text: t("js_h_timeline") }));
   const tl = el("div", { class: "timeline" });
   for (const r of data.timeline) {

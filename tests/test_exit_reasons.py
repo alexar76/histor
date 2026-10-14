@@ -533,3 +533,30 @@ def test_a_wrong_old_record_is_traced_again_first_and_with_what_started_it(world
     assert [r[1] for r in fake.runs] == ["keyed"], "the wrong record goes before every new package"
     assert fake.configs == [{"env": ["HASDATA_API_KEY"]}], "and with the key that started it"
     assert stats["packages"]["retraced"] == 1 and s.store.target(keyed.id)["last_status"] == "ok"
+
+
+def test_a_failing_package_an_older_reader_left_with_unplaced_sends_is_traced_again(world):
+    s = world["services"]
+    fake = KeyedPackages()
+
+    def observe(registry, name, version, **config):
+        version = version or fake.latest.get(f"{registry}:{name}")
+        fake.runs.append((registry, name, version))
+        return Observation(status="timeout", detail="no answer to initialize", package_version=version, package_observer="4")
+
+    fake.observe = observe
+    s.crawler.packages = fake
+    slow = package_target()
+    world["targets"].append(slow)
+    fake.latest["npm:@a/mem"] = "1.0.0"
+    s.crawler.run()
+    signals = json.loads(s.store.target(slow.id)["package_signals"])
+    signals["behaviour"] = {"observer": "gvisor-trace/2", "complete": False,
+                            "startup": {"network": ["sendto(0x5 socket:[2], 0x7e, 0x1, 0x0, null, 0x0) = 1 (0x1)"]}}
+    with s.store.db.transaction() as tx:
+        tx.execute("UPDATE targets SET package_signals=? WHERE id=?", (json.dumps(signals), slow.id))
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    assert len(fake.runs) == 2 and stats["packages"]["retraced"] == 1, "a timeout keeps no wrong evidence either"
+    assert s.store.target(slow.id)["last_status"] == "timeout"
+

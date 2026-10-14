@@ -330,6 +330,13 @@ def test_a_crawl_runs_a_version_once_and_a_new_version_that_changes_the_tools_is
     ]
     assert answer["query"]["package"] == "npm:@a/mem"
 
+    # A set the sandbox never got, e.g. a launcher's on a machine where its program is installed.
+    unseen = "sha256-" + "A" * 43 + "="
+    answer = s.checker.check({"package": "npm:@a/mem", "toolSetDigest": unseen}, allow_scan=False)
+    assert answer["match"] == "different"
+    assert "what your machine has and HISTOR's sandbox has not" in answer["note"]
+    assert "at this endpoint" not in answer["note"]
+
 
 def test_a_sandbox_failure_is_ours_and_issues_no_label_about_the_package(world):
     s = world["services"]

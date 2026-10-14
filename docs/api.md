@@ -28,7 +28,7 @@ flowchart LR
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved`; `q` matches name, endpoint, title |
-| GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports |
+| GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | README badge: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
@@ -119,11 +119,37 @@ refused. With `contribute`, nothing but the day's count for that digest is store
 
 For a stdio server (an npm or PyPI package your client starts), send `package` — `npm:<name>` or `pypi:<name>` — instead of `endpoint`; PyPI names are normalised for you. `target.packageVersion` is the version HISTOR last observed in its [package sandbox](operations.md#package-sandbox). A package name is never counted as an unlisted host. Two more answers for a package. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), for any package asked about, listed or not, names the popular package this one is named like — one character away, the same name under another scope, or other separators — when that one is downloaded at least 100 times more; generic names such as `mcp-server` are nobody's to imitate. `target.packageSignals` is what the registry says about the version HISTOR observed: `provenance` (an attested CI build), `publisher` (never an email), `installScripts`, and `flags` for what changed since the version observed before it — `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — the marks of a stolen publishing token.
 
+`declared` appears when the set you sent is one the server's publisher declares in its registry entry (next section): `toolSetDigest`, `toolCount`, `when` (the publisher's condition, in its words), `registryVersion`, `firstDeclared`, `lastDeclared`. `match` still says what HISTOR observed: a declared set HISTOR never saw stays `different`, or `not-observed` when HISTOR holds no set at all, and the note adds that the publisher declares it.
+
+## Declaring tool sets (publishers)
+
+A server can list different tools on different machines. A launcher hands stdio to a program installed next to it and, where the program is missing (as in HISTOR's sandbox), lists only an "install me" tool; a real key can unlock tools a placeholder does not. HISTOR records what it observes. A publisher who knows the other sets can name them in the `server.json` it publishes to the official MCP registry, in the field the registry keeps for downstream registries:
+
+```json
+"_meta": {
+  "io.modelcontextprotocol.registry/publisher-provided": {
+    "dev.modelmarket.histor/tool-sets": {
+      "mtl": "1",
+      "sets": [
+        { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
+      ]
+    }
+  }
+}
+```
+
+- `digest` (required): the MTL/1 digest of the `tools/list` result. On a machine that gets that set, `npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` prints it.
+- `count` (optional): the number of tools, for display.
+- `when` (optional, at most 200 characters): the condition, in your words, shown as yours. Control and invisible characters are dropped.
+- At most 8 sets. An entry that breaks these rules is skipped, and the crawl says why (`lastRun.declaredToolSets.ignored` in `/api/v1/stats`).
+
+HISTOR reads the declaration at each daily crawl from the server's latest registry entry and applies it to every endpoint and package of that server. It keeps the first and the last day it read each set; a set the entry stops naming is marked withdrawn, not deleted. A declaration is the publisher's word: the registry vouches that it comes from whoever controls the server's namespace, and HISTOR never counts it as an observation, issues no label about it and never sees the tools behind it. WARDEN reports a declared set as `HISTOR_DECLARED_TOOLSET` (low; info when HISTOR has no set of its own) instead of `HISTOR_UNSEEN_TOOLSET`, and still runs every one of its own checks on the tools.
+
 ## Stats and live badges
 
 | Path | Returns |
 |---|---|
-| `/api/v1/stats` | the last crawl (registry size, what the endpoints answered, what was not dialled, labels issued), current counts, changes in the last 24 h / 7 d / 30 d, log size, client reports in 7 d |
+| `/api/v1/stats` | the last crawl (registry size, what the endpoints answered, what was not dialled, labels issued), current counts, changes in the last 24 h / 7 d / 30 d, log size, client reports in 7 d; `lastRun.declaredToolSets`: servers that declare tool sets, and entries skipped with the reason |
 | `/api/v1/stats/hosts?limit=` | endpoints per host among dialled ones |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | [shields.io endpoint](https://shields.io/badges/endpoint-badge) JSON for README badges |
 | `/health` | liveness, store backend, tree size, whether a crawl is running, last crawl error |

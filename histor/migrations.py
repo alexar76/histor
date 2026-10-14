@@ -297,6 +297,24 @@ MIGRATION_008: Statements = {backend: (
     "CREATE TABLE webhook_cursors (id TEXT PRIMARY KEY, url_digest TEXT NOT NULL, cursor BIGINT NOT NULL, attempts INTEGER NOT NULL, next_attempt DOUBLE PRECISION NOT NULL, lease_until DOUBLE PRECISION NOT NULL, lease_token TEXT)",
 ) for backend, identity in _IDENTITY.items()}
 
+# Tool sets a publisher declares in its registry entry (histor.declared): its word, kept apart from
+# what HISTOR observed. One row per (target, digest); a set the entry stops naming is marked withdrawn.
+MIGRATION_009: tuple[str, ...] = (
+    """
+    CREATE TABLE declared_toolsets (
+        target_id TEXT NOT NULL,
+        toolset TEXT NOT NULL,
+        tool_count INTEGER,
+        when_text TEXT,
+        registry_version TEXT,
+        first_declared TEXT NOT NULL,
+        last_declared TEXT NOT NULL,
+        withdrawn_at TEXT,
+        PRIMARY KEY (target_id, toolset)
+    )
+    """,
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -307,6 +325,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (6, "006_package_version", MIGRATION_006),
     (7, "007_package_signals", MIGRATION_007),
     (8, "008_security_events", MIGRATION_008),
+    (9, "009_declared_toolsets", MIGRATION_009),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

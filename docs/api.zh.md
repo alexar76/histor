@@ -28,7 +28,7 @@ flowchart LR
 | 方法 | 路径 | 返回 |
 |---|---|---|
 | GET | `/api/v1/servers?q=&state=&limit=&offset=` | 端点列表；`state` ∈ `all`、`pinned`、`changed`、`flagged`、`unobserved`；`q` 匹配名称、端点、标题 |
-| GET | `/api/v1/servers/<id>` | 单个端点：当前工具集、带匹配区间的 WARDEN 匹配项、标签、折叠后的时间线、变更、30 天内的客户端报告 |
+| GET | `/api/v1/servers/<id>` | 单个端点：当前工具集、带匹配区间的 WARDEN 匹配项、标签、折叠后的时间线、变更、30 天内的客户端报告、发布者声明的工具集（`declaredToolSets`） |
 | GET | `/badge/<id>.svg` | README 徽章：`pinned ‹date›`、`unchanged Nd`、`changed ‹date›`、`not observed`、`not listed` |
 
 `<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符——稳定不变，每个远程端点一个。
@@ -113,11 +113,37 @@ Content-Type: application/json
 
 对于 stdio 服务器（由你的客户端启动的 npm 或 PyPI 软件包），用 `package`——`npm:<名称>` 或 `pypi:<名称>`——代替 `endpoint`；PyPI 名称会替你规范化。`target.packageVersion` 是 HISTOR 在其[软件包沙箱](operations.zh.md#软件包沙箱)中最近观察到的版本。软件包名称永远不会被计为未知主机。 对软件包还有两项应答。`packageLookalike`（`of`、`weekly`、`how`、`ownWeekly`）：对任何被询问的软件包（无论是否已收录），当某个热门软件包的下载量至少高出 100 倍时，指出此名称模仿的那个热门软件包——相差一个字符、在另一个 scope 下同名，或仅分隔符不同；`mcp-server` 这类通用名称不属于任何人。`target.packageSignals` 是注册表对 HISTOR 所观察版本的说明：`provenance`（经证明的 CI 构建）、`publisher`（从不包含邮箱）、`installScripts`，以及 `flags`——相对上一个观察到的版本发生了什么变化：`provenance-lost`、`publisher-changed`、`install-scripts-added`、`new-dependencies`，这些是发布令牌被盗的典型迹象。
 
+当你发送的工具集是服务器发布者在其注册表条目中声明的工具集时（见下一节），会出现 `declared`：`toolSetDigest`、`toolCount`、`when`（发布者的条件，用其原话）、`registryVersion`、`firstDeclared`、`lastDeclared`。`match` 仍然表示 HISTOR 观测到的情况：HISTOR 从未见过的已声明工具集仍为 `different`，HISTOR 完全没有工具集时为 `not-observed`，说明中会补充发布者声明了它。
+
+## 声明工具集（发布者）
+
+同一个服务器在不同机器上可能列出不同的工具。启动器把 stdio 交给安装在旁边的程序，而在缺少该程序的地方（例如 HISTOR 的沙箱），只列出一个“请安装我”的工具；真实的密钥可能解锁占位符无法解锁的工具。HISTOR 记录它观测到的内容。知道其他工具集的发布者可以在发布到官方 MCP 注册表的 `server.json` 中列出它们，放在注册表为下游注册表保留的字段里：
+
+```json
+"_meta": {
+  "io.modelcontextprotocol.registry/publisher-provided": {
+    "dev.modelmarket.histor/tool-sets": {
+      "mtl": "1",
+      "sets": [
+        { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
+      ]
+    }
+  }
+}
+```
+
+- `digest`（必填）：`tools/list` 结果的 MTL/1 摘要。在能拿到该工具集的机器上，`npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` 会打印它。
+- `count`（可选）：工具数量，用于显示。
+- `when`（可选，最多 200 个字符）：条件，用你自己的话写，按你的原话显示。控制字符和不可见字符会被去掉。
+- 最多 8 个工具集。违反这些规则的条目会被跳过，爬取会说明原因（`/api/v1/stats` 中的 `lastRun.declaredToolSets.ignored`）。
+
+HISTOR 在每次每日爬取时从服务器最新的注册表条目读取声明，并将其应用于该服务器的每个端点和软件包。它保存读到每个工具集的第一天和最后一天；条目不再列出的工具集会被标记为已撤回，而不是删除。声明是发布者的说法：注册表担保它来自控制该服务器命名空间的人，HISTOR 从不把它算作观测，不为其签发标签，也看不到其背后的工具。WARDEN 把已声明的工具集报告为 `HISTOR_DECLARED_TOOLSET`（low；当 HISTOR 没有自己的工具集时为 info），而不是 `HISTOR_UNSEEN_TOOLSET`，并且仍对这些工具执行它自己的全部检查。
+
 ## 统计与实时徽章
 
 | 路径 | 返回 |
 |---|---|
-| `/api/v1/stats` | 最近一次抓取（注册表规模、各端点如何应答、哪些未连接、签发了多少标签）、当前计数、最近 24 小时 / 7 天 / 30 天的变更、日志大小、7 天内的客户端报告 |
+| `/api/v1/stats` | 最近一次抓取（注册表规模、各端点如何应答、哪些未连接、签发了多少标签）、当前计数、最近 24 小时 / 7 天 / 30 天的变更、日志大小、7 天内的客户端报告；`lastRun.declaredToolSets`：声明了工具集的服务器，以及被跳过的条目及原因 |
 | `/api/v1/stats/hosts?limit=` | 在已连接的端点中，按主机统计的端点数 |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | 供 README 徽章使用的 [shields.io endpoint](https://shields.io/badges/endpoint-badge) JSON |
 | `/health` | 存活状态、存储后端、树大小、是否正在抓取、上次抓取的错误 |

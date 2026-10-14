@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 
 from awr import SigningKey
 
+from histor.declared import public as declared_public
 from histor.logbook import sign_document, utcnow
 from histor.lookalike import default_index
 from histor.mcpclient import MAX_TOOLS
@@ -73,6 +74,15 @@ NOTES = {
         "clients different definitions. Read the definitions again before approving them."
     ),
     "no-digest": "No tool set was sent, so only HISTOR's own observations are reported.",
+    # A package runs on the client's machine, not at one endpoint: what it lists can depend on what that
+    # machine has. A launcher hands stdio to a locally installed program and offers only an "install me"
+    # tool where the program is missing, as it is in HISTOR's sandbox.
+    "different-package": (
+        "The tool definitions you sent differ from every set HISTOR has observed from this package, in any version "
+        "it ran. Possible causes: the package lists tools according to what your machine has and HISTOR's sandbox "
+        "has not (a program it hands over to, a real key or setting), you run a version HISTOR has not reached yet, "
+        "or the package you run is not the one published. Read the definitions again before approving them."
+    ),
     "undigestible": (
         "The tools you sent are not digestible under MTL/1 (see query.digestError), so they cannot be compared "
         "with HISTOR's record. HISTOR's own observations are reported."
@@ -89,6 +99,10 @@ NOTE_CLASSIFIER = (
 NOTE_CLASSIFIER_NONE = (
     "HISTOR holds no classifier verdict for this tool set. The classifier runs during HISTOR's daily crawl, "
     "over sets HISTOR observed itself; /check reads stored verdicts and never calls a model."
+)
+NOTE_DECLARED = (
+    " The publisher declares this set in its registry entry{when}. That is the publisher's word, read from the "
+    "registry, not an observation: HISTOR has not seen this set served."
 )
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
 NOTE_LAST_FAILED = (
@@ -213,6 +227,12 @@ class Checker:
                     result["seenBefore"] = seen
                 else:
                     state = "different"
+            if client_digest and state != "same":
+                # The publisher's own account of a set HISTOR did not observe, e.g. a launcher's tools
+                # on a machine where its program is installed (histor.declared).
+                row = self.store.declared_toolset(target["id"], client_digest)
+                if row:
+                    result["declared"] = declared_public(row)
             if (body.get("contribute") is True and client_digest
                     and (may_contribute is None or may_contribute(target["id"]))):
                 day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -229,7 +249,10 @@ class Checker:
                 lookalike = None
             if lookalike:
                 result["packageLookalike"] = lookalike
-        note = NOTES[state]
+        note = NOTES["different-package" if package and state == "different" else state]
+        if result.get("declared") and state in ("different", "not-observed"):
+            when = result["declared"].get("when")
+            note += NOTE_DECLARED.format(when=f' ("{when}")' if when else "")
         if target is not None and state not in ("not-listed", "not-observed"):
             if target["delisted"]:
                 note += NOTE_DELISTED.format(day=str(target["last_listed"] or "")[:10])

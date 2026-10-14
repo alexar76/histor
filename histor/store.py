@@ -326,6 +326,59 @@ class Store:
         with self.db.read() as tx:
             return int(tx.one("SELECT COUNT(*) AS n FROM changes WHERE observed_at >= ?", (since,))["n"])
 
+    # -- publisher-declared tool sets ----------------------------------------------------
+
+    @staticmethod
+    def sync_declarations(tx: Tx, targets: list[Any], now: str) -> dict[str, Any]:
+        """Record what each listed target's registry entry declares now (histor.declared), and mark
+        withdrawn a set its entry no longer names. Only targets in this harvest are touched: a
+        registry outage or a delisting withdraws nothing."""
+        active: dict[str, set[str]] = {}
+        for row in tx.execute("SELECT target_id, toolset FROM declared_toolsets WHERE withdrawn_at IS NULL"):
+            active.setdefault(row["target_id"], set()).add(row["toolset"])
+        servers: set[str] = set()
+        sets = withdrawn = 0
+        ignored: list[dict[str, str]] = []
+        reported: set[str] = set()
+        for t in targets:
+            if t.declared_ignored and t.name not in reported and len(ignored) < 50:
+                reported.add(t.name)
+                ignored.extend({"server": t.name, "reason": r} for r in t.declared_ignored[:4])
+            named = {d["digest"] for d in t.declared}
+            for d in t.declared:
+                tx.execute(
+                    "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
+                    "first_declared, last_declared, withdrawn_at) VALUES(?, ?, ?, ?, ?, ?, ?, NULL) "
+                    "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
+                    "when_text=excluded.when_text, registry_version=excluded.registry_version, "
+                    "last_declared=excluded.last_declared, withdrawn_at=NULL",
+                    (t.id, d["digest"], d.get("count"), d.get("when"), t.version, now, now),
+                )
+            if t.declared:
+                servers.add(t.name)
+                sets += len(t.declared)
+            for gone in active.get(t.id, set()) - named:
+                tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?", (now, t.id, gone))
+                withdrawn += 1
+        return {"servers": len(servers), "sets": sets, "withdrawn": withdrawn, **({"ignored": ignored} if ignored else {})}
+
+    def declared_toolset(self, target_id: str, toolset: str) -> dict[str, Any] | None:
+        """The publisher's current declaration of this set at this target, if it makes one."""
+        with self.db.read() as tx:
+            row = tx.one("SELECT * FROM declared_toolsets WHERE target_id=? AND toolset=? AND withdrawn_at IS NULL",
+                         (target_id, toolset))
+        return dict(row) if row else None
+
+    def declared_toolsets(self, target_id: str) -> list[dict[str, Any]]:
+        """Every set the publisher declared at this target, current ones first."""
+        with self.db.read() as tx:
+            rows = tx.execute(
+                "SELECT * FROM declared_toolsets WHERE target_id=? "
+                "ORDER BY CASE WHEN withdrawn_at IS NULL THEN 0 ELSE 1 END, first_declared, toolset",
+                (target_id,),
+            )
+        return [dict(r) for r in rows]
+
     # -- client reports -------------------------------------------------------------
 
     def add_client_report(self, target_id: str, toolset: str, day: str) -> None:
