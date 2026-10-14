@@ -444,7 +444,9 @@ def test_a_package_an_older_trace_reader_left_with_unplaced_sends_is_traced_agai
 
     old = {"observer": "gvisor-trace/2", "startup": {"network": ["sendto(0x5 socket:[2], 0x7e, 0x1, 0x0, null, 0x0) = 1 (0x1)"]}}
     assert _unplaced_sends(old)
-    assert not _unplaced_sends({**old, "observer": "gvisor-trace/5"}), "the current reader's verdict stands"
+    assert _unplaced_sends({**old, "observer": "gvisor-trace/5"}), "5 kept a closed socket's family for its fd number"
+    assert _unplaced_sends({**old, "observer": "gvisor-trace/6"}), "6 could not place a send on an accepted connection"
+    assert not _unplaced_sends({**old, "observer": "gvisor-trace/7"}), "the current reader's verdict stands"
     assert not _unplaced_sends({"observer": "gvisor-trace/2", "startup": {"network": ["api.example.com:443"]}})
     assert not _unplaced_sends(None)
 

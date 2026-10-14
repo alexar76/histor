@@ -42,7 +42,7 @@ import json
 p = "/etc/docker/daemon.json"
 d = json.load(open(p))
 want = {"path": "/usr/bin/runsc", "runtimeArgs": ["--strace",
-        "--strace-syscalls=socket,connect,openat,open,execve,execveat,sendto,sendmsg,sendmmsg,bind,unlinkat,renameat,mkdirat,socketpair",
+        "--strace-syscalls=socket,connect,openat,open,execve,execveat,sendto,sendmsg,sendmmsg,bind,unlinkat,renameat,mkdirat,socketpair,accept,accept4",
         "--strace-log-size=512", "--debug-log=/var/lib/histor-sandbox/trace/%ID%/"]}
 if d.setdefault("runtimes", {}).get("runsc-trace") != want:
     d["runtimes"]["runsc-trace"] = want

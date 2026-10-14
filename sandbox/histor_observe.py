@@ -127,7 +127,7 @@ MAX_NOISE = 4096               # bytes of non-protocol stdout kept to say why a 
 # The trace reader's own generation: 3 resolves relative opens and reads socketpair ends as local
 # (2 listed asyncio's self-pipe as a destination). HISTOR runs a package traced by an older
 # reader again when that left it with sends it could not place.
-TRACE_OBSERVER = "gvisor-trace/5"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs
+TRACE_OBSERVER = "gvisor-trace/7"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs; 6: a socket's family follows the socket, not its fd number; 7: an accepted connection's peer
 
 
 class Refused(Exception):
@@ -402,6 +402,9 @@ _CONNECT = re.compile(r" X connect\(0x[0-9a-f]+ [^,]*, 0x[0-9a-f]+ \{Family: (AF
 _OPEN = re.compile(r" X (?:openat\((?:AT_FDCWD|0x[0-9a-f]+)(?: (/[^,]*))?, |open\()0x[0-9a-f]+ (.+?), (O_[A-Z_|0-9]+(?:\|0x[0-9a-f]+)*)")
 _SOCKET = re.compile(r" X socket\((AF_\w+), .*\) = (\d+) ")
 _SOCK_FD = re.compile(r" X (?:connect|sendto|sendmsg|sendmmsg)\((0x[0-9a-f]+) socket:\[(\d+)\]")
+# accept4(0x3 socket:[1], 0x7e… {Family: AF_INET, Addr: 127.0.0.1, Port: 41192}, 0x7e… {length=16},
+# SOCK_CLOEXEC) = 5 (0x5): gVisor prints the peer on exit, and the new fd as the result.
+_ACCEPT = re.compile(r" X accept4?\(0x[0-9a-f]+ socket:\[\d+\], .*\) = (\d+) ")
 _ADDRESS = re.compile(r"\{Family: (AF_\w+), Addr: ([^,}]*)(?:, Port: (\d+))?")
 
 
@@ -434,7 +437,16 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
     if not src_ip:
         issues.add("source-ip-missing")
     records = 0
+    # socket() prints a family and an fd number; connect() and send print the fd and the socket's
+    # inode. The family is handed from the first to the second at the socket's first use, because
+    # close() is not traced and the number comes back: gvisor-trace/5 kept the family of a closed
+    # TCP socket (or a failed docker.sock connect) for the socketpair end that got its number, and
+    # listed asyncio's one-byte wake-ups as sends it could not place.
     socket_families: dict[tuple[str, int], str] = {}
+    inode_families: dict[str, str] = {}
+    # accept() answers with a new fd and prints who connected; the send that follows names
+    # neither. A server answering a loopback client wrote 789 bytes gvisor-trace/6 could not place.
+    accepted: dict[tuple[str, int], tuple[str, str, str | None] | None] = {}
     socket_peers: dict[str, tuple[str, str, str | None]] = {}
     # socketpair(2) is traced, but gVisor prints its result array as an address, not the two fds.
     # A socket can leave the container only through a traced connect() or a send that names its
@@ -457,10 +469,23 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                 records += 1
                 a = acts[phase]
                 if " X socketpair(" in line:
-                    pairs_made = pairs_made or bool(re.search(r"\) = 0 ", line))
+                    if re.search(r"\) = 0 ", line):
+                        pairs_made = True
+                        # Its two fds are printed as an address: any number socket() gave out
+                        # earlier and nothing has used yet may be one of them now.
+                        for pending in (socket_families, accepted):
+                            for key in [k for k in pending if pm and k[0] == pm.group(1)]:
+                                del pending[key]
                 elif (m := _SOCKET.search(line)):
                     if pm:
                         socket_families[(pm.group(1), int(m.group(2)))] = m.group(1)
+                        accepted.pop((pm.group(1), int(m.group(2))), None)
+                elif " X accept" in line and (m := _ACCEPT.search(line)):
+                    if pm:
+                        key = (pm.group(1), int(m.group(1)))
+                        socket_families.pop(key, None)
+                        peer = _ADDRESS.findall(line)
+                        accepted[key] = peer[0] if peer else None
                 elif (m := _EXEC.search(line)):
                     path = m.group(1).strip()
                     if pid1:
@@ -470,7 +495,18 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                 elif any(f" X {call}(" in line for call in ("connect", "sendto", "sendmsg", "sendmmsg")):
                     addresses = _ADDRESS.findall(line)
                     fd = _SOCK_FD.search(line)
-                    family = socket_families.get((pm.group(1), int(fd.group(1), 16))) if pm and fd else None
+                    if fd and pm and fd.group(2) not in inode_families:
+                        key = (pm.group(1), int(fd.group(1), 16))
+                        made = socket_families.pop(key, None)
+                        if made:
+                            inode_families[fd.group(2)] = made
+                        elif key in accepted:
+                            peer = accepted.pop(key)
+                            # No printed peer: a connection from somewhere, never one end of a pair.
+                            inode_families[fd.group(2)] = peer[0] if peer else "accepted"
+                            if peer:
+                                socket_peers[fd.group(2)] = peer
+                    family = inode_families.get(fd.group(2)) if fd else None
                     if addresses and fd and " X connect(" in line:
                         socket_peers[fd.group(2)] = addresses[0]
                     if not addresses and fd and fd.group(2) in socket_peers:

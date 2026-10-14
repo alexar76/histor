@@ -127,7 +127,7 @@ RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", 
 # The sandbox's trace reader (behaviour.observer). gvisor-trace/2 listed the byte asyncio writes
 # to its own socketpair as a send it could not place, which read as "reached out at startup" for
 # nearly every Python server; a package it left with such sends is traced again, once.
-TRACE_OBSERVER = "gvisor-trace/5"
+TRACE_OBSERVER = "gvisor-trace/7"
 UNPLACED_SEND = ("sendto(", "sendmsg(", "sendmmsg(")
 # Evidence that cannot be this run's: another run's canary recipient, or a name only MOMUS's
 # red-team fixtures use. gvisor-trace/3 and older matched trap records by address from before

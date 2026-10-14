@@ -418,6 +418,26 @@ def test_asyncio_self_pipe_is_not_an_unresolved_destination(tmp_path, monkeypatc
     assert _trace(tmp_path, monkeypatch, [pair, connected, later])["network"] == ["203.0.113.9:443"]
 
 
+def test_a_socketpair_end_that_reuses_a_closed_sockets_number_is_still_local(tmp_path, monkeypatch):
+    """close() is not traced: fd 5 was a TCP socket to the trap, then one end of asyncio's pair."""
+    tcp = "socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP) = 5 (0x5) (9µs)"
+    trap = "connect(0x5 socket:[16], 0xabc {Family: AF_INET, Addr: 10.231.0.1, Port: 443}, 0x10) = -1 errno=115 (operation now in progress) (9µs)"
+    pair = "socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0x0, 0x7eab27a075d0) = 0 (0x0) (94µs)"
+    wake = "sendto(0x5 socket:[51], 0x7eec5742bfd0, 0x1, 0x0, null, 0x0) = 1 (0x1) (15µs)"
+    r = _trace(tmp_path, monkeypatch, [tcp, trap, pair, wake])
+    assert r["complete"] and r["network"] == ["10.231.0.1:443"]
+    # A docker.sock that was not there, then the same number for the pair.
+    unix = "socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0x0) = 5 (0x5) (9µs)"
+    dock = 'connect(0x5 socket:[7], 0xabc {Family: AF_UNIX, Addr: "/run/docker.sock"}, 0x6e) = -1 errno=2 (no such file or directory) (9µs)'
+    r = _trace(tmp_path, monkeypatch, [unix, dock, pair, wake])
+    assert r["complete"] and r["network"] == ["unix:/run/docker.sock"]
+    # A socket() nothing used before the pair was made may have handed its number to the pair.
+    assert _trace(tmp_path, monkeypatch, [tcp, pair, wake])["complete"]
+    # Made after the pair, never connected: still unresolved, as before.
+    r = _trace(tmp_path, monkeypatch, [pair, tcp, wake])
+    assert not r["complete"] and "socket-destination-unresolved" in r["incompleteReasons"]
+
+
 def test_a_dns_query_the_logger_never_saw_is_not_clean(tmp_path, monkeypatch):
     class Logger:
         def __init__(self, names):
@@ -461,3 +481,20 @@ def test_the_start_is_read_while_the_container_exists():
         body = src[src.index(stage):]
         body = body[:body.index("\ndef ", 10)]
         assert body.index("container_started(cid)") < body.index('docker("rm", "-f"'), stage
+
+
+def test_a_send_on_an_accepted_connection_goes_to_the_peer_accept_printed(tmp_path, monkeypatch):
+    """The format runsc release-20261005.0 prints, from a loopback server on hunt."""
+    listen = "socket(AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_IP) = 3 (0x3) (29µs)"
+    loop = "accept4(0x3 socket:[1], 0x7ea884cc6510 {Family: AF_INET, Addr: 127.0.0.1, Port: 41192}, 0x7ea884cc64ec {length=16}, SOCK_CLOEXEC) = 5 (0x5) (17ms)"
+    reply = "sendto(0x5 socket:[3], 0xc664d0, 0x315, 0x0, null, 0x0) = 789 (0x315) (182µs)"
+    r = _trace(tmp_path, monkeypatch, [listen, loop, reply])
+    assert r["complete"] and "network" not in r, "a loopback client is inside the container"
+    outside = loop.replace("127.0.0.1, Port: 41192", "203.0.113.7, Port: 41192")
+    assert _trace(tmp_path, monkeypatch, [listen, outside, reply])["network"] == ["203.0.113.7:41192"]
+    # accept(fd, NULL, NULL) prints no peer: somebody connected, so it is never a pair's end.
+    blind = "accept4(0x3 socket:[1], 0x0, 0x0, SOCK_CLOEXEC) = 5 (0x5) (17ms)"
+    pair = "socketpair(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0x0, 0x7eab27a075d0) = 0 (0x0) (94µs)"
+    r = _trace(tmp_path, monkeypatch, [pair, listen, blind, reply])
+    assert not r["complete"] and "socket-destination-unresolved" in r["incompleteReasons"]
+
