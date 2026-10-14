@@ -329,43 +329,128 @@ class Store:
     # -- publisher-declared tool sets ----------------------------------------------------
 
     @staticmethod
-    def sync_declarations(tx: Tx, targets: list[Any], now: str) -> dict[str, Any]:
-        """Record what each listed target's registry entry declares now (histor.declared), and mark
-        withdrawn a set its entry no longer names. Only targets in this harvest are touched: a
+    def _active_declarations(tx: Tx) -> dict[str, dict[str, str]]:
+        """target → {digest: source} for every set a publisher declares now."""
+        active: dict[str, dict[str, str]] = {}
+        for row in tx.execute("SELECT target_id, toolset, source FROM declared_toolsets WHERE withdrawn_at IS NULL"):
+            active.setdefault(row["target_id"], {})[row["toolset"]] = row["source"] or "registry"
+        return active
+
+    @staticmethod
+    def _apply_declaration(tx: Tx, target_id: str, version: str | None, now: str,
+                           registry: list[dict[str, Any]] | None, url: list[dict[str, Any]] | None,
+                           active: dict[str, str]) -> tuple[int, int]:
+        """What one target's publisher declares now, from its registry entry and from its declaration
+        file. ``None`` for a source leaves that source's sets as they are: a file that could not be
+        read this time is not a withdrawal. A digest both name counts as the registry's. Returns
+        (sets declared now, sets withdrawn)."""
+        keep = {d for d, src in active.items() if (src == "url" and url is None) or (src != "url" and registry is None)}
+        entries: dict[str, tuple[dict[str, Any], str]] = {}
+        for source, sets in (("registry", registry), ("url", url)):
+            for d in sets or ():
+                if d["digest"] not in keep and d["digest"] not in entries:
+                    entries[d["digest"]] = (d, source)
+        for digest, (d, source) in entries.items():
+            tx.execute(
+                "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
+                "first_declared, last_declared, withdrawn_at, source) VALUES(?, ?, ?, ?, ?, ?, ?, NULL, ?) "
+                "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
+                "when_text=excluded.when_text, registry_version=excluded.registry_version, "
+                "last_declared=excluded.last_declared, withdrawn_at=NULL, source=excluded.source",
+                (target_id, digest, d.get("count"), d.get("when"), version, now, now, source),
+            )
+        gone = set(active) - keep - set(entries)
+        for digest in gone:
+            tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?", (now, target_id, digest))
+        return len(entries) + len(keep), len(gone)
+
+    @staticmethod
+    def _note_read(tx: Tx, target_id: str, url: str, now: str, error: str | None) -> None:
+        """How the last read of a target's declaration file went. A new URL starts a new record."""
+        tx.execute(
+            "INSERT INTO declaration_urls(target_id, url, first_seen, last_fetched, last_ok, last_error) "
+            "VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET "
+            "first_seen=CASE WHEN declaration_urls.url = excluded.url THEN declaration_urls.first_seen ELSE excluded.first_seen END, "
+            "last_ok=CASE WHEN excluded.last_ok IS NOT NULL THEN excluded.last_ok "
+            "WHEN declaration_urls.url = excluded.url THEN declaration_urls.last_ok ELSE NULL END, "
+            "url=excluded.url, last_fetched=excluded.last_fetched, last_error=excluded.last_error",
+            (target_id, url, now, now, None if error else now, error),
+        )
+
+    @staticmethod
+    def sync_declarations(tx: Tx, targets: list[Any], now: str,
+                          files: dict[str, tuple[list[dict[str, Any]] | None, str | None]] | None = None) -> dict[str, Any]:
+        """Record what each listed target's publisher declares now (histor.declared): the sets in its
+        registry entry, and those in the declaration file the entry points at, read just before this
+        transaction (*files*: url → (sets, error)). Only targets in this harvest are touched: a
         registry outage or a delisting withdraws nothing."""
-        active: dict[str, set[str]] = {}
-        for row in tx.execute("SELECT target_id, toolset FROM declared_toolsets WHERE withdrawn_at IS NULL"):
-            active.setdefault(row["target_id"], set()).add(row["toolset"])
+        files = files or {}
+        active = Store._active_declarations(tx)
+        with_url = {r["target_id"] for r in tx.execute("SELECT target_id FROM declaration_urls")}
         servers: set[str] = set()
         sets = withdrawn = 0
         ignored: list[dict[str, str]] = []
+        unread: list[dict[str, str]] = []
+        urls: set[str] = set()
         reported: set[str] = set()
         for t in targets:
             if t.declared_ignored and t.name not in reported and len(ignored) < 50:
                 reported.add(t.name)
                 ignored.extend({"server": t.name, "reason": r} for r in t.declared_ignored[:4])
-            named = {d["digest"] for d in t.declared}
-            for d in t.declared:
-                tx.execute(
-                    "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
-                    "first_declared, last_declared, withdrawn_at) VALUES(?, ?, ?, ?, ?, ?, ?, NULL) "
-                    "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
-                    "when_text=excluded.when_text, registry_version=excluded.registry_version, "
-                    "last_declared=excluded.last_declared, withdrawn_at=NULL",
-                    (t.id, d["digest"], d.get("count"), d.get("when"), t.version, now, now),
-                )
-            if t.declared:
+            if not (t.declared or t.declared_url or t.id in active or t.id in with_url):
+                continue
+            from_url: list[dict[str, Any]] | None = []
+            if t.declared_url:
+                from_url, error = files.get(t.declared_url, (None, "not read"))
+                Store._note_read(tx, t.id, t.declared_url, now, error)
+                urls.add(t.declared_url)
+                if error and t.declared_url not in {u["url"] for u in unread} and len(unread) < 20:
+                    unread.append({"server": t.name, "url": t.declared_url, "error": error})
+            elif t.id in with_url:
+                # The entry no longer points at a file: what the file declared goes with it.
+                tx.execute("DELETE FROM declaration_urls WHERE target_id=?", (t.id,))
+            n, w = Store._apply_declaration(tx, t.id, t.version, now, list(t.declared), from_url, active.get(t.id, {}))
+            if n:
                 servers.add(t.name)
-                sets += len(t.declared)
-            for gone in active.get(t.id, set()) - named:
-                tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?", (now, t.id, gone))
-                withdrawn += 1
-        return {"servers": len(servers), "sets": sets, "withdrawn": withdrawn, **({"ignored": ignored} if ignored else {})}
+                sets += n
+            withdrawn += w
+        return {"servers": len(servers), "sets": sets, "withdrawn": withdrawn,
+                **({"files": len(urls)} if urls else {}), **({"unread": unread} if unread else {}),
+                **({"ignored": ignored} if ignored else {})}
+
+    def declaration_files(self) -> list[dict[str, Any]]:
+        """Every listed target whose registry entry points at a declaration file."""
+        with self.db.read() as tx:
+            return [dict(r) for r in tx.execute(
+                "SELECT d.target_id, d.url, t.name, t.version FROM declaration_urls d "
+                "JOIN targets t ON t.id = d.target_id WHERE t.delisted = 0 ORDER BY d.target_id")]
+
+    def refresh_declarations(self, rows: list[dict[str, Any]], files: dict[str, tuple[list[dict[str, Any]] | None, str | None]],
+                             now: str) -> dict[str, Any]:
+        """Apply declaration files read between crawls; the registry's own sets are left as they are."""
+        changed = withdrawn = 0
+        with self.db.transaction() as tx:
+            active = Store._active_declarations(tx)
+            for row in rows:
+                sets, error = files.get(row["url"], (None, "not read"))
+                Store._note_read(tx, row["target_id"], row["url"], now, error)
+                before = set(active.get(row["target_id"], {}))
+                _, w = Store._apply_declaration(tx, row["target_id"], row["version"], now, None, sets,
+                                                active.get(row["target_id"], {}))
+                withdrawn += w
+                if sets is not None and {d["digest"] for d in sets} - before:
+                    changed += 1
+        urls = {r["url"] for r in rows}
+        return {"files": len(urls), "unread": sum(1 for u in urls if files.get(u, (None, "not read"))[1]),
+                "targetsWithNewSets": changed, "withdrawn": withdrawn}
+
+    _DECLARED = ("SELECT d.*, u.url AS url FROM declared_toolsets d "
+                 "LEFT JOIN declaration_urls u ON u.target_id = d.target_id ")
 
     def declared_toolset(self, target_id: str, toolset: str) -> dict[str, Any] | None:
         """The publisher's current declaration of this set at this target, if it makes one."""
         with self.db.read() as tx:
-            row = tx.one("SELECT * FROM declared_toolsets WHERE target_id=? AND toolset=? AND withdrawn_at IS NULL",
+            row = tx.one(self._DECLARED + "WHERE d.target_id=? AND d.toolset=? AND d.withdrawn_at IS NULL",
                          (target_id, toolset))
         return dict(row) if row else None
 
@@ -373,11 +458,19 @@ class Store:
         """Every set the publisher declared at this target, current ones first."""
         with self.db.read() as tx:
             rows = tx.execute(
-                "SELECT * FROM declared_toolsets WHERE target_id=? "
-                "ORDER BY CASE WHEN withdrawn_at IS NULL THEN 0 ELSE 1 END, first_declared, toolset",
+                self._DECLARED + "WHERE d.target_id=? "
+                "ORDER BY CASE WHEN d.withdrawn_at IS NULL THEN 0 ELSE 1 END, d.first_declared, d.toolset",
                 (target_id,),
             )
         return [dict(r) for r in rows]
+
+    def declaration_file(self, target_id: str) -> dict[str, Any] | None:
+        """The target's declaration file and how its last reads went."""
+        with self.db.read() as tx:
+            row = tx.one("SELECT url, first_seen, last_fetched, last_ok, last_error FROM declaration_urls WHERE target_id=?",
+                         (target_id,))
+        return {k: v for k, v in (("url", row["url"]), ("firstSeen", row["first_seen"]), ("lastRead", row["last_fetched"]),
+                                  ("lastOk", row["last_ok"]), ("lastError", row["last_error"])) if v is not None} if row else None
 
     # -- client reports -------------------------------------------------------------
 

@@ -123,11 +123,11 @@ décompte du jour pour cette empreinte n’est stocké.
 
 Pour un serveur stdio (un paquet npm ou PyPI que votre client lance), envoyez `package` — `npm:<nom>` ou `pypi:<nom>` — au lieu d’`endpoint` ; les noms PyPI sont normalisés pour vous. `target.packageVersion` est la dernière version qu’HISTOR a observée dans son [bac à sable des paquets](operations.fr.md#bac-à-sable-des-paquets). Un nom de paquet n’est jamais compté comme hôte inconnu. Deux réponses de plus pour un paquet. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), pour tout paquet demandé, listé ou non, nomme le paquet populaire auquel ce nom ressemble — à un caractère près, le même nom sous un autre scope, ou d’autres séparateurs — quand celui-ci est téléchargé au moins 100 fois plus ; les noms génériques comme `mcp-server` ne sont à personne. `target.packageSignals` est ce que dit le registre de la version qu’HISTOR a observée : `provenance` (une compilation attestée en CI), `publisher` (jamais un e-mail), `installScripts`, et `flags` pour ce qui a changé depuis la version observée avant : `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — les marques d’un jeton de publication volé.
 
-`declared` apparaît quand l’ensemble envoyé est un ensemble que l’éditeur du serveur déclare dans son entrée du registre (section suivante) : `toolSetDigest`, `toolCount`, `when` (la condition de l’éditeur, dans ses mots), `registryVersion`, `firstDeclared`, `lastDeclared`. `match` dit toujours ce qu’HISTOR a observé : un ensemble déclaré qu’HISTOR n’a jamais vu reste `different`, ou `not-observed` quand HISTOR n’a aucun ensemble, et la note ajoute que l’éditeur le déclare.
+`declared` apparaît quand l’ensemble envoyé est un ensemble que déclare l’éditeur du serveur (section suivante) : `toolSetDigest`, `toolCount`, `when` (la condition de l’éditeur, dans ses mots), `source` — `registry` s’il est dans l’entrée du registre elle-même, `url` s’il est dans le fichier de déclaration vers lequel elle pointe (alors avec `url`) —, `registryVersion`, `firstDeclared`, `lastDeclared`. `match` dit toujours ce qu’HISTOR a observé : un ensemble déclaré qu’HISTOR n’a jamais vu reste `different`, ou `not-observed` quand HISTOR n’a aucun ensemble, et la note ajoute que l’éditeur le déclare, et où.
 
 ## Déclarer des ensembles d’outils (éditeurs)
 
-Un serveur peut lister des outils différents sur des machines différentes. Un lanceur passe stdio à un programme installé à côté et, là où le programme manque (comme dans le bac à sable d’HISTOR), ne liste qu’un outil « installez-moi » ; une vraie clé peut débloquer des outils qu’une valeur factice ne débloque pas. HISTOR enregistre ce qu’il observe. Un éditeur qui connaît les autres ensembles peut les nommer dans le `server.json` qu’il publie au registre MCP officiel, dans le champ que le registre conserve pour les registres en aval :
+Un serveur peut lister des outils différents sur des machines différentes. Un lanceur passe stdio à un programme installé à côté et, là où le programme manque (comme dans le bac à sable d’HISTOR), ne liste qu’un outil « installez-moi » ; une vraie clé peut débloquer des outils qu’une valeur factice ne débloque pas. HISTOR enregistre ce qu’il observe. Un éditeur qui connaît les autres ensembles les nomme par leur condensé MTL/1 dans le `server.json` qu’il publie au registre MCP officiel, dans le champ que le registre conserve pour les registres en aval :
 
 ```json
 "_meta": {
@@ -136,18 +136,31 @@ Un serveur peut lister des outils différents sur des machines différentes. Un 
       "mtl": "1",
       "sets": [
         { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
-      ]
+      ],
+      "url": "https://example.com/.well-known/mcp-tool-sets.json"
     }
   }
 }
 ```
 
-- `digest` (obligatoire) : le condensé MTL/1 du résultat de `tools/list`. Sur une machine qui reçoit cet ensemble, `npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` l’affiche.
-- `count` (facultatif) : le nombre d’outils, pour l’affichage.
-- `when` (facultatif, 200 caractères au plus) : la condition, dans vos mots, affichée comme la vôtre. Les caractères de contrôle et invisibles sont supprimés.
-- 8 ensembles au plus. Une entrée qui enfreint ces règles est ignorée, et le passage dit pourquoi (`lastRun.declaredToolSets.ignored` dans `/api/v1/stats`).
+`sets`, `url` ou les deux.
 
-HISTOR lit la déclaration à chaque passage quotidien dans la dernière entrée du serveur au registre et l’applique à chaque endpoint et paquet de ce serveur. Il garde le premier et le dernier jour où il a lu chaque ensemble ; un ensemble que l’entrée cesse de nommer est marqué retiré, pas supprimé. Une déclaration est la parole de l’éditeur : le registre garantit qu’elle vient de qui contrôle l’espace de noms du serveur, et HISTOR ne la compte jamais comme une observation, n’émet aucun label à son sujet et ne voit jamais les outils derrière. WARDEN signale un ensemble déclaré comme `HISTOR_DECLARED_TOOLSET` (low ; info quand HISTOR n’a pas d’ensemble à lui) au lieu de `HISTOR_UNSEEN_TOOLSET`, et applique toujours toutes ses propres vérifications aux outils.
+- `sets` : 8 au plus (le registre conserve ici environ 4 Ko). Chacun a `digest` (obligatoire : le condensé MTL/1 du résultat de `tools/list`), `count` (facultatif : le nombre d’outils, pour l’affichage) et `when` (facultatif, 200 caractères au plus : la condition dans vos mots, affichée comme la vôtre ; les caractères de contrôle et invisibles sont supprimés).
+- `url` : un fichier de déclaration sur votre propre domaine, pour des ensembles qui changent sans nouvelle entrée au registre — un runner publié à part du paquet, un par système d’exploitation. Le fichier est le même objet, `{"mtl": "1", "sets": [...]}`, avec jusqu’à 64 ensembles. HISTOR le lit à chaque passage et toutes les heures entre deux passages : un ensemble ajouté avec une version du runner est connu dans l’heure. Un `"sets": []` explicite retire tous les ensembles que le fichier listait.
+
+**Où le fichier peut se trouver.** Sur le domaine que le registre a vérifié pour l’espace de noms du serveur, ou un sous-domaine : `ai.example/server` → `example.com`, `docs.example.com`. Pour `io.github.<user>/…` : `<user>.github.io`, ou sous `/<user>/` sur `raw.githubusercontent.com` ou `gist.githubusercontent.com`. https sur le port par défaut, sans redirection, 64 Kio au plus, adresses publiques uniquement. Une `url` ailleurs est ignorée : personne d’autre ne peut parler au nom de l’éditeur par un fichier.
+
+**L’écrire.** WARDEN 0.16 le fait sur une machine qui reçoit l’ensemble :
+
+```bash
+npx -y @aimarket/warden declare --when "runner 1.4, macOS" --out mcp-tool-sets.json -- npx -y @example/launcher
+```
+
+démarre le serveur comme le ferait un client, calcule le condensé de son `tools/list` et ajoute l’ensemble au fichier (créé s’il n’existe pas ; les autres ensembles sont gardés, le même condensé remplacé). Lancez-le sur chaque système et chaque version du runner, puis publiez le fichier. `--server-json --link URL` affiche le bloc ci-dessus pour l’entrée du registre ; `--check URL --name SERVER` lit le fichier publié comme HISTOR le lira et dit ce qu’HISTOR en retiendra. Avec un WARDEN plus ancien, `npx -y @aimarket/warden scan --json` affiche le condensé dans `mtlDigest`.
+
+**Ce qu’HISTOR en fait.** Il applique la déclaration à chaque endpoint et paquet du serveur, d’après la dernière entrée du serveur au registre, et garde le premier et le dernier jour où il a lu chaque ensemble ; un ensemble qui n’est plus nommé est marqué retiré, pas supprimé. Un fichier illisible garde ce qu’il déclarait jusqu’à la prochaine lecture réussie — un échec de lecture n’est pas un retrait — et la page du serveur montre quand le fichier a été lu pour la dernière fois et pourquoi une lecture a échoué. Quand l’entrée cesse de pointer vers un fichier, ce que seul le fichier déclarait est retiré. Un condensé nommé aux deux endroits compte comme celui de l’entrée du registre. Ce qui enfreint les règles est ignoré, et le passage dit pourquoi (`lastRun.declaredToolSets.ignored`, et `unread` pour un fichier illisible, dans `/api/v1/stats`).
+
+Une déclaration est la parole de l’éditeur : le registre garantit qu’elle vient de qui contrôle l’espace de noms du serveur, et le fichier est lié au même domaine ou compte. HISTOR ne la compte jamais comme une observation, n’émet aucun label à son sujet et ne voit jamais les outils derrière. WARDEN signale un ensemble déclaré comme `HISTOR_DECLARED_TOOLSET` (low ; info quand HISTOR n’a pas d’ensemble à lui) au lieu de `HISTOR_UNSEEN_TOOLSET`, dit où se trouve la déclaration et applique toujours toutes ses propres vérifications aux outils.
 
 ## Statistiques et badges en direct
 

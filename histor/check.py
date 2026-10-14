@@ -101,8 +101,8 @@ NOTE_CLASSIFIER_NONE = (
     "over sets HISTOR observed itself; /check reads stored verdicts and never calls a model."
 )
 NOTE_DECLARED = (
-    " The publisher declares this set in its registry entry{when}. That is the publisher's word, read from the "
-    "registry, not an observation: HISTOR has not seen this set served."
+    " The publisher declares this set {where}{when}. That is the publisher's word, not an observation: HISTOR "
+    "has not seen this set served."
 )
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
 NOTE_LAST_FAILED = (
@@ -251,8 +251,10 @@ class Checker:
                 result["packageLookalike"] = lookalike
         note = NOTES["different-package" if package and state == "different" else state]
         if result.get("declared") and state in ("different", "not-observed"):
-            when = result["declared"].get("when")
-            note += NOTE_DECLARED.format(when=f' ("{when}")' if when else "")
+            declared = result["declared"]
+            where = (f"in the declaration file its registry entry points at ({declared['url']})"
+                     if declared.get("source") == "url" and declared.get("url") else "in its registry entry")
+            note += NOTE_DECLARED.format(where=where, when=f' ("{declared["when"]}")' if declared.get("when") else "")
         if target is not None and state not in ("not-listed", "not-observed"):
             if target["delisted"]:
                 note += NOTE_DELISTED.format(day=str(target["last_listed"] or "")[:10])

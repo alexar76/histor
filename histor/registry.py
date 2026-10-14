@@ -55,6 +55,8 @@ class Target:
     # Tool sets the publisher declares in its server.json (histor.declared), and why any entry was not taken.
     declared: tuple[dict[str, Any], ...] = field(default=(), compare=False)
     declared_ignored: tuple[str, ...] = field(default=(), compare=False)
+    # A declaration file on the publisher's own domain (histor.declared), checked against the namespace.
+    declared_url: str | None = field(default=None, compare=False)
 
 
 def target_id(name: str, endpoint: str) -> str:
@@ -127,8 +129,8 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
     for name, (srv, _meta) in sorted(latest.items()):
         remotes = [r for r in (srv.get("remotes") or []) if isinstance(r, dict) and isinstance(r.get("url"), str)]
         repo = srv.get("repository") if isinstance(srv.get("repository"), dict) else {}
-        sets, ignored = declared_tool_sets(srv)
-        declared = {"declared": tuple(sets), "declared_ignored": tuple(ignored)}
+        sets, ignored, declared_url = declared_tool_sets(srv)
+        declared = {"declared": tuple(sets), "declared_ignored": tuple(ignored), "declared_url": declared_url}
         for remote in remotes[:MAX_REMOTES_PER_SERVER]:
             url = clean_text(remote["url"].strip(), 2000)
             transport = clean_text(remote.get("type") or "", 40)

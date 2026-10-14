@@ -119,11 +119,11 @@ refused. With `contribute`, nothing but the day's count for that digest is store
 
 For a stdio server (an npm or PyPI package your client starts), send `package` — `npm:<name>` or `pypi:<name>` — instead of `endpoint`; PyPI names are normalised for you. `target.packageVersion` is the version HISTOR last observed in its [package sandbox](operations.md#package-sandbox). A package name is never counted as an unlisted host. Two more answers for a package. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), for any package asked about, listed or not, names the popular package this one is named like — one character away, the same name under another scope, or other separators — when that one is downloaded at least 100 times more; generic names such as `mcp-server` are nobody's to imitate. `target.packageSignals` is what the registry says about the version HISTOR observed: `provenance` (an attested CI build), `publisher` (never an email), `installScripts`, and `flags` for what changed since the version observed before it — `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — the marks of a stolen publishing token.
 
-`declared` appears when the set you sent is one the server's publisher declares in its registry entry (next section): `toolSetDigest`, `toolCount`, `when` (the publisher's condition, in its words), `registryVersion`, `firstDeclared`, `lastDeclared`. `match` still says what HISTOR observed: a declared set HISTOR never saw stays `different`, or `not-observed` when HISTOR holds no set at all, and the note adds that the publisher declares it.
+`declared` appears when the set you sent is one the server's publisher declares (next section): `toolSetDigest`, `toolCount`, `when` (the publisher's condition, in its words), `source` — `registry` for the registry entry itself, `url` for the declaration file it points at (then with `url`) — `registryVersion`, `firstDeclared`, `lastDeclared`. `match` still says what HISTOR observed: a declared set HISTOR never saw stays `different`, or `not-observed` when HISTOR holds no set at all, and the note adds that the publisher declares it, and where.
 
 ## Declaring tool sets (publishers)
 
-A server can list different tools on different machines. A launcher hands stdio to a program installed next to it and, where the program is missing (as in HISTOR's sandbox), lists only an "install me" tool; a real key can unlock tools a placeholder does not. HISTOR records what it observes. A publisher who knows the other sets can name them in the `server.json` it publishes to the official MCP registry, in the field the registry keeps for downstream registries:
+A server can list different tools on different machines. A launcher hands stdio to a program installed next to it and, where the program is missing (as in HISTOR's sandbox), lists only an "install me" tool; a real key can unlock tools a placeholder does not. HISTOR records what it observes. A publisher who knows the other sets names them by MTL/1 digest in the `server.json` it publishes to the official MCP registry, in the field the registry keeps for downstream registries:
 
 ```json
 "_meta": {
@@ -132,18 +132,31 @@ A server can list different tools on different machines. A launcher hands stdio 
       "mtl": "1",
       "sets": [
         { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
-      ]
+      ],
+      "url": "https://example.com/.well-known/mcp-tool-sets.json"
     }
   }
 }
 ```
 
-- `digest` (required): the MTL/1 digest of the `tools/list` result. On a machine that gets that set, `npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` prints it.
-- `count` (optional): the number of tools, for display.
-- `when` (optional, at most 200 characters): the condition, in your words, shown as yours. Control and invisible characters are dropped.
-- At most 8 sets. An entry that breaks these rules is skipped, and the crawl says why (`lastRun.declaredToolSets.ignored` in `/api/v1/stats`).
+`sets`, `url` or both.
 
-HISTOR reads the declaration at each daily crawl from the server's latest registry entry and applies it to every endpoint and package of that server. It keeps the first and the last day it read each set; a set the entry stops naming is marked withdrawn, not deleted. A declaration is the publisher's word: the registry vouches that it comes from whoever controls the server's namespace, and HISTOR never counts it as an observation, issues no label about it and never sees the tools behind it. WARDEN reports a declared set as `HISTOR_DECLARED_TOOLSET` (low; info when HISTOR has no set of its own) instead of `HISTOR_UNSEEN_TOOLSET`, and still runs every one of its own checks on the tools.
+- `sets`: at most 8 (the registry keeps about 4 KB here). Each has `digest` (required: the MTL/1 digest of the `tools/list` result), `count` (optional: the number of tools, for display) and `when` (optional, at most 200 characters: the condition in your words, shown as yours; control and invisible characters are dropped).
+- `url`: a declaration file on your own domain, for sets that change without a new registry entry — a runner released apart from the package, one per operating system. The file is the same object, `{"mtl": "1", "sets": [...]}`, with up to 64 sets. HISTOR reads it at every crawl and every hour between crawls, so a set added with a runner release is known within the hour. An explicit `"sets": []` withdraws every set the file listed.
+
+**Where the file may be.** On the domain the registry verified for the server's namespace, or a subdomain: `ai.example/server` → `example.com`, `docs.example.com`. For `io.github.<user>/…`: `<user>.github.io`, or under `/<user>/` on `raw.githubusercontent.com` or `gist.githubusercontent.com`. https on the default port, no redirects, at most 64 KiB, public addresses only. A `url` anywhere else is skipped: nobody else can speak for the publisher through a file.
+
+**Writing it.** WARDEN 0.16 does it on a machine that gets the set:
+
+```bash
+npx -y @aimarket/warden declare --when "runner 1.4, macOS" --out mcp-tool-sets.json -- npx -y @example/launcher
+```
+
+starts the server the way a client would, digests its `tools/list` and adds the set to the file (created if missing; other sets kept, the same digest replaced). Run it on each operating system and runner version, then publish the file. `--server-json --link URL` prints the block above for the registry entry; `--check URL --name SERVER` reads the published file the way HISTOR will and says what HISTOR takes from it. With an older WARDEN, `npx -y @aimarket/warden scan --json` prints the digest as `mtlDigest`.
+
+**What HISTOR does with it.** It applies the declaration to every endpoint and package of the server, from the server's latest registry entry, and keeps the first and the last day it read each set; a set no longer named is marked withdrawn, not deleted. A file that cannot be read keeps what it declared until the next good read — a failed read is not a withdrawal — and the server page shows when the file was last read and why a read failed. When the entry stops pointing at a file, what only the file declared is withdrawn. A digest named in both places counts as the registry entry's. Anything that breaks the rules is skipped, and the crawl says why (`lastRun.declaredToolSets.ignored`, and `unread` for a file it could not read, in `/api/v1/stats`).
+
+A declaration is the publisher's word: the registry vouches that it comes from whoever controls the server's namespace, and the file is bound to the same domain or account. HISTOR never counts it as an observation, issues no label about it and never sees the tools behind it. WARDEN reports a declared set as `HISTOR_DECLARED_TOOLSET` (low; info when HISTOR has no set of its own) instead of `HISTOR_UNSEEN_TOOLSET`, says where the declaration is, and still runs every one of its own checks on the tools.
 
 ## Stats and live badges
 

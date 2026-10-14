@@ -38,6 +38,7 @@ satellite), émet le certificat avec certbot s’il n’existe pas, installe le 
 | `HISTOR_OPERATOR_TOKEN` | vide | prod : ≥ 24 caractères ; protège `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod : `https://…` ; utilisé dans les badges, le flux, la fédération |
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = uniquement à la demande de l’opérateur |
+| `HISTOR_DECLARATION_REFRESH_S` | `3600` | fréquence de lecture, entre deux passages, des fichiers de déclaration des éditeurs ([api](api.fr.md)) ; `0` = seulement au passage |
 | `HISTOR_CRAWL_ON_START` | `1` | `0` : une instance neuve attend un intervalle avant sa première exploration (crawl) |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | politesse : un hôte qui porte 2 000 points de terminaison (endpoints) n’est jamais sollicité plus de deux fois à la fois |
 | `HISTOR_CRAWL_LIMIT` | `0` | dev : n’observer que les N premiers points de terminaison |

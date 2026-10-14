@@ -121,11 +121,11 @@ recuento del día para ese resumen.
 
 Para un servidor stdio (un paquete de npm o PyPI que arranca tu cliente), envía `package` —`npm:<nombre>` o `pypi:<nombre>`— en lugar de `endpoint`; los nombres de PyPI se normalizan por ti. `target.packageVersion` es la última versión que HISTOR observó en su [sandbox de paquetes](operations.es.md#sandbox-de-paquetes). Un nombre de paquete nunca se cuenta como host desconocido. Dos respuestas más para un paquete. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), para cualquier paquete consultado, esté listado o no, nombra el paquete popular al que se parece este nombre —a un carácter, el mismo nombre bajo otro scope u otros separadores— cuando ese se descarga al menos 100 veces más; los nombres genéricos como `mcp-server` no son de nadie. `target.packageSignals` es lo que dice el registro sobre la versión que HISTOR observó: `provenance` (una compilación atestiguada en CI), `publisher` (nunca un correo), `installScripts` y `flags` con lo que cambió desde la versión observada antes: `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies`, las marcas de un token de publicación robado.
 
-`declared` aparece cuando el conjunto que enviaste es uno que el editor del servidor declara en su entrada del registro (sección siguiente): `toolSetDigest`, `toolCount`, `when` (la condición del editor, con sus palabras), `registryVersion`, `firstDeclared`, `lastDeclared`. `match` sigue diciendo lo que HISTOR observó: un conjunto declarado que HISTOR nunca vio sigue siendo `different`, o `not-observed` si HISTOR no tiene ningún conjunto, y la nota añade que el editor lo declara.
+`declared` aparece cuando el conjunto que enviaste es uno que declara el editor del servidor (sección siguiente): `toolSetDigest`, `toolCount`, `when` (la condición del editor, con sus palabras), `source` — `registry` si está en la propia entrada del registro, `url` si está en el archivo de declaración al que apunta (entonces con `url`) —, `registryVersion`, `firstDeclared`, `lastDeclared`. `match` sigue diciendo lo que HISTOR observó: un conjunto declarado que HISTOR nunca vio sigue siendo `different`, o `not-observed` si HISTOR no tiene ningún conjunto, y la nota añade que el editor lo declara, y dónde.
 
 ## Declarar conjuntos de herramientas (editores)
 
-Un servidor puede listar herramientas distintas en máquinas distintas. Un lanzador cede stdio a un programa instalado a su lado y, donde el programa falta (como en el sandbox de HISTOR), lista solo una herramienta de «instálame»; una clave real puede desbloquear herramientas que un valor de relleno no. HISTOR registra lo que observa. Un editor que conoce los otros conjuntos puede nombrarlos en el `server.json` que publica en el registro oficial de MCP, en el campo que el registro guarda para registros posteriores:
+Un servidor puede listar herramientas distintas en máquinas distintas. Un lanzador cede stdio a un programa instalado a su lado y, donde el programa falta (como en el sandbox de HISTOR), lista solo una herramienta de «instálame»; una clave real puede desbloquear herramientas que un valor de relleno no. HISTOR registra lo que observa. Un editor que conoce los otros conjuntos los nombra por su digest MTL/1 en el `server.json` que publica en el registro oficial de MCP, en el campo que el registro guarda para registros posteriores:
 
 ```json
 "_meta": {
@@ -134,18 +134,31 @@ Un servidor puede listar herramientas distintas en máquinas distintas. Un lanza
       "mtl": "1",
       "sets": [
         { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
-      ]
+      ],
+      "url": "https://example.com/.well-known/mcp-tool-sets.json"
     }
   }
 }
 ```
 
-- `digest` (obligatorio): el digest MTL/1 del resultado de `tools/list`. En una máquina que recibe ese conjunto, lo imprime `npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'`.
-- `count` (opcional): el número de herramientas, para mostrarlo.
-- `when` (opcional, como máximo 200 caracteres): la condición, con tus palabras, mostrada como tuya. Se descartan los caracteres de control e invisibles.
-- Como máximo 8 conjuntos. Una entrada que incumple estas reglas se omite, y el rastreo dice por qué (`lastRun.declaredToolSets.ignored` en `/api/v1/stats`).
+`sets`, `url` o ambos.
 
-HISTOR lee la declaración en cada rastreo diario desde la última entrada del servidor en el registro y la aplica a cada endpoint y paquete de ese servidor. Guarda el primer y el último día en que leyó cada conjunto; un conjunto que la entrada deja de nombrar se marca como retirado, no se borra. Una declaración es la palabra del editor: el registro garantiza que viene de quien controla el espacio de nombres del servidor, y HISTOR nunca la cuenta como observación, no emite etiquetas sobre ella y nunca ve las herramientas que hay detrás. WARDEN informa de un conjunto declarado como `HISTOR_DECLARED_TOOLSET` (low; info cuando HISTOR no tiene un conjunto propio) en lugar de `HISTOR_UNSEEN_TOOLSET`, y sigue ejecutando todas sus comprobaciones sobre las herramientas.
+- `sets`: como máximo 8 (aquí el registro guarda unos 4 KB). Cada uno tiene `digest` (obligatorio: el digest MTL/1 del resultado de `tools/list`), `count` (opcional: el número de herramientas, para mostrarlo) y `when` (opcional, como máximo 200 caracteres: la condición con tus palabras, mostrada como tuya; se descartan los caracteres de control e invisibles).
+- `url`: un archivo de declaración en tu propio dominio, para conjuntos que cambian sin una nueva entrada en el registro: un runner publicado aparte del paquete, uno por sistema operativo. El archivo es el mismo objeto, `{"mtl": "1", "sets": [...]}`, con hasta 64 conjuntos. HISTOR lo lee en cada rastreo y cada hora entre rastreos, así que un conjunto añadido con una versión del runner se conoce en menos de una hora. Un `"sets": []` explícito retira todos los conjuntos que listaba el archivo.
+
+**Dónde puede estar el archivo.** En el dominio que el registro verificó para el espacio de nombres del servidor, o en un subdominio: `ai.example/server` → `example.com`, `docs.example.com`. Para `io.github.<user>/…`: `<user>.github.io`, o bajo `/<user>/` en `raw.githubusercontent.com` o `gist.githubusercontent.com`. https en el puerto por defecto, sin redirecciones, como máximo 64 KiB, solo direcciones públicas. Una `url` en cualquier otro sitio se omite: nadie más puede hablar por el editor a través de un archivo.
+
+**Cómo escribirlo.** WARDEN 0.16 lo hace en una máquina que recibe el conjunto:
+
+```bash
+npx -y @aimarket/warden declare --when "runner 1.4, macOS" --out mcp-tool-sets.json -- npx -y @example/launcher
+```
+
+arranca el servidor como lo haría un cliente, calcula el digest de su `tools/list` y añade el conjunto al archivo (lo crea si no existe; conserva los demás y reemplaza el mismo digest). Ejecútalo en cada sistema operativo y versión del runner y publica el archivo. `--server-json --link URL` imprime el bloque de arriba para la entrada del registro; `--check URL --name SERVER` lee el archivo publicado como lo leerá HISTOR y dice qué tomará de él. Con un WARDEN anterior, `npx -y @aimarket/warden scan --json` imprime el digest como `mtlDigest`.
+
+**Qué hace HISTOR con ello.** Aplica la declaración a cada endpoint y paquete del servidor, según la última entrada del servidor en el registro, y guarda el primer y el último día en que leyó cada conjunto; un conjunto que deja de nombrarse se marca como retirado, no se borra. Un archivo que no se puede leer conserva lo que declaró hasta la siguiente lectura correcta —una lectura fallida no es una retirada— y la página del servidor muestra cuándo se leyó el archivo por última vez y por qué falló una lectura. Cuando la entrada deja de apuntar a un archivo, se retira lo que solo declaraba el archivo. Un digest nombrado en ambos sitios cuenta como de la entrada del registro. Todo lo que incumple las reglas se omite, y el rastreo dice por qué (`lastRun.declaredToolSets.ignored`, y `unread` para un archivo que no pudo leer, en `/api/v1/stats`).
+
+Una declaración es la palabra del editor: el registro garantiza que viene de quien controla el espacio de nombres del servidor, y el archivo está ligado al mismo dominio o cuenta. HISTOR nunca la cuenta como observación, no emite etiquetas sobre ella y nunca ve las herramientas que hay detrás. WARDEN informa de un conjunto declarado como `HISTOR_DECLARED_TOOLSET` (low; info cuando HISTOR no tiene un conjunto propio) en lugar de `HISTOR_UNSEEN_TOOLSET`, dice dónde está la declaración y sigue ejecutando todas sus comprobaciones sobre las herramientas.
 
 ## Estadísticas e insignias en vivo
 

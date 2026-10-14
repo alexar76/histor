@@ -315,6 +315,23 @@ MIGRATION_009: tuple[str, ...] = (
     """,
 )
 
+# Where each declared set comes from: the registry entry itself, or the declaration file it points at
+# on the publisher's own domain (histor.declared). The file's URL and how its last reads went.
+MIGRATION_010: tuple[str, ...] = (
+    "ALTER TABLE declared_toolsets ADD COLUMN source TEXT",
+    "UPDATE declared_toolsets SET source = 'registry' WHERE source IS NULL",
+    """
+    CREATE TABLE declaration_urls (
+        target_id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        first_seen TEXT NOT NULL,
+        last_fetched TEXT,
+        last_ok TEXT,
+        last_error TEXT
+    )
+    """,
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -326,6 +343,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (7, "007_package_signals", MIGRATION_007),
     (8, "008_security_events", MIGRATION_008),
     (9, "009_declared_toolsets", MIGRATION_009),
+    (10, "010_declaration_urls", MIGRATION_010),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

@@ -466,6 +466,7 @@ def create_app(services: Services) -> FastAPI:
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
             "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
+            "declarationFile": store.declaration_file(target_id),
         }
         if t["transport"] == "stdio":
             try:

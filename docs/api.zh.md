@@ -113,11 +113,11 @@ Content-Type: application/json
 
 对于 stdio 服务器（由你的客户端启动的 npm 或 PyPI 软件包），用 `package`——`npm:<名称>` 或 `pypi:<名称>`——代替 `endpoint`；PyPI 名称会替你规范化。`target.packageVersion` 是 HISTOR 在其[软件包沙箱](operations.zh.md#软件包沙箱)中最近观察到的版本。软件包名称永远不会被计为未知主机。 对软件包还有两项应答。`packageLookalike`（`of`、`weekly`、`how`、`ownWeekly`）：对任何被询问的软件包（无论是否已收录），当某个热门软件包的下载量至少高出 100 倍时，指出此名称模仿的那个热门软件包——相差一个字符、在另一个 scope 下同名，或仅分隔符不同；`mcp-server` 这类通用名称不属于任何人。`target.packageSignals` 是注册表对 HISTOR 所观察版本的说明：`provenance`（经证明的 CI 构建）、`publisher`（从不包含邮箱）、`installScripts`，以及 `flags`——相对上一个观察到的版本发生了什么变化：`provenance-lost`、`publisher-changed`、`install-scripts-added`、`new-dependencies`，这些是发布令牌被盗的典型迹象。
 
-当你发送的工具集是服务器发布者在其注册表条目中声明的工具集时（见下一节），会出现 `declared`：`toolSetDigest`、`toolCount`、`when`（发布者的条件，用其原话）、`registryVersion`、`firstDeclared`、`lastDeclared`。`match` 仍然表示 HISTOR 观测到的情况：HISTOR 从未见过的已声明工具集仍为 `different`，HISTOR 完全没有工具集时为 `not-observed`，说明中会补充发布者声明了它。
+当你发送的工具集是服务器发布者声明的工具集时（见下一节），会出现 `declared`：`toolSetDigest`、`toolCount`、`when`（发布者的条件，用其原话）、`source`——`registry` 表示在注册表条目本身中，`url` 表示在条目指向的声明文件中（此时还有 `url`）——、`registryVersion`、`firstDeclared`、`lastDeclared`。`match` 仍然表示 HISTOR 观测到的情况：HISTOR 从未见过的已声明工具集仍为 `different`，HISTOR 完全没有工具集时为 `not-observed`，说明中会补充发布者声明了它以及在哪里声明。
 
 ## 声明工具集（发布者）
 
-同一个服务器在不同机器上可能列出不同的工具。启动器把 stdio 交给安装在旁边的程序，而在缺少该程序的地方（例如 HISTOR 的沙箱），只列出一个“请安装我”的工具；真实的密钥可能解锁占位符无法解锁的工具。HISTOR 记录它观测到的内容。知道其他工具集的发布者可以在发布到官方 MCP 注册表的 `server.json` 中列出它们，放在注册表为下游注册表保留的字段里：
+同一个服务器在不同机器上可能列出不同的工具。启动器把 stdio 交给安装在旁边的程序，而在缺少该程序的地方（例如 HISTOR 的沙箱），只列出一个“请安装我”的工具；真实的密钥可能解锁占位符无法解锁的工具。HISTOR 记录它观测到的内容。知道其他工具集的发布者，用 MTL/1 摘要在发布到官方 MCP 注册表的 `server.json` 中列出它们，放在注册表为下游注册表保留的字段里：
 
 ```json
 "_meta": {
@@ -126,18 +126,31 @@ Content-Type: application/json
       "mtl": "1",
       "sets": [
         { "digest": "sha256-…", "count": 23, "when": "the runner is installed" }
-      ]
+      ],
+      "url": "https://example.com/.well-known/mcp-tool-sets.json"
     }
   }
 }
 ```
 
-- `digest`（必填）：`tools/list` 结果的 MTL/1 摘要。在能拿到该工具集的机器上，`npx -y @aimarket/warden scan --json | jq '.servers[] | {key, toolCount, mtlDigest}'` 会打印它。
-- `count`（可选）：工具数量，用于显示。
-- `when`（可选，最多 200 个字符）：条件，用你自己的话写，按你的原话显示。控制字符和不可见字符会被去掉。
-- 最多 8 个工具集。违反这些规则的条目会被跳过，爬取会说明原因（`/api/v1/stats` 中的 `lastRun.declaredToolSets.ignored`）。
+`sets`、`url` 或两者都写。
 
-HISTOR 在每次每日爬取时从服务器最新的注册表条目读取声明，并将其应用于该服务器的每个端点和软件包。它保存读到每个工具集的第一天和最后一天；条目不再列出的工具集会被标记为已撤回，而不是删除。声明是发布者的说法：注册表担保它来自控制该服务器命名空间的人，HISTOR 从不把它算作观测，不为其签发标签，也看不到其背后的工具。WARDEN 把已声明的工具集报告为 `HISTOR_DECLARED_TOOLSET`（low；当 HISTOR 没有自己的工具集时为 info），而不是 `HISTOR_UNSEEN_TOOLSET`，并且仍对这些工具执行它自己的全部检查。
+- `sets`：最多 8 个（注册表在这里保存约 4 KB）。每个包含 `digest`（必填：`tools/list` 结果的 MTL/1 摘要）、`count`（可选：工具数量，用于显示）和 `when`（可选，最多 200 个字符：用你自己的话写的条件，按你的原话显示；控制字符和不可见字符会被去掉）。
+- `url`：放在你自己域名上的声明文件，用于不发布新注册表条目也会变化的工具集——与软件包分开发布的运行器、每个操作系统各一个。文件是同样的对象 `{"mtl": "1", "sets": [...]}`，最多 64 个工具集。HISTOR 在每次爬取时读取它，并在两次爬取之间每小时读取一次，因此随运行器发布而新增的工具集在一小时内就会被知道。显式的 `"sets": []` 会撤回该文件列出的全部工具集。
+
+**文件可以放在哪里。** 注册表为该服务器命名空间验证过的域名或其子域名：`ai.example/server` → `example.com`、`docs.example.com`。对于 `io.github.<user>/…`：`<user>.github.io`，或 `raw.githubusercontent.com`、`gist.githubusercontent.com` 上 `/<user>/` 之下。默认端口的 https，不跟随重定向，最多 64 KiB，只允许公网地址。放在其他任何地方的 `url` 都会被跳过：别人无法通过文件替发布者发言。
+
+**如何编写。** WARDEN 0.16 在能拿到该工具集的机器上完成：
+
+```bash
+npx -y @aimarket/warden declare --when "runner 1.4, macOS" --out mcp-tool-sets.json -- npx -y @example/launcher
+```
+
+会像客户端一样启动服务器，计算其 `tools/list` 的摘要，并把该工具集加入文件（文件不存在时创建；保留其他工具集，相同摘要则替换）。在每个操作系统和每个运行器版本上运行它，然后发布文件。`--server-json --link URL` 打印上面用于注册表条目的块；`--check URL --name SERVER` 按 HISTOR 的方式读取已发布的文件，并说明 HISTOR 会从中采用什么。使用较早版本的 WARDEN 时，`npx -y @aimarket/warden scan --json` 会把摘要打印为 `mtlDigest`。
+
+**HISTOR 如何处理。** 它按服务器在注册表中的最新条目，把声明应用于该服务器的每个端点和软件包，并保存读到每个工具集的第一天和最后一天；不再列出的工具集会被标记为已撤回，而不是删除。无法读取的文件会保留其声明，直到下一次成功读取——读取失败不算撤回——服务器页面会显示文件最近一次读取的时间以及读取失败的原因。当条目不再指向文件时，只由文件声明的内容会被撤回。两处都列出的摘要按注册表条目计。违反规则的内容会被跳过，爬取会说明原因（`/api/v1/stats` 中的 `lastRun.declaredToolSets.ignored`，以及无法读取的文件对应的 `unread`）。
+
+声明是发布者的说法：注册表担保它来自控制该服务器命名空间的人，而文件绑定在同一个域名或账号上。HISTOR 从不把它算作观测，不为其签发标签，也看不到其背后的工具。WARDEN 把已声明的工具集报告为 `HISTOR_DECLARED_TOOLSET`（low；当 HISTOR 没有自己的工具集时为 info），而不是 `HISTOR_UNSEEN_TOOLSET`，说明声明在哪里，并且仍对这些工具执行它自己的全部检查。
 
 ## 统计与实时徽章
 

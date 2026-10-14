@@ -31,7 +31,7 @@ Schema revision 8 appends signed security events in the same transaction as the 
 
 `histor census > census.json` exports a signed latest-version manifest, distinct package/target denominators, complete/incomplete phase counts, tool-call coverage, evidence hashes and freshness. It cannot turn a catalogue size into a claim that all packages were tested. The actual 45k-package run and the public report require those observations first.
 
-The scanner vendors the exact local WARDEN npm tarball (0.13.0; 0.14.0 since 2026-10-11; 0.15.0 since 2026-10-14) with a lock-file integrity hash. This avoids depending on an unpublished npm version. Deployment acceptance and installed component identities are recorded separately; npm publication is not required.
+The scanner vendors the exact local WARDEN npm tarball (0.13.0; 0.14.0 since 2026-10-11; 0.15.0 since 2026-10-14; 0.16.0 since 2026-10-14) with a lock-file integrity hash. This avoids depending on an unpublished npm version. Deployment acceptance and installed component identities are recorded separately; npm publication is not required.
 
 ## Host integration corrections
 

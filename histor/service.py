@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -129,12 +130,28 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
             return True
         return (now - booted).total_seconds() >= interval
 
+    refresh = services.settings.declaration_refresh_s
+    refreshed = [time.monotonic()]  # the first crawl reads the files; the hourly reads start after it
+    refreshing = threading.Lock()
+
+    def refresh_declarations() -> None:
+        with refreshing:
+            try:
+                result = services.crawler.refresh_declarations()
+                if result.get("files"):
+                    log.warning("declaration files read: %s", result)
+            except Exception:  # noqa: BLE001 - a publisher's file must not end the schedule
+                log.exception("declaration refresh failed")
+
     if services.stop.wait(first_wait):
         return
     while True:
         try:
             if due():
                 crawl_in_background(services)
+            if refresh and time.monotonic() - refreshed[0] >= refresh and not refreshing.locked():
+                refreshed[0] = time.monotonic()
+                threading.Thread(target=refresh_declarations, name="histor-declared", daemon=True).start()
         except Exception:  # noqa: BLE001 - a transient DB error must not end the schedule
             log.exception("scheduler tick failed")
         if services.stop.wait(tick):

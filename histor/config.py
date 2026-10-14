@@ -118,6 +118,9 @@ class Settings:
     # Observations in flight across all hosts. Each holds a crawl thread (HISTOR_CRAWL_WORKERS, 12) for
     # up to sandbox_timeout_s and may buffer a 32 MiB answer in HISTOR's 768 MB container.
     sandbox_max_slots: int = 12
+    # Seconds between reads of the declaration files publishers point at from their registry entry
+    # (histor.declared); the crawl reads them too. 0 = only at the crawl.
+    declaration_refresh_s: int = 3600
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -215,6 +218,7 @@ def load_settings() -> Settings:
         sandbox_observers_valid=tuple(v.strip() for v in os.environ.get("HISTOR_SANDBOX_OBSERVERS_VALID", "3").split(",") if v.strip()),
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
+        declaration_refresh_s=_int("HISTOR_DECLARATION_REFRESH_S", 3600, minimum=0),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

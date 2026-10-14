@@ -38,6 +38,7 @@ de seguridad») y, si había un rastreo en curso al empezar, lo reinicia; con lo
 | `HISTOR_OPERATOR_TOKEN` | vacío | prod: ≥ 24 caracteres; protege `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; se usa en insignias, feed y federación |
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = solo a petición del operador |
+| `HISTOR_DECLARATION_REFRESH_S` | `3600` | cada cuánto se leen entre rastreos los archivos de declaración de los editores ([api](api.es.md)); `0` = solo en el rastreo |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: una instancia nueva espera un intervalo antes de su primer rastreo |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | cortesía: un host con 2 000 endpoints nunca recibe más de dos conexiones a la vez |
 | `HISTOR_CRAWL_LIMIT` | `0` | dev: observar solo los primeros N endpoints |

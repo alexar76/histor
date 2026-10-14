@@ -36,6 +36,7 @@ flowchart LR
 | `HISTOR_OPERATOR_TOKEN` | 空 | prod：≥ 24 个字符；保护 `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod：`https://…`；用于徽章、订阅源、联邦 |
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = 仅在运营方请求时抓取 |
+| `HISTOR_DECLARATION_REFRESH_S` | `3600` | 两次爬取之间读取发布者声明文件的间隔（[api](api.zh.md)）；`0` = 仅在爬取时读取 |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`：新实例会先等待一个间隔，再进行首次抓取 |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | 礼貌策略：即使一个主机承载 2000 个端点，同一时刻也最多只被访问两次 |
 | `HISTOR_CRAWL_LIMIT` | `0` | dev：只观测前 N 个端点 |

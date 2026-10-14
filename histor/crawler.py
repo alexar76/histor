@@ -39,6 +39,7 @@ from urllib.parse import urlsplit
 from histor import diffing
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
+from histor.declared import DeclarationError, DeclarationFetcher
 from histor.exit_reasons import NODE_RUNTIMES, classify, excerpt
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
@@ -205,6 +206,7 @@ class Crawler:
                  harvest_fn: Callable[[str], list[Target]] | None = None,
                  classifier: Classifier | None = None,
                  packages: PackageReader | SandboxPool | None = None,
+                 declarations: DeclarationFetcher | None = None,
                  clock: Callable[[], str] = utcnow) -> None:
         self.settings = settings
         self.store = store
@@ -218,6 +220,9 @@ class Crawler:
             readers = sandbox_readers(settings)
             packages = SandboxPool(readers, max_slots=settings.sandbox_max_slots) if len(readers) > 1 else readers[0][0]
         self.packages = packages
+        self.declarations = declarations or DeclarationFetcher(allow_private=settings.allow_private_targets)
+        # The crawl's sync and the hourly refresh both write the declared sets: one at a time.
+        self._declarations_lock = threading.Lock()
         self._due_versions: dict[str, str] = {}
         self._due_config: dict[str, dict[str, list[str]]] = {}
         self._due_legacy: set[str] = set()
@@ -269,7 +274,9 @@ class Crawler:
             stats["curated_endpoints"] = sum(1 for t in curated if not is_package(t))
             stats["curated_packages"] = sum(1 for t in curated if is_package(t))
             stats["not_attempted"] = dict(Counter(t.skip_reason for t in targets if t.skip_reason))
-            declared = self._sync_targets(targets, started)
+            files = self._read_declaration_files(
+                {t.declared_url for t in targets if t.declared_url and t.registry != REGISTRY_CURATED})
+            declared = self._sync_targets(targets, started, files)
             if declared["servers"] or declared["withdrawn"] or declared.get("ignored"):
                 stats["declared_tool_sets"] = declared
 
@@ -354,8 +361,33 @@ class Crawler:
             self.store.db.maintenance()
         return stats
 
-    def _sync_targets(self, targets: list[Target], now: str) -> dict[str, Any]:
-        with self.store.db.transaction() as tx:
+    def _read_declaration_files(self, urls: set[str]) -> dict[str, tuple[list[dict[str, Any]] | None, str | None]]:
+        """url → (sets, None) or (None, why it could not be read). Read before any transaction opens:
+        a slow publisher site must never hold the database."""
+        def one(url: str) -> tuple[str, tuple[list[dict[str, Any]] | None, str | None]]:
+            try:
+                sets, _ignored = self.declarations.fetch(url)
+                return url, (sets, None)
+            except DeclarationError as exc:
+                return url, (None, str(exc)[:300])
+            except Exception as exc:  # noqa: BLE001 - one publisher's file must not stop a crawl
+                return url, (None, f"internal: {type(exc).__name__}")
+        if not urls:
+            return {}
+        with ThreadPoolExecutor(max_workers=min(8, len(urls)), thread_name_prefix="histor-declared") as pool:
+            return dict(pool.map(one, sorted(urls)))
+
+    def refresh_declarations(self) -> dict[str, Any]:
+        """Read every declaration file again, between crawls: a publisher who ships a runner adds its
+        set to the file, and HISTOR should know within the hour, not the next day."""
+        rows = self.store.declaration_files()
+        files = self._read_declaration_files({r["url"] for r in rows})
+        with self._declarations_lock:
+            return self.store.refresh_declarations(rows, files, self.clock())
+
+    def _sync_targets(self, targets: list[Target], now: str,
+                      files: dict[str, tuple[list[dict[str, Any]] | None, str | None]] | None = None) -> dict[str, Any]:
+        with self._declarations_lock, self.store.db.transaction() as tx:
             for t in targets:
                 tx.execute(
                     "INSERT INTO targets(id, name, endpoint, transport, registry, title, description, version, "
@@ -371,7 +403,7 @@ class Crawler:
             # Only after a successful harvest: a registry outage must not delist everything.
             tx.execute("UPDATE targets SET delisted=1 WHERE last_listed < ?", (now,))
             # Curated targets have no registry entry, so nothing of theirs is declared.
-            return Store.sync_declarations(tx, [t for t in targets if t.registry != REGISTRY_CURATED], now)
+            return Store.sync_declarations(tx, [t for t in targets if t.registry != REGISTRY_CURATED], now, files)
 
     def reobserve(self, keys: list[str]) -> list[dict[str, Any]]:
         """Observe the named targets again now (``histor reobserve``), by endpoint or target id,
