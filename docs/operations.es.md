@@ -158,6 +158,17 @@ Si `runsc` no está registrado como runtime de Docker, se niega a ejecutar en lu
 
 **Comportamiento.** gVisor escribe su propia traza de la ejecución (`execve`, `connect`, `open`/`openat`) fuera del sandbox, así que el paquete no puede ocultarla ni falsificarla; el registro DNS anota cada nombre consultado y responde con una dirección única de 198.18.0.0/15 que no lleva a ninguna parte, de modo que cada intento de conexión se ve junto con el nombre para el que era. Por fase —scripts de instalación, arranque, llamadas canario— la observación informa de los programas lanzados, los nombres consultados y las direcciones marcadas, los señuelos abiertos y las escrituras que persistirían fuera del sandbox (`.bashrc`, `authorized_keys`, …). La actividad del proceso de entrada en la fase de scripts es la del propio npm y se descarta; las conexiones loopback también. La instalación añade el runtime `runsc-trace`, la red interna `histor-observe` (10.231.0.0/24), una regla de firewall que solo le deja llegar al resolvedor, `CAP_NET_BIND_SERVICE` para el servicio y un temporizador que borra las trazas leídas. HISTOR vuelve a ejecutar una versión cuando su observador es anterior a `HISTOR_SANDBOX_OBSERVER` (2 = comportamiento).
 
+**De quién es un registro de la trampa.** Un registro cuenta para una ejecución solo si su conexión se abrió
+mientras el contenedor de esa ejecución tenía la dirección (desde su `State.StartedAt`) y no lleva la etiqueta de otra
+ejecución. Cada señuelo que HISTOR planta o pasa lleva la etiqueta de 12 hexadecimales de la ejecución
+(`canary-<etiqueta>@histor-trap.invalid`, `histor-canary-ssh-<etiqueta>`, `histor-envkey-<etiqueta>` …). Docker da una
+dirección liberada al siguiente contenedor, y una conexión que el anterior titular dejó en cola puede aceptarse
+después de que arranque el siguiente: ese registro se muestra como tráfico de otra ejecución y deja la ejecución
+incompleta (`foreign-run-traffic`), nunca como destinatario, señuelo o destino de clave de esta ejecución. Las razones
+de incompletitud se suman (`dns-unrecorded` y `foreign-run-traffic` a la vez); una ejecución sin ninguna está limpia,
+así que «el observador no pudo dar cuenta de toda la ejecución» nunca se lee como «limpia». Lo sugirió un lector del
+estudio de 12 915 servidores; observador `gvisor-trace/8`.
+
 **Qué versiones.** Una versión publicada en npm o PyPI no puede cambiar, así que cada versión se observa una vez. Cada rastreo pregunta a los registros por la última versión (es barato) y ejecuta el sandbox solo para las versiones que no ha visto, como mucho `HISTOR_SANDBOX_MAX_PER_CRAWL` (300): primero las versiones nuevas de paquetes ya observados —ahí es donde una descripción de herramienta cambiada llega a todos los que ejecutan el paquete sin fijar versión—, después los paquetes nunca observados. Un fallo del propio sandbox se registra como error interno de HISTOR y no emite ninguna etiqueta sobre el paquete.
 
 **Preparar el host del sandbox** (Ubuntu 24.04, Docker):

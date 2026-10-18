@@ -120,3 +120,38 @@ def test_a_request_from_the_addresses_previous_holder_is_not_this_runs():
     collector.records[-1]["at"] = 205.0  # finished after the next container got the address
     assert collector.phase("10.231.0.7", 200.0, 300.0, "bbbbbbbbbbbb")["requests"] == []
     assert collector.phase("10.231.0.7", 50.0, 150.0, "aaaaaaaaaaaa")["requests"]
+
+
+def test_a_queued_connection_from_the_previous_holder_accepted_in_the_next_run_is_not_inherited():
+    """The handoff a reader of the 12,915-server survey asked for: container A leaves a connection queued,
+    Docker gives its address to B, and the trap accepts A's connection inside B's window. Address and time
+    say B; the content says A. Neither run inherits the other's canary, and B is not called clean."""
+    collector = sink.Collector()
+    a, b = "aaaaaaaaaaaa", "bbbbbbbbbbbb"
+    collector.record("10.231.0.7", "smtp", "smtp", f"Subject: x\n\nhistor-canary-ssh-{a}".encode(),
+                     recipient_list=[f"canary-{a}@histor-trap.invalid", "copy@attacker.invalid"], opened=210.0)
+    collector.record("10.231.0.7", "http", "api.example.test",
+                     json.dumps({"to": f"canary-{b}@histor-trap.invalid"}).encode(), opened=220.0)
+    phase = collector.phase("10.231.0.7", 200.0, 300.0, b)
+    # A's hidden copy and A's decoy are not B's.
+    assert not phase["decoyTransmitted"] and phase["unexpectedRecipients"] == []
+    assert [r["destination"] for r in phase["requests"]] == ["api.example.test"]
+    # And B is not clean: the observer saw traffic on this address it cannot account to B.
+    assert not phase["complete"] and phase["incompleteReasons"] == ["foreign-run-traffic"] and phase["foreignRequests"] == 1
+    # A's window closed before the queued connection was accepted: A is not credited with it either.
+    assert collector.phase("10.231.0.7", 100.0, 190.0, a)["requests"] == []
+    # A run whose records carry only its own tag stays clean.
+    collector.record("10.231.0.9", "http", "api.example.test",
+                     json.dumps({"to": f"canary-{b}@histor-trap.invalid"}).encode(), opened=230.0)
+    clean = collector.phase("10.231.0.9", 200.0, 300.0, b)
+    assert clean["complete"] and clean["incompleteReasons"] == [] and clean["foreignRequests"] == 0
+
+
+def test_a_record_with_this_runs_tag_and_another_stays_this_runs_but_is_flagged():
+    collector = sink.Collector()
+    a, b = "aaaaaaaaaaaa", "bbbbbbbbbbbb"
+    collector.record("10.231.0.7", "http", "x.example.test",
+                     json.dumps({"to": [f"canary-{b}@histor-trap.invalid", f"canary-{a}@histor-trap.invalid"]}).encode(), opened=220.0)
+    phase = collector.phase("10.231.0.7", 200.0, 300.0, b)
+    assert len(phase["requests"]) == 1 and phase["unexpectedRecipients"] == [f"canary-{a}@histor-trap.invalid"]
+    assert not phase["complete"] and phase["incompleteReasons"] == ["foreign-run-traffic"]

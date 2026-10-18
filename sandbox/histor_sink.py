@@ -33,6 +33,24 @@ RECIPIENT_KEYS = {
 }
 
 
+# The run a trap record belongs to, read from its content: every placeholder HISTOR plants or passes
+# carries the run's 12-hex tag (canary-<tag>@histor-trap.invalid, histor-canary-ssh-<tag>,
+# histor-envkey-<tag>, env-<tag>.histor-trap.invalid ...). Docker hands a freed address to the next
+# container, and a connection the previous holder queued can be accepted after the next one started:
+# matched by address and time alone, that run would inherit the other's canary.
+RUN_TAG = re.compile(
+    rb"(?:histor-canary-[a-z0-9]+-|canary-|histor-envkey-|env-|historcanary|histor-trap\.invalid/|histor canary (?:note )?)"
+    rb"([0-9a-f]{12})(?![0-9a-f])"
+)
+
+
+def run_tags(payload: bytes, recipient_list) -> list[str]:
+    found = {m.group(1).decode() for m in RUN_TAG.finditer(payload)}
+    for r in recipient_list or []:
+        found.update(m.group(1).decode() for m in RUN_TAG.finditer(str(r).encode(errors="ignore")))
+    return sorted(found)
+
+
 def recipients(value, active=False):
     found = set()
     if isinstance(value, dict):
@@ -64,6 +82,7 @@ class Collector:
         if len(recipient_list) > 40:
             complete = False
         recipient_list = [str(value)[:320] for value in recipient_list[:40]]
+        tags = run_tags(payload, recipient_list)
         now = time.time()
         record = {
             "at": now,
@@ -76,6 +95,7 @@ class Collector:
             "recipients": recipient_list,
             "payloadSha256": hashlib.sha256(payload).hexdigest(),
             "complete": complete,
+            "runTags": tags[:8],
             # A placeholder key HISTOR set because the server asked for one: where it went is a
             # fact to show (its own API, or somewhere else), not a decoy theft.
             "envKeySent": b"histor-envkey-" in payload,
@@ -94,10 +114,19 @@ class Collector:
         with self.lock:
             rows = [dict(r) for r in self.records if r["source"] == source and since <= r.get("opened", r["at"]) <= until]
             lost = self.lost_at > 0 and self.lost_at >= since
+        # A record that carries only other runs' tags was sent by whoever held this address before: it
+        # is not this run's evidence (no recipient, decoy or key destination of its own), and the run is
+        # not clean either — the observer saw traffic on this address it cannot account to this run.
+        # A record that carries this run's tag and another's stays this run's, and is flagged the same way.
+        foreign = [r for r in rows if set(r.get("runTags") or []) - {tag}]
+        rows = [r for r in rows if not (r.get("runTags") and tag not in r["runTags"])]
+        reasons = ["foreign-run-traffic"] if foreign else []
         expected = f"canary-{tag}@histor-trap.invalid"
         unexpected = sorted({r for row in rows for r in row["recipients"] if r.lower() != expected})
         return {
-            "complete": not lost and all(r["complete"] for r in rows),
+            "complete": not lost and not foreign and all(r["complete"] for r in rows),
+            "incompleteReasons": reasons,
+            "foreignRequests": len(foreign),
             "requests": [{k: v for k, v in row.items() if k not in ("source", "at", "opened")} for row in rows[:100]],
             "unexpectedRecipients": unexpected[:40],
             "decoyTransmitted": any(r["decoyTransmitted"] for r in rows),

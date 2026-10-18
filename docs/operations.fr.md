@@ -160,6 +160,18 @@ Si `runsc` n’est pas un runtime Docker, il refuse de s’exécuter plutôt que
 
 **Comportement.** gVisor écrit lui-même la trace de l’exécution (`execve`, `connect`, `open`/`openat`) hors du bac à sable : le paquet ne peut ni la cacher ni la falsifier ; le journal DNS note chaque nom demandé et répond par une adresse unique de 198.18.0.0/15 qui ne mène nulle part, si bien que chaque tentative de connexion est vue avec le nom visé. Par phase — scripts d’installation, démarrage, appels canaris — l’observation rapporte les programmes lancés, les noms demandés et les adresses composées, les leurres ouverts et les écritures qui survivraient hors du bac à sable (`.bashrc`, `authorized_keys`, …). L’activité du processus d’entrée dans la phase des scripts est celle de npm lui-même et est écartée, de même que les connexions loopback. L’installation ajoute le runtime `runsc-trace`, le réseau interne `histor-observe` (10.231.0.0/24), une règle de pare-feu qui ne lui laisse joindre que le résolveur, `CAP_NET_BIND_SERVICE` pour le service et une minuterie qui efface les traces lues. HISTOR relance une version quand son observateur est antérieur à `HISTOR_SANDBOX_OBSERVER` (2 = comportement).
 
+**À qui appartient un enregistrement du piège.** Un enregistrement compte pour une exécution seulement si sa
+connexion s’est ouverte pendant que le conteneur de cette exécution détenait l’adresse (depuis son `State.StartedAt`)
+et s’il ne porte pas l’étiquette d’une autre exécution. Chaque leurre que HISTOR dépose ou transmet porte l’étiquette
+de 12 caractères hexadécimaux de l’exécution (`canary-<étiquette>@histor-trap.invalid`,
+`histor-canary-ssh-<étiquette>`, `histor-envkey-<étiquette>` …). Docker donne une adresse libérée au conteneur suivant,
+et une connexion mise en file par le détenteur précédent peut être acceptée après le démarrage du suivant : un tel
+enregistrement est montré comme le trafic d’une autre exécution et laisse l’exécution incomplète
+(`foreign-run-traffic`), jamais comme destinataire, leurre ou destination de clé de cette exécution. Les raisons
+d’incomplétude s’additionnent (`dns-unrecorded` et `foreign-run-traffic` ensemble) ; une exécution sans aucune est
+propre, donc « l’observateur n’a pas pu rendre compte de toute l’exécution » ne se lit jamais comme « propre ».
+Suggéré par un lecteur de l’étude des 12 915 serveurs ; observateur `gvisor-trace/8`.
+
 **Quelles versions.** Une version publiée sur npm ou PyPI ne peut pas changer : chaque version est observée une fois. Chaque exploration demande aux registres la dernière version (c’est peu coûteux) et ne lance le bac à sable que pour les versions jamais vues, au plus `HISTOR_SANDBOX_MAX_PER_CRAWL` (300) : d’abord les nouvelles versions de paquets déjà observés — c’est là qu’une description d’outil modifiée atteint tous ceux qui lancent le paquet sans version fixée —, puis les paquets jamais observés. Une panne du bac à sable lui-même est enregistrée comme erreur interne d’HISTOR et n’émet aucune étiquette sur le paquet.
 
 **Préparer l’hôte du bac à sable** (Ubuntu 24.04, Docker) :

@@ -127,7 +127,7 @@ MAX_NOISE = 4096               # bytes of non-protocol stdout kept to say why a 
 # The trace reader's own generation: 3 resolves relative opens and reads socketpair ends as local
 # (2 listed asyncio's self-pipe as a destination). HISTOR runs a package traced by an older
 # reader again when that left it with sends it could not place.
-TRACE_OBSERVER = "gvisor-trace/7"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs; 6: a socket's family follows the socket, not its fd number; 7: an accepted connection's peer
+TRACE_OBSERVER = "gvisor-trace/8"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs; 6: a socket's family follows the socket, not its fd number; 7: an accepted connection's peer; 8: a trap record carrying another run's tag is not this run's evidence, and leaves it incomplete
 
 
 class Refused(Exception):
@@ -901,10 +901,14 @@ def sandbox_flags(run_id: str, work: Path, traced: bool, cidfile: Path, *, packa
 
 
 def merge_sink(section: dict[str, Any], ip: str | None, since: float, until: float, tag: str) -> None:
-    captured = SINK.phase(ip, since, until, tag) if SINK else {"complete": False}
+    captured = SINK.phase(ip, since, until, tag) if SINK else {"complete": False, "incompleteReasons": ["sink-unavailable"]}
     complete = section.get("complete") is True and captured.pop("complete") is True and not captured.get("truncated")
+    # The trap's reasons join the trace's: a run the observer could not fully account for says every
+    # reason why ("dns-unrecorded" and "foreign-run-traffic" together), and stays apart from a clean one.
+    reasons = {*section.get("incompleteReasons", []), *captured.pop("incompleteReasons", [])}
     section.update(captured)
     section["complete"] = complete
+    section["incompleteReasons"] = sorted(reasons)
 
 
 def container_started(cid: str | None) -> float | None:

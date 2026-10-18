@@ -498,3 +498,28 @@ def test_a_send_on_an_accepted_connection_goes_to_the_peer_accept_printed(tmp_pa
     r = _trace(tmp_path, monkeypatch, [pair, listen, blind, reply])
     assert not r["complete"] and "socket-destination-unresolved" in r["incompleteReasons"]
 
+
+
+def test_the_traps_reasons_join_the_traces_and_a_clean_run_stays_clean(monkeypatch):
+    """A run the observer could not fully account for keeps every reason, the DNS one included; a run
+    with none is clean. The two never collapse into one 'answered' count."""
+    class Foreign:
+        def phase(self, ip, since, until, tag):
+            return {"complete": False, "incompleteReasons": ["foreign-run-traffic"], "foreignRequests": 1, "requests": []}
+
+    class Clean:
+        def phase(self, ip, since, until, tag):
+            return {"complete": True, "incompleteReasons": [], "foreignRequests": 0, "requests": []}
+
+    monkeypatch.setattr(obs, "SINK", Foreign())
+    section = {"complete": False, "incompleteReasons": ["dns-unrecorded"]}
+    obs.merge_sink(section, "10.231.0.7", 0.0, 1.0, "bbbbbbbbbbbb")
+    assert not section["complete"] and section["incompleteReasons"] == ["dns-unrecorded", "foreign-run-traffic"]
+    monkeypatch.setattr(obs, "SINK", Clean())
+    section = {"complete": True, "incompleteReasons": []}
+    obs.merge_sink(section, "10.231.0.7", 0.0, 1.0, "bbbbbbbbbbbb")
+    assert section["complete"] and section["incompleteReasons"] == []
+    monkeypatch.setattr(obs, "SINK", None)
+    section = {"complete": True, "incompleteReasons": []}
+    obs.merge_sink(section, "10.231.0.7", 0.0, 1.0, "bbbbbbbbbbbb")
+    assert not section["complete"] and section["incompleteReasons"] == ["sink-unavailable"]

@@ -162,6 +162,16 @@ The internal network is `histor-observe` (10.231.0.0/24). The root-owned firewal
 
 All process file/network activity remains evidence, including PID 1. npm uses `/dev/null` as its own user configuration and disables its update notifier; the planted `.npmrc` remains available for package code. Socket creation distinguishes local netlink from outbound `sendto` activity. Missing paths, destinations or truncated evidence are incomplete. Container address discovery retries transient Docker timeouts within a 30-second bound.
 
+**Whose evidence a trap record is.** A record counts for a run only if its connection opened while that run's
+container held the address (from its `State.StartedAt`) and it does not carry another run's tag. Every placeholder
+HISTOR plants or passes carries the run's 12-hex tag (`canary-<tag>@histor-trap.invalid`, `histor-canary-ssh-<tag>`,
+`histor-envkey-<tag>` …). Docker gives a freed address to the next container, and a connection the previous holder
+queued can be accepted after the next one started: such a record is shown as another run's traffic and leaves the
+run incomplete (`foreign-run-traffic`), never as this run's recipient, decoy or key destination. Incomplete reasons
+add up (`dns-unrecorded` and `foreign-run-traffic` together); a run with none is clean, so "the observer could not
+fully account for this run" never reads as "clean". Suggested by a reader of the 12,915-server survey; observer
+`gvisor-trace/8`.
+
 **Which versions.** A version with successful, complete observer-3 evidence is cached. New versions, incomplete observations and older observers are retried, ordered by oldest attempt so popular failures cannot starve unobserved packages. `HISTOR_SANDBOX_MAX_PER_CRAWL` caps work per crawl. Sandbox infrastructure errors are not clean package results. Details and acceptance evidence: [observer 3](behaviour-v3.md).
 
 **Set up the sandbox host** (Ubuntu 24.04, Docker):

@@ -128,7 +128,7 @@ RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", 
 # The sandbox's trace reader (behaviour.observer). gvisor-trace/2 listed the byte asyncio writes
 # to its own socketpair as a send it could not place, which read as "reached out at startup" for
 # nearly every Python server; a package it left with such sends is traced again, once.
-TRACE_OBSERVER = "gvisor-trace/7"
+TRACE_OBSERVER = "gvisor-trace/8"
 UNPLACED_SEND = ("sendto(", "sendmsg(", "sendmmsg(")
 # Evidence that cannot be this run's: another run's canary recipient, or a name only MOMUS's
 # red-team fixtures use. gvisor-trace/3 and older matched trap records by address from before
@@ -144,9 +144,13 @@ def _unplaced_sends(behaviour: Any) -> bool:
     if not isinstance(behaviour, dict) or behaviour.get("observer") == TRACE_OBSERVER:
         return False
     phases = [behaviour[p] for p in ("installScripts", "startup", "calls") if isinstance(behaviour.get(p), dict)]
-    return (any(isinstance(e, str) and e.startswith(UNPLACED_SEND) for ph in phases for e in ph.get("network") or [])
+    foreign = any(isinstance(e, str) and FOREIGN_CANARY.match(e) for ph in phases for e in ph.get("unexpectedRecipients") or [])
+    if behaviour.get("observer") == "gvisor-trace/7":
+        # 8 reads only one thing differently: a trap record carrying another run's tag (a connection the
+        # address's previous holder queued). A 7 trace is traced again only when it shows one.
+        return foreign
+    return (foreign or any(isinstance(e, str) and e.startswith(UNPLACED_SEND) for ph in phases for e in ph.get("network") or [])
             or any(isinstance(e, str) and not e.startswith("/") for ph in phases for e in ph.get("writes") or [])
-            or any(isinstance(e, str) and FOREIGN_CANARY.match(e) for ph in phases for e in ph.get("unexpectedRecipients") or [])
             # gvisor-trace/4 read the container's start after removing it, so every run said so.
             or any("start-time-unknown" in (ph.get("incompleteReasons") or []) for ph in phases)
             or any(isinstance(e, str) and "momus-trap.invalid" in e for ph in phases
