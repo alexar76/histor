@@ -90,6 +90,8 @@ solo falla en el sentido mecánico de que dos resúmenes difieren. No se lee có
 resuelve ningún paquete, no se observa ningún comportamiento. Un cambio se muestra como una fecha y
 un diff, nunca como una acusación. Detalles: [docs/labels.es.md](docs/labels.es.md).
 
+**Cuánto cuesta una lista de herramientas.** Un cliente reenvía la lista de herramientas de cada servidor conectado con cada petición al modelo. Sobre los 18 204 paquetes y 16 170 servidores remotos del registro, la mediana de una lista ronda los 1 300 tokens, el percentil 90 los 8 000, y 31 paquetes listan más de 100 000: [docs/tool-list-cost.es.md](docs/tool-list-cost.es.md).
+
 ## Inicio rápido
 
 ```bash

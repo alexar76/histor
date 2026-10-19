@@ -1,0 +1,160 @@
+{
+ "tokenizer": "tiktoken 0.12.0, o200k_base",
+ "unreadable_lines": 0,
+ "kinds": {
+  "package": {
+   "servers": 18204,
+   "definitions": 337449,
+   "tools_per_server": {
+    "mean": 18.5,
+    "median": 8,
+    "p90": 40,
+    "max": 2516
+   },
+   "tokens_sent_per_server": {
+    "mean": 3812,
+    "median": 1272,
+    "p75": 3487,
+    "p90": 8361,
+    "p99": 39612,
+    "max": 304780
+   },
+   "tokens_full_per_server": {
+    "median": 1390,
+    "p90": 9960
+   },
+   "tokens_per_tool": {
+    "mean": 205.7,
+    "median": 129,
+    "p90": 388
+   },
+   "servers_over": {
+    ">1000": 10386,
+    ">5000": 3218,
+    ">10000": 1447,
+    ">50000": 115,
+    ">100000": 31
+   },
+   "largest": [
+    {
+     "tools": 1722,
+     "tokens_sent": 304780
+    },
+    {
+     "tools": 1221,
+     "tokens_sent": 280090
+    },
+    {
+     "tools": 2516,
+     "tokens_sent": 265075
+    },
+    {
+     "tools": 317,
+     "tokens_sent": 264966
+    },
+    {
+     "tools": 952,
+     "tokens_sent": 257992
+    },
+    {
+     "tools": 197,
+     "tokens_sent": 249711
+    },
+    {
+     "tools": 309,
+     "tokens_sent": 246621
+    },
+    {
+     "tools": 194,
+     "tokens_sent": 246433
+    },
+    {
+     "tools": 1300,
+     "tokens_sent": 230083
+    },
+    {
+     "tools": 388,
+     "tokens_sent": 191991
+    }
+   ]
+  },
+  "remote": {
+   "servers": 16170,
+   "definitions": 232427,
+   "tools_per_server": {
+    "mean": 14.4,
+    "median": 7,
+    "p90": 31,
+    "max": 1711
+   },
+   "tokens_sent_per_server": {
+    "mean": 3412,
+    "median": 1328,
+    "p75": 4790,
+    "p90": 7425,
+    "p99": 22294,
+    "max": 547935
+   },
+   "tokens_full_per_server": {
+    "median": 1585,
+    "p90": 7430
+   },
+   "tokens_per_tool": {
+    "mean": 237.4,
+    "median": 231,
+    "p90": 369
+   },
+   "servers_over": {
+    ">1000": 10137,
+    ">5000": 3953,
+    ">10000": 618,
+    ">50000": 39,
+    ">100000": 9
+   },
+   "largest": [
+    {
+     "tools": 71,
+     "tokens_sent": 547935
+    },
+    {
+     "tools": 745,
+     "tokens_sent": 357050
+    },
+    {
+     "tools": 144,
+     "tokens_sent": 316664
+    },
+    {
+     "tools": 15,
+     "tokens_sent": 175588
+    },
+    {
+     "tools": 193,
+     "tokens_sent": 168959
+    },
+    {
+     "tools": 255,
+     "tokens_sent": 154228
+    },
+    {
+     "tools": 393,
+     "tokens_sent": 152801
+    },
+    {
+     "tools": 1711,
+     "tokens_sent": 105451
+    },
+    {
+     "tools": 339,
+     "tokens_sent": 100233
+    },
+    {
+     "tools": 219,
+     "tokens_sent": 96979
+    }
+   ]
+  }
+ },
+ "snapshot": "HISTOR log, current tool list of every server with at least one tool, 2026-10-19 ~11:30 UTC",
+ "counted_as": "per tool {name, description, input_schema} as compact JSON (what a client sends a model); 'full' = the listed definitions as JSON"
+}

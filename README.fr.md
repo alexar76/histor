@@ -92,6 +92,8 @@ pas un constat. Trois des quatre méthodes ne peuvent jamais renvoyer `fail` ; l
 aucun paquet résolu, aucun comportement observé. Un changement s’affiche comme une date et un diff,
 jamais comme une accusation. Détails : [docs/labels.fr.md](docs/labels.fr.md).
 
+**Ce que coûte une liste d’outils.** Un client renvoie la liste d’outils de chaque serveur connecté à chaque requête au modèle. Sur les 18 204 paquets et 16 170 serveurs distants du journal, la médiane d’une liste avoisine 1 300 tokens, le 90e centile 8 000, et 31 paquets en listent plus de 100 000 : [docs/tool-list-cost.fr.md](docs/tool-list-cost.fr.md).
+
 ## Démarrage rapide
 
 ```bash

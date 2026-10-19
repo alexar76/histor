@@ -96,6 +96,8 @@ four methods can never return `fail`; the fourth (continuity) fails only in the 
 that two digests differ. No source is read, no package resolved, no behaviour observed. A change
 is shown as a date and a diff, never as an accusation. Details: [docs/labels.md](docs/labels.md).
 
+**What a tool list costs.** A client resends every connected server's tool list with each model request. Over the 18,204 packages and 16,170 remote servers in the log, a list's median is about 1,300 tokens, the 90th percentile about 8,000, and 31 packages list over 100,000: [docs/tool-list-cost.md](docs/tool-list-cost.md).
+
 ## Quick start
 
 ```bash
