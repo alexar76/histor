@@ -12,6 +12,14 @@ def main(argv: list[str] | None = None) -> int:
     command = args[0] if args else "serve"
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
+    if command == "mcp":
+        from histor.mcp_stdio import main as mcp
+
+        if len(args) != 1:
+            print("usage: histor mcp", file=sys.stderr)
+            return 2
+        return mcp()
+
     if command == "migrate":
         from histor.migrations import main as migrate
 
@@ -87,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|crawl|migrate [up|status]|issuer|audit URL|sandboxes]", file=sys.stderr)
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|sandboxes]", file=sys.stderr)
         return 2
     finally:
         services.close()

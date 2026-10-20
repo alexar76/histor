@@ -1,9 +1,16 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["alexar76"],
+  "maintainers": [
+    "alexar76"
+  ],
   "name": "histor",
   "description": "Public transparency log of MCP tool definitions: signed MTL/1 labels over what each server advertised, when it changed, and a Merkle log anyone can audit.",
   "repository": "https://github.com/alexar76/histor",
   "dockerfile": "Dockerfile",
-  "command": [".venv/bin/python", "-m", "histor", "serve"]
+  "command": [
+    ".venv/bin/python",
+    "-m",
+    "histor",
+    "mcp"
+  ]
 }

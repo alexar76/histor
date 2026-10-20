@@ -108,6 +108,11 @@ HISTOR_CRAWL_LIMIT=40 uv run --project . python -m histor crawl   # observe 40 e
 uv run --project . python -m histor serve   # desk + API on :9490 (SQLite under ./data)
 ```
 
+For a local MCP client or Glama, run `python -m histor mcp`. It exposes
+`histor_changes`, `histor_check` and `histor_server` over stdio using the local log.
+It opens no HTTP port and starts no crawl; use the separate `crawl` command above to
+populate a fresh log. See [Glama build settings](docs/GLAMA.md).
+
 Production runs on Postgres, and `HISTOR_PROFILE=prod` refuses to start without it:
 
 ```bash
