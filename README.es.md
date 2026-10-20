@@ -92,6 +92,8 @@ un diff, nunca como una acusación. Detalles: [docs/labels.es.md](docs/labels.es
 
 **Cuánto cuesta una lista de herramientas.** Un cliente reenvía la lista de herramientas de cada servidor conectado con cada petición al modelo. Sobre los 18 204 paquetes y 16 170 servidores remotos del registro, la mediana de una lista ronda los 1 300 tokens, el percentil 90 los 8 000, y 31 paquetes listan más de 100 000: [docs/tool-list-cost.es.md](docs/tool-list-cost.es.md).
 
+**Descargar los datos.** Una vez al mes, todo lo que ve el registro se publica como archivos en [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): cada servidor listado, cada conjunto de herramientas que mostró, cada cambio registrado y los escaneos de WARDEN. Son JSON Lines (gzip) con un manifiesto firmado por la clave del registro; la compilación es CC BY 4.0. El README de cada instantánea describe los campos y cómo cargarlos en pandas o DuckDB ([histor/dataset.py](histor/dataset.py)). También en [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); para citarlo: [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759).
+
 ## Inicio rápido
 
 ```bash

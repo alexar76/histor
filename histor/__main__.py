@@ -1,4 +1,4 @@
-"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL`` · ``histor sandboxes``."""
+"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL`` · ``histor sandboxes`` · ``histor export-dataset DIR``."""
 
 from __future__ import annotations
 
@@ -92,10 +92,14 @@ def main(argv: list[str] | None = None) -> int:
             for subscription in subscriptions:
                 print(json.dumps({"id": subscription["id"], **deliver(services.store, subscription)}))
             return 0
+        if command == "export-dataset":
+            from histor.dataset import main as export_dataset
+
+            return export_dataset(services.store, services.key, settings, args[1:])
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|sandboxes]", file=sys.stderr)
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|sandboxes|export-dataset DIR]", file=sys.stderr)
         return 2
     finally:
         services.close()

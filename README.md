@@ -98,6 +98,8 @@ is shown as a date and a diff, never as an accusation. Details: [docs/labels.md]
 
 **What a tool list costs.** A client resends every connected server's tool list with each model request. Over the 18,204 packages and 16,170 remote servers in the log, a list's median is about 1,300 tokens, the 90th percentile about 8,000, and 31 packages list over 100,000: [docs/tool-list-cost.md](docs/tool-list-cost.md).
 
+**Download the data.** Once a month the log's whole view is published as files at [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): every listed server, every tool set it showed, every recorded change and the WARDEN scans. The files are JSON Lines (gzip) with a manifest signed by the log's key; the compilation is CC BY 4.0. Each snapshot's README lists the fields and loads in pandas or DuckDB ([histor/dataset.py](histor/dataset.py)). Also on [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); to cite: [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759).
+
 ## Quick start
 
 ```bash

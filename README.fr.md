@@ -94,6 +94,8 @@ jamais comme une accusation. Détails : [docs/labels.fr.md](docs/labels.fr.md).
 
 **Ce que coûte une liste d’outils.** Un client renvoie la liste d’outils de chaque serveur connecté à chaque requête au modèle. Sur les 18 204 paquets et 16 170 serveurs distants du journal, la médiane d’une liste avoisine 1 300 tokens, le 90e centile 8 000, et 31 paquets en listent plus de 100 000 : [docs/tool-list-cost.fr.md](docs/tool-list-cost.fr.md).
 
+**Télécharger les données.** Une fois par mois, tout ce que voit le journal est publié sous forme de fichiers sur [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/) : chaque serveur listé, chaque ensemble d’outils qu’il a montré, chaque changement enregistré et les analyses WARDEN. Ce sont des JSON Lines (gzip) avec un manifeste signé par la clé du journal ; la compilation est sous CC BY 4.0. Le README de chaque instantané décrit les champs et le chargement dans pandas ou DuckDB ([histor/dataset.py](histor/dataset.py)). Aussi sur [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions) ; pour le citer : [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759).
+
 ## Démarrage rapide
 
 ```bash
