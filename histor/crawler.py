@@ -24,8 +24,8 @@ continuity label would say "definitions changed" about definitions that did not.
 from __future__ import annotations
 
 import json
-import re
 import logging
+import re
 import threading
 import time
 from collections import Counter, defaultdict, deque
@@ -267,6 +267,15 @@ class Crawler:
         with self.store.db.transaction() as tx:
             run_id = int(tx.one("INSERT INTO runs(started_at) VALUES(?) RETURNING id", (started,))["id"])
         stats: dict[str, Any] = {"started_at": started}
+        # A restart used to cost the whole cycle: the next run dialled every server again, the
+        # same day. Continue the interrupted cycle instead, and say so in the run's stats at once,
+        # so a run interrupted in turn still names the cycle it belongs to.
+        # A cycle is one interval; with the scheduler off (interval 0, crawls by hand) it is a day.
+        resume = self.store.resume_point(run_id, started, self.settings.crawl_interval_s or 86400)
+        stats["cycle_started_at"] = resume["cycle_started_at"] if resume else started
+        if resume:
+            stats["resumed_from"] = resume["run_id"]
+        self.store.set_run_stats(run_id, stats)
         try:
             targets = self.harvest_fn(self.settings.registry_url)
             official = [t for t in targets if t.registry != REGISTRY_CURATED]
@@ -290,6 +299,11 @@ class Crawler:
             dialable = [t for t in targets if not t.skip_reason]
             if self.settings.crawl_limit:
                 dialable = dialable[: self.settings.crawl_limit]
+            if resume:
+                done = self.store.attempted_since(resume["cycle_started_at"])
+                before = len(dialable)
+                dialable = [t for t in dialable if t.id not in done]
+                stats["skipped_already_attempted"] = before - len(dialable)
             packages = [t for t in dialable if parse_package(t.endpoint)]
             if packages:
                 due = self._packages_due(packages, stats)

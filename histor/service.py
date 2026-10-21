@@ -104,9 +104,9 @@ def crawl_in_background(services: Services) -> bool:
 def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300.0) -> None:
     """Crawl every ``crawl_interval_s``, counted from the start of the last SUCCESSFUL crawl.
 
-    A crawl that failed (registry down, crash) or was interrupted by a restart is retried after at
-    most an hour instead of waiting a full interval — otherwise one bad night costs a day of
-    history. With ``HISTOR_CRAWL_ON_START=0`` a fresh instance waits one interval before its first
+    A crawl that failed (registry down, crash) is retried after at most an hour instead of
+    waiting a full interval — otherwise one bad night costs a day of history. One interrupted by a
+    restart continues at once: the new run skips what the interrupted cycle already read. With ``HISTOR_CRAWL_ON_START=0`` a fresh instance waits one interval before its first
     automatic crawl; an operator can still trigger one by hand.
     """
     interval = services.settings.crawl_interval_s
@@ -123,9 +123,14 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
         ok = services.store.last_successful_run()
         last = services.store.last_run(finished_only=True)
         if last and last["stats"].get("error") and (ok is None or last["id"] > ok["id"]):
+            if str(last["stats"]["error"]).startswith("interrupted"):
+                # A restart, not a failure: the next run continues the cycle, re-dialling nothing.
+                return True
             return (now - parse(last["finished_at"])).total_seconds() >= retry
         if ok:
-            return (now - parse(ok["started_at"])).total_seconds() >= interval
+            # Counted from the start of the cycle, so a resumed run keeps the daily rhythm.
+            start = ok["stats"].get("cycle_started_at") or ok["started_at"]
+            return (now - parse(start)).total_seconds() >= interval
         if services.settings.crawl_on_start:
             return True
         return (now - booted).total_seconds() >= interval

@@ -550,6 +550,46 @@ class Store:
                 tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?", (now, dumps(stats), row["id"]))
         return len(rows)
 
+    def resume_point(self, run_id: int, now: str, window_s: int) -> dict[str, Any] | None:
+        """The cycle a new run continues, or None.
+
+        A run that ended with an error (a restart marks it "interrupted") leaves its targets
+        half-read. Walking back from ``run_id`` through the unbroken chain of such runs (up to the
+        last successful one), the cycle began at the earliest start that is less than ``window_s``
+        old: a run's recorded ``cycle_started_at``, or its own start when it recorded none (older
+        code, or a run killed before it wrote one). The new run keeps that start, and every target
+        attempted since then is not dialled again. No chain, or a chain older than the window:
+        a fresh cycle.
+        """
+        if window_s <= 0:
+            return None
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT * FROM runs WHERE id < ? ORDER BY id DESC LIMIT 50", (run_id,))
+        parse = lambda ts: datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+        cycle: str | None = None
+        latest: int | None = None
+        for row in rows:
+            if not row.get("finished_at"):
+                break
+            stats = json.loads(row["stats"]) if row.get("stats") else {}
+            if not stats.get("error"):
+                break
+            start = stats.get("cycle_started_at") or row["started_at"]
+            if (parse(now) - parse(start)).total_seconds() >= window_s:
+                break
+            latest = latest or row["id"]
+            cycle = start if cycle is None or start < cycle else cycle
+        return {"run_id": latest, "cycle_started_at": cycle} if cycle else None
+
+    def attempted_since(self, since: str) -> set[str]:
+        """Targets dialled (or run in the sandbox) at or after ``since``: committed, so really done."""
+        with self.db.read() as tx:
+            return {r["id"] for r in tx.execute("SELECT id FROM targets WHERE last_attempt >= ?", (since,))}
+
+    def set_run_stats(self, run_id: int, stats: dict[str, Any]) -> None:
+        with self.db.transaction() as tx:
+            tx.execute("UPDATE runs SET stats=? WHERE id=?", (dumps(stats), run_id))
+
     def last_run(self, finished_only: bool = True) -> dict[str, Any] | None:
         sql = "SELECT * FROM runs"
         if finished_only:
