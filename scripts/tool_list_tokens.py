@@ -16,7 +16,12 @@ literal \\n), from:
 
 A plain SELECT of the same rows makes psql hold every list in memory and exit with nothing; COPY streams.
 """
-import base64, gzip, json, statistics, sys
+import base64
+import gzip
+import json
+import statistics
+import sys
+
 import tiktoken
 
 enc = tiktoken.get_encoding("o200k_base")
