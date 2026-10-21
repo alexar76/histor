@@ -69,6 +69,9 @@ services:
       HISTOR_SANDBOX_8_TOKEN: "${HISTOR_SANDBOX_8_TOKEN:-}"
       HISTOR_SANDBOX_8_CERT_SHA256: "${HISTOR_SANDBOX_8_CERT_SHA256:-}"
       HISTOR_SANDBOX_8_CONCURRENCY: "${HISTOR_SANDBOX_8_CONCURRENCY:-2}"
+      # Pages served beside the app that sitemap-site.xml names too (comma-separated paths), e.g.
+      # /datasets/ where deploy/export_dataset.sh writes the monthly snapshots.
+      HISTOR_SITEMAP_EXTRA: "${HISTOR_SITEMAP_EXTRA:-}"
       # Optional meaning-based classifier (OpenAI-compatible; DeepSeek's own API by default). Off
       # unless a model, a key and a budget are all set. The key stays in the host .env.
       HISTOR_CLASSIFIER_MODEL: "${HISTOR_CLASSIFIER_MODEL:-}"

@@ -44,3 +44,10 @@ def test_development_defaults_to_sqlite(monkeypatch):
     set_env(monkeypatch)
     settings = load_settings()
     assert settings.profile == "dev" and settings.database_url == ""
+
+
+def test_sitemap_extra_takes_paths_only(monkeypatch):
+    set_env(monkeypatch, HISTOR_SITEMAP_EXTRA=" /datasets/ , https://elsewhere.example/x,,/about")
+    assert load_settings().sitemap_extra == ("/datasets/", "/about")
+    monkeypatch.delenv("HISTOR_SITEMAP_EXTRA")
+    assert load_settings().sitemap_extra == ()

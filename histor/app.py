@@ -93,6 +93,56 @@ def _ago(days: int) -> str:
     return (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# The desk's INVISIBLE pattern (desk.js): shown as ⟨U+…⟩ so a hidden character stays visible.
+_INVISIBLE = re.compile("[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f­͏؜ᅟᅠ឴឵"
+                        "᠋-᠏​-‏‪-‮⁠-⁯ㅤ︀-️﻿ﾠ￰-￻"
+                        "\U000e0000-\U000e007f]")
+PRERENDER_TOOLS = 100
+PRERENDER_CHARS = 400
+
+
+def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
+    """Publisher text as escaped HTML: invisible characters named, cut at ``limit``."""
+    s = str(text or "")
+    s = s if len(s) <= limit else s[:limit].rstrip() + " …"
+    return xml_escape(_INVISIBLE.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", s))
+
+
+def _server_prerender(t: dict[str, Any], tools_json: str | None) -> str:
+    """What the desk shows for one server, as plain HTML inside #view.
+
+    Without it all /s/<id> pages were the landing page with another <title> — 99.7% the same
+    text — and search engines indexed three of 39k. desk.js replaces #view on load, so a
+    browser with scripts sees the desk as before; crawlers and readers without scripts get the
+    record. Facts only, the publisher's text escaped: HISTOR never calls a server safe.
+    """
+    name = t["title"] or t["name"]
+    day = lambda v: str(v)[:10] if v else "—"  # noqa: E731
+    facts = (("First observed", day(t["first_pinned"])), ("Unchanged since", day(t["unchanged_since"])),
+             ("Last observed", day(t["last_ok"])), ("Observations", t["ok_observations"]),
+             ("Changes on record", t["changes"]), ("Tools", "—" if t["current_count"] is None else t["current_count"]))
+    out = [f'<div class="detail"><h2>{_shown(name, 200)}</h2>',
+           f'<p class="mono faint">{_shown(t["name"], 200)} · {_shown(t["endpoint"], 300)}</p>']
+    if t["description"]:
+        out.append(f'<p class="muted">{_shown(t["description"])}</p>')
+    out.append('<dl class="facts">' + "".join(f"<div class=\"fact\"><dt class=\"k\">{k}</dt><dd class=\"v\">{_shown(v)}</dd></div>"
+                                             for k, v in facts) + "</dl>")
+    try:
+        tools = json.loads(tools_json) if tools_json else []
+    except ValueError:
+        tools = []
+    tools = [x for x in tools if isinstance(x, dict)] if isinstance(tools, list) else []
+    if tools:
+        out.append(f'<h3 class="block-h">Tool definitions as last observed ({len(tools)})</h3><ul class="prerender-tools">')
+        out += [f"<li><code>{_shown(x.get('name'), 120)}</code> — {_shown(x.get('description'))}</li>" for x in tools[:PRERENDER_TOOLS]]
+        if len(tools) > PRERENDER_TOOLS:
+            out.append(f"<li>… and {len(tools) - PRERENDER_TOOLS} more</li>")
+        out.append("</ul>")
+    out.append('<p class="faint">The signed observations, every earlier tool set and a diff of each change: this page '
+               f'with scripts on, or <code>/api/v1/servers/{t["id"]}</code>.</p></div>')
+    return "".join(out)
+
+
 class RateLimiter:
     """Sliding window per key. In memory: one instance serves the site, so that is enough.
 
@@ -264,6 +314,9 @@ def create_app(services: Services) -> FastAPI:
         html = re.sub(r'<meta property="og:title" content="[^"]*"/>', f'<meta property="og:title" content="{xml_escape(title, {chr(34): "&quot;"})}"/>', html, count=1)
         html = re.sub(r'<meta property="og:description" content="[^"]*"/>', f'<meta property="og:description" content="{xml_escape(desc, {chr(34): "&quot;"})}"/>', html, count=1)
         html = re.sub(r'<meta property="og:url" content="[^"]*"/>', f'<meta property="og:url" content="{xml_escape(url)}"/>', html, count=1)
+        tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
+        html = html.replace('<div id="view" aria-live="polite"></div>',
+                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools)}</div>', 1)
         return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     SITEMAP_PAGE = 40_000
@@ -283,7 +336,8 @@ def create_app(services: Services) -> FastAPI:
 
     @app.get("/sitemap-site.xml", include_in_schema=False)
     def sitemap_site() -> Response:
-        urls = "".join(f"<url><loc>{xml_escape(settings.public_base)}{r}</loc></url>" for r in SPA_ROUTES)
+        routes = SPA_ROUTES + tuple(r for r in settings.sitemap_extra if r not in SPA_ROUTES)
+        urls = "".join(f"<url><loc>{xml_escape(settings.public_base)}{xml_escape(r)}</loc></url>" for r in routes)
         return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
                         media_type="application/xml")
 

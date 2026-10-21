@@ -121,6 +121,9 @@ class Settings:
     # Seconds between reads of the declaration files publishers point at from their registry entry
     # (histor.declared); the crawl reads them too. 0 = only at the crawl.
     declaration_refresh_s: int = 3600
+    # Pages the deployment serves beside the app that sitemap-site.xml should name too, e.g.
+    # /datasets/ (nginx, from deploy/export_dataset.sh). Paths only, comma-separated.
+    sitemap_extra: tuple[str, ...] = ()
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -219,6 +222,9 @@ def load_settings() -> Settings:
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
         declaration_refresh_s=_int("HISTOR_DECLARATION_REFRESH_S", 3600, minimum=0),
+        sitemap_extra=tuple(
+            p.strip() for p in os.environ.get("HISTOR_SITEMAP_EXTRA", "").split(",") if p.strip().startswith("/")
+        ),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public
