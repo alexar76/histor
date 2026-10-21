@@ -7,7 +7,6 @@ description = "HISTOR — public transparency log of MCP tool definitions: signe
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-classifiers = ["Private :: Do Not Upload"]
 dependencies = [
     # The AWR/2 reference implementation, from PyPI. It is the only code that
     # canonicalizes, digests and signs a label: HISTOR never reimplements the format.
