@@ -74,6 +74,8 @@ ln -sfn "$day" "$DIR/latest.tmp" && mv -T "$DIR/latest.tmp" "$DIR/latest"
 
 # Keep the newest $KEEP snapshots.
 ls -1d "$DIR"/20??-??-?? 2> /dev/null | sort | head -n -"$KEEP" | xargs -r rm -rf
+# The landing page (/datasets/index.html) lists what is left, with the schema.org Dataset block.
+python3 "$(dirname "$MODULE")/dataset_index.py" "$DIR" || echo "index page not rebuilt" >&2
 echo "histor dataset: $(du -sh "$DIR/$day" | cut -f1) → $DIR/$day"
 
 # Mirror to Hugging Face when the host is set up for it (deploy/upload_hf.sh); the snapshot above
