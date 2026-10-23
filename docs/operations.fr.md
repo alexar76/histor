@@ -29,6 +29,28 @@ si `/health` ne répond pas. Il installe le vhost nginx depuis `deploy/nginx/his
 satellite), émet le certificat avec certbot s’il n’existe pas, installe le minuteur de sauvegarde nocturne (voir
 « Sauvegardes ») et, si une exploration tournait au démarrage, la relance ; avec les lots, elle perd au plus un lot.
 
+## Un redémarrage en plein parcours
+
+Un redémarrage (un déploiement, un plantage, un arrêt faute de mémoire) ne coûte pas le parcours. Le
+résultat de chaque cible est enregistré dès qu'il arrive, et le démarrage suivant poursuit le cycle interrompu :
+
+- **Ce qui est lu reste lu.** La nouvelle exécution n'interroge que ce que le cycle n'a pas encore tenté. Le
+  cycle est poursuivi depuis aussi longtemps qu'il tourne, tant qu'il avançait : seul un processus arrêté
+  pendant tout un `HISTOR_CRAWL_INTERVAL_S` commence un nouveau cycle. (Jusqu'au 2026-10-23, un cycle était
+  abandonné dès que son début avait un jour : le 22 octobre, un cycle de 42 heures et six redémarrages a été
+  repris depuis le premier serveur.)
+- **Les paquets gardent leur plan et leur budget.** Un cycle planifie ses paquets une fois (demander à npm et
+  PyPI la version de chaque paquet connu prenait 59 minutes) et garde le plan dans `crawl_plans` ; une
+  exécution qui poursuit prend ce qui reste, et `HISTOR_SANDBOX_MAX_PER_CRAWL` comme le budget du
+  classificateur sont ceux du cycle, pas de chaque exécution.
+- **Les chiffres restent.** Une exécution enregistre ses comptes toutes les 30 secondes : une exécution
+  interrompue dit ce qu'elle a fait. `/api/v1/stats` rend compte du cycle : `lastRun` donne ce que toutes ses
+  exécutions ont enregistré (avec `cycle.startedAt` et `cycle.runs`), et `crawl.progress` compte le cycle,
+  avec `thisRun` à côté.
+
+Un redémarrage ne perd que le travail en cours : le lot de points de terminaison en lecture et les paquets qui
+tournaient à ce moment dans un bac à sable. Ils sont relus.
+
 ## Configuration
 
 | Variable | Défaut | Remarques |

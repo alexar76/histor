@@ -30,6 +30,25 @@ back if `/health` does not answer. It installs the nginx vhost from `deploy/ngin
 timer (see Backups), and — if a crawl was running when it started — restarts that crawl, which with batching
 loses at most one batch.
 
+## A restart mid-crawl
+
+A restart (a deploy, a crash, an out-of-memory kill) does not cost the crawl. Every target's result is
+committed when it is in, and the next start continues the interrupted cycle:
+
+- **What was read stays read.** The new run dials only what the cycle has not attempted yet. The cycle is
+  continued however long it has been running, as long as it was making progress: only a process that was down
+  for a whole `HISTOR_CRAWL_INTERVAL_S` starts a fresh cycle. (Until 2026-10-23 a cycle was dropped once its
+  start was a day old: on 22 October one 42 hours and six restarts in was dialled again from the first server.)
+- **Packages keep their plan and budget.** A cycle plans its packages once (asking npm and PyPI for every
+  known version took 59 minutes) and keeps the plan in `crawl_plans`; a continued run takes what is left of
+  it, and `HISTOR_SANDBOX_MAX_PER_CRAWL` and the classifier's budget are the cycle's, not each run's.
+- **The numbers stay.** A run saves its counts every 30 seconds, so an interrupted run says what it did.
+  `/api/v1/stats` reports the cycle: `lastRun` gives what every run of it committed (with `cycle.startedAt`
+  and `cycle.runs`), and `crawl.progress` counts the cycle, with `thisRun` beside it.
+
+What a restart loses is the work in flight: the batch of endpoints being read and the packages running in a
+sandbox at that moment. They are read again.
+
 ## Configuration
 
 | Variable | Default | Notes |

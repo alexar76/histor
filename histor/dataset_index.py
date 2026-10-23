@@ -33,10 +33,12 @@ DESCRIPTION = (
 )
 FILES = (
     ("servers.jsonl.gz", "One row per listed server: endpoint, transport, status, tool count, the digest of its current tool list."),
-    ("toolsets.jsonl.gz", "Every tool list a server served, exactly as served, current ones and every one a change replaced."),
+    ("toolsets.jsonl.gz", "Every tool list a server served (name, description and schemas, as served), current ones and every one a change replaced."),
     ("changes.jsonl.gz", "Every recorded change: tools added, removed and modified, field by field, with the signed label."),
     ("scans.jsonl.gz", "WARDEN pattern matches per tool list (rules in pattern-set.json). Leads to read, not verdicts."),
     ("classifications.jsonl.gz", "Advisory LLM readings of tool lists. Not reproducible, so never in the signed log."),
+    ("tool_extras.jsonl.gz", "What each tool carried beyond those: annotations (readOnlyHint, destructiveHint…), _meta, title, icons. Since 2026-10-22."),
+    ("extras_changes.jsonl.gz", "Every change to those members, annotation by annotation, with the tools that dropped readOnlyHint."),
     ("manifest.json", "Counts and SHA-256 of every file, signed by the log's key, with the tree head of the snapshot."),
     ("README.md", "The dataset card: fields, loading, citation, what the data does not say."),
 )
@@ -99,6 +101,8 @@ def page(snaps: list[dict[str, Any]]) -> str:
     rows = []
     for name, what in FILES:
         meta = f.get(name)
+        if meta is None and name not in ("manifest.json", "README.md"):
+            continue  # a file this snapshot does not have (older snapshots predate the extras files)
         size = _size(meta["bytes"]) if meta else ""
         nrows = f"{meta['rows']:,}" if meta and isinstance(meta.get("rows"), int) else ""
         rows.append(f'<tr><td><a href="{esc(day)}/{esc(name)}"><code>{esc(name)}</code></a></td>'

@@ -2,7 +2,7 @@
 # (see oracles/core/pyproject.toml). Distribution name is always aimarket-*.
 [project]
 name = "aimarket-histor"
-version = "0.2.0"
+version = "0.3.0"
 description = "HISTOR — public transparency log of MCP tool definitions: signed MTL/1 labels over what each server advertised, when it changed, and a Merkle log anyone can audit"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -28,8 +28,14 @@ postgres = [
 pqc = [
     "dilithium-py>=1.4.0",
 ]
+# Token counts of tool lists: `histor tool-cost` in a package's CI, and /api/v1/.../cost on the service.
+# o200k_base is the same table in every tiktoken release that has it.
+cost = [
+    "tiktoken>=0.12,<1",
+]
 dev = [
     "pytest>=8",
+    "tiktoken>=0.12,<1",
     "pytest-cov>=5",
     "ruff>=0.12,<1",
     "dilithium-py>=1.4.0",

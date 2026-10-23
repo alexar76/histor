@@ -40,7 +40,12 @@ stable, un par entrée distante.
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | du plus récent au plus ancien ; chacun avec `summary.added`, `summary.removed`, `summary.modified[].fields` (diff mot à mot des descriptions, diff par chemin JSON des schémas) |
 | GET | `/api/v1/changes/<id>` | un changement |
+| GET | `/api/v1/changes/<id>/cost` | ce que le changement a fait au coût en tokens de la liste d’outils : chaque total avant et après (`sent`, réparti en `names`, `descriptions`, `inputSchemas` et `structure` ; à côté, `outputSchemas` et `listed`), les outils ajoutés et retirés, et chaque outil dont le compte a bougé, description, schéma d’entrée et chaque propriété de premier niveau de ce schéma à part |
+| GET | `/api/v1/servers/<id>/cost?limit=` | le coût de la liste actuelle par outil, et les totaux de ses derniers changements (jusqu’à 50) |
+| GET | `/api/v1/cost/toolsets/<digest>` | le coût d’un ensemble d’outils enregistré |
 | GET | `/feed.xml` | flux Atom des 50 derniers changements ; `?watch=<id>,<id>,…` (jusqu’à 100 identifiants de cible, tels que `/check` et les pages de serveur les donnent) ne garde que ces serveurs et paquets — un abonnement dans n’importe quel lecteur de flux |
+
+Compté comme dans [tool-list-cost.fr.md](tool-list-cost.fr.md) (`o200k_base`). Un déploiement sans l’extra `cost` répond 503 à ces trois chemins.
 
 ## Étiquettes et éléments de preuve
 

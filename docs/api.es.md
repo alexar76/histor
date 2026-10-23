@@ -39,7 +39,12 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | primero los más recientes; cada uno con `summary.added`, `summary.removed`, `summary.modified[].fields` (diff por palabras de las descripciones, diff por JSON-path de los esquemas) |
 | GET | `/api/v1/changes/<id>` | un cambio |
+| GET | `/api/v1/changes/<id>/cost` | qué hizo el cambio con el coste en tokens de la lista de herramientas: cada total antes y después (`sent`, desglosado en `names`, `descriptions`, `inputSchemas` y `structure`; al lado `outputSchemas` y `listed`), herramientas añadidas y quitadas, y cada herramienta cuyo recuento se movió, con su descripción, su esquema de entrada y cada propiedad de primer nivel de ese esquema por separado |
+| GET | `/api/v1/servers/<id>/cost?limit=` | el coste de la lista actual por herramienta y los totales de sus últimos cambios (hasta 50) |
+| GET | `/api/v1/cost/toolsets/<digest>` | el coste de un conjunto de herramientas guardado |
 | GET | `/feed.xml` | feed Atom de los últimos 50 cambios; `?watch=<id>,<id>,…` (hasta 100 ids de destino, como los dan `/check` y las páginas de servidor) deja solo esos servidores y paquetes: una suscripción en cualquier lector de feeds |
+
+Contado como en [tool-list-cost.es.md](tool-list-cost.es.md) (`o200k_base`). Un despliegue sin el extra `cost` responde 503 a estas tres rutas.
 
 ## Etiquetas y evidencia
 

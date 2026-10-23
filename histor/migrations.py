@@ -332,6 +332,22 @@ MIGRATION_010: tuple[str, ...] = (
     """,
 )
 
+# Tool members beyond the four MTL/1 digests (histor.extras): annotations, _meta, title, icons and the
+# rest, under a digest of their own. The extras an observation saw, the target's current ones, and
+# every change between two of them; never in a label.
+MIGRATION_011: Statements = {backend: (
+    "ALTER TABLE observations ADD COLUMN extras TEXT",
+    "ALTER TABLE targets ADD COLUMN current_extras TEXT",
+    f"CREATE TABLE extras_changes (seq {identity}, target_id TEXT NOT NULL, observed_at TEXT NOT NULL, from_extras TEXT, to_extras TEXT, summary TEXT NOT NULL)",
+    "CREATE INDEX extras_changes_target ON extras_changes(target_id, seq)",
+) for backend, identity in _IDENTITY.items()}
+
+# The packages a crawl cycle planned to run, kept so a restarted run takes the rest of the plan instead
+# of asking npm and PyPI for every version again (an hour) and planning a whole new budget.
+MIGRATION_012: tuple[str, ...] = (
+    "CREATE TABLE crawl_plans (cycle_started_at TEXT PRIMARY KEY, created_at TEXT NOT NULL, body TEXT NOT NULL)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -344,6 +360,8 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (8, "008_security_events", MIGRATION_008),
     (9, "009_declared_toolsets", MIGRATION_009),
     (10, "010_declaration_urls", MIGRATION_010),
+    (11, "011_tool_extras", MIGRATION_011),
+    (12, "012_crawl_plans", MIGRATION_012),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates
@@ -355,7 +373,7 @@ TARGET_COLUMNS: tuple[str, ...] = (
     "current_toolset", "current_count", "first_pinned", "unchanged_since", "observations",
     "ok_observations", "changes", "block_matches", "advise_matches", "record_matches",
     "chain_label", "last_continuity_at", "failure_reported", "scan_sets",
-    "classifier_model", "classifier_flags", "package_version", "package_signals",
+    "classifier_model", "classifier_flags", "package_version", "package_signals", "current_extras",
 )
 
 

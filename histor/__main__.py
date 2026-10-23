@@ -1,4 +1,4 @@
-"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL`` · ``histor sandboxes`` · ``histor export-dataset DIR``."""
+"""``histor serve`` · ``histor crawl`` · ``histor migrate [up|status]`` · ``histor issuer`` · ``histor audit URL`` · ``histor tool-cost`` · ``histor sandboxes`` · ``histor export-dataset DIR``."""
 
 from __future__ import annotations
 
@@ -29,6 +29,11 @@ def main(argv: list[str] | None = None) -> int:
         from histor.audit import main as audit
 
         return audit(args[1:])
+    if command == "tool-cost":
+        # Runs in a package's own CI against its own server: no settings, no database, no keys.
+        from histor.toolcost_cli import main as tool_cost
+
+        return tool_cost(args[1:])
 
     from histor.config import load_settings
     from histor.service import build
@@ -99,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|sandboxes|export-dataset DIR]", file=sys.stderr)
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|sandboxes|export-dataset DIR]", file=sys.stderr)
         return 2
     finally:
         services.close()

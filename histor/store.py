@@ -17,6 +17,17 @@ UNLISTED_RETENTION_DAYS = 90
 UNLISTED_HOSTS_PER_DAY = 5000
 
 
+def sum_counts(counts: Any) -> dict[str, int]:
+    """Counters saved as JSON objects, added up; anything that is not one is skipped."""
+    total: dict[str, int] = {}
+    for c in counts:
+        if isinstance(c, dict):
+            for k, v in c.items():
+                if isinstance(v, int):
+                    total[k] = total.get(k, 0) + v
+    return total
+
+
 def dumps(value: Any) -> str:
     text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     try:
@@ -314,6 +325,15 @@ class Store:
         with self.db.read() as tx:
             return [self._change_row(r) for r in tx.execute(sql, args)]
 
+    def extras_changes(self, target_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Newest first: when a target's annotations, _meta or other extra members moved (histor.extras)."""
+        with self.db.read() as tx:
+            rows = tx.execute(
+                "SELECT seq, observed_at, from_extras, to_extras, summary FROM extras_changes "
+                "WHERE target_id=? ORDER BY seq DESC LIMIT ?", (target_id, limit))
+        return [{"id": r["seq"], "observedAt": r["observed_at"], "fromExtrasDigest": r["from_extras"],
+                 "toExtrasDigest": r["to_extras"], "summary": json.loads(r["summary"])} for r in rows]
+
     def change(self, change_id: int) -> dict[str, Any] | None:
         with self.db.read() as tx:
             row = tx.one(
@@ -541,12 +561,18 @@ class Store:
         return None
 
     def mark_interrupted_runs(self, now: str) -> int:
-        """A run with no finish time after a restart was interrupted: say so instead of leaving it open."""
-        with self.db.transaction() as tx:
-            rows = tx.execute("SELECT id, stats FROM runs WHERE finished_at IS NULL")
-            for row in rows:
-                stats = json.loads(row["stats"]) if row.get("stats") else {}
-                stats["error"] = "interrupted: the process restarted before the crawl finished"
+        """A run with no finish time after a restart was interrupted: say so instead of leaving it open.
+
+        The counts it saved while running stay, and it gets its cycle's totals so far from the
+        database, so the last run on the desk is not an empty bar until the cycle ends."""
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT id, started_at, stats FROM runs WHERE finished_at IS NULL")
+        for row in rows:
+            stats = json.loads(row["stats"]) if row.get("stats") else {}
+            stats["error"] = "interrupted: the process restarted before the crawl finished"
+            stats["cycle"] = {**(stats.get("cycle") or {}),
+                              **self.cycle_totals(stats.get("cycle_started_at") or row["started_at"])}
+            with self.db.transaction() as tx:
                 tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?", (now, dumps(stats), row["id"]))
         return len(rows)
 
@@ -555,11 +581,16 @@ class Store:
 
         A run that ended with an error (a restart marks it "interrupted") leaves its targets
         half-read. Walking back from ``run_id`` through the unbroken chain of such runs (up to the
-        last successful one), the cycle began at the earliest start that is less than ``window_s``
-        old: a run's recorded ``cycle_started_at``, or its own start when it recorded none (older
-        code, or a run killed before it wrote one). The new run keeps that start, and every target
-        attempted since then is not dialled again. No chain, or a chain older than the window:
-        a fresh cycle.
+        last successful one) finds the cycle they belong to: the ``cycle_started_at`` they
+        recorded or, for runs written before that was recorded, the earliest start. A run that
+        started before a recorded cycle belongs to an older one and ends the chain.
+
+        The chain is continued, however old the cycle, while it was making progress: the last
+        target it committed (or its newest run's start) is less than ``window_s`` ago. A cycle
+        with many restarts used to be thrown away whole once its START was a day old (2026-10-22:
+        42 hours and six restarts in, every server was dialled again); now only a process that
+        was down for a whole interval starts afresh. The new run keeps the cycle's start, and
+        every target attempted since then is not dialled again.
         """
         if window_s <= 0:
             return None
@@ -567,19 +598,60 @@ class Store:
             rows = tx.execute("SELECT * FROM runs WHERE id < ? ORDER BY id DESC LIMIT 50", (run_id,))
         parse = lambda ts: datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
         cycle: str | None = None
-        latest: int | None = None
+        known = False   # the cycle start was recorded by a run, not inferred from older runs' starts
+        chain: list[dict[str, Any]] = []
         for row in rows:
             if not row.get("finished_at"):
                 break
             stats = json.loads(row["stats"]) if row.get("stats") else {}
             if not stats.get("error"):
                 break
-            start = stats.get("cycle_started_at") or row["started_at"]
-            if (parse(now) - parse(start)).total_seconds() >= window_s:
+            if known and cycle is not None and row["started_at"] < cycle:
                 break
-            latest = latest or row["id"]
+            chain.append({"id": row["id"], "stats": stats})
+            recorded = stats.get("cycle_started_at")
+            start = recorded or row["started_at"]
             cycle = start if cycle is None or start < cycle else cycle
-        return {"run_id": latest, "cycle_started_at": cycle} if cycle else None
+            known = known or bool(recorded)
+        if cycle is None:
+            return None
+        last = max(x for x in (self.last_attempt_since(cycle), rows[0]["started_at"],
+                               *(c["stats"].get("progress_at") for c in chain)) if x)
+        if (parse(now) - parse(last)).total_seconds() >= window_s:
+            return None
+        return {"run_id": chain[0]["id"], "cycle_started_at": cycle, "runs": [c["id"] for c in chain],
+                "classified": sum(int(c["stats"].get("classified") or 0) for c in chain),
+                "labels_issued": sum_counts(c["stats"].get("labels_issued") for c in chain)}
+
+    def last_attempt_since(self, since: str) -> str | None:
+        with self.db.read() as tx:
+            row = tx.one("SELECT MAX(last_attempt) AS at FROM targets WHERE last_attempt >= ?", (since,))
+        return row["at"] if row else None
+
+    def cycle_totals(self, since: str) -> dict[str, Any]:
+        """What a cycle has done since it started, read from what was committed: the targets attempted
+        and the status each was last left in, and the changes recorded. Exact however many restarts
+        the cycle had, and whatever code wrote its runs."""
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT last_status, COUNT(*) AS n FROM targets WHERE last_attempt >= ? "
+                              "GROUP BY last_status", (since,))
+            changes = tx.one("SELECT COUNT(*) AS n FROM changes WHERE observed_at >= ?", (since,))
+        statuses = {str(r["last_status"]): int(r["n"]) for r in rows if r["last_status"]}
+        return {"startedAt": since, "attempted": sum(statuses.values()), "statuses": statuses,
+                "changes": int(changes["n"] or 0)}
+
+    def save_crawl_plan(self, cycle_started_at: str, plan: dict[str, Any], now: str) -> None:
+        """The cycle's package plan (histor.crawler); plans of other cycles are dropped."""
+        with self.db.transaction() as tx:
+            tx.execute("DELETE FROM crawl_plans WHERE cycle_started_at <> ?", (cycle_started_at,))
+            tx.execute("INSERT INTO crawl_plans(cycle_started_at, created_at, body) VALUES(?, ?, ?) "
+                       "ON CONFLICT(cycle_started_at) DO UPDATE SET created_at=excluded.created_at, body=excluded.body",
+                       (cycle_started_at, now, dumps(plan)))
+
+    def crawl_plan(self, cycle_started_at: str) -> dict[str, Any] | None:
+        with self.db.read() as tx:
+            row = tx.one("SELECT body FROM crawl_plans WHERE cycle_started_at=?", (cycle_started_at,))
+        return json.loads(row["body"]) if row else None
 
     def attempted_since(self, since: str) -> set[str]:
         """Targets dialled (or run in the sandbox) at or after ``since``: committed, so really done."""

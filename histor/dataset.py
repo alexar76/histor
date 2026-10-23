@@ -8,6 +8,9 @@ routes, ``/api/v1/changes``); a snapshot puts it in files a researcher can load 
     changes.jsonl.gz          every recorded change, oldest first
     scans.jsonl.gz            WARDEN pattern matches per tool set, under the current pattern set
     classifications.jsonl.gz  the advisory meaning-based verdicts (never in the signed log)
+    tool_extras.jsonl.gz      per tool, the members MTL/1 does not digest: annotations, _meta,
+                              title, icons and the rest (histor.extras)
+    extras_changes.jsonl.gz   every change between two of those, oldest first
     pattern-set.json          the rules the scans ran (and record-set.json, the name records)
     manifest.json             counts, SHA-256 of every file, the signed tree head the export
                               started under — signed by the log's own key (type histor.dataset/v1)
@@ -104,8 +107,17 @@ def _server_row(t: dict[str, Any]) -> dict[str, Any]:
         "blockMatches": t["block_matches"], "adviseMatches": t["advise_matches"],
         "recordMatches": t["record_matches"], "classifierModel": t.get("classifier_model"),
         "classifierFlags": t.get("classifier_flags"), "packageVersion": t.get("package_version"),
+        "toolExtrasDigest": t.get("current_extras"),
         "chainLabel": t["chain_label"], "page": f"{SITE}/s/{t['id']}",
     }
+
+
+def _has_extras(store: Store) -> bool:
+    """Whether the database has migration 011 (histor.extras). The export can run against a log the
+    service has not migrated yet: then the two extras files are written empty."""
+    with store.db.read() as tx:
+        row = tx.one("SELECT 1 AS x FROM schema_migrations WHERE version >= 11 LIMIT 1")
+    return row is not None
 
 
 def export(store: Store, key: Any, out: Path, *, opt_out: tuple[str, ...] = (), now: str | None = None) -> dict[str, Any]:
@@ -132,6 +144,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
            sth: dict[str, Any] | None) -> dict[str, Any]:
     excluded: set[str] = set()
     wanted: set[str] = set()
+    wanted_extras: set[str] = set()
     tally = {"listed": 0, "delisted": 0, "pinned": 0, "everChanged": 0, "blockTier": 0, "adviseOnly": 0,
              "packages": 0, "remote": 0}
 
@@ -149,6 +162,8 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
         if t["current_toolset"]:
             tally["pinned"] += 1
             wanted.add(t["current_toolset"])
+        if t.get("current_extras"):
+            wanted_extras.add(t["current_extras"])
         if t["changes"]:
             tally["everChanged"] += 1
         if t["block_matches"]:
@@ -174,6 +189,27 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
             "labelId": c["label_id"], "summaryJson": c["summary"],
         })
     changes.close()
+
+    # Annotations, _meta and the other members MTL/1 does not digest, and every change between two of them.
+    extras_changes = _Writer(d / "extras_changes.jsonl.gz")
+    tool_extras = _Writer(d / "tool_extras.jsonl.gz")
+    if _has_extras(store):
+        for c in _pages(store, "SELECT * FROM extras_changes WHERE seq > ? ORDER BY seq LIMIT ?", "seq", 0, PAGE):
+            if c["target_id"] in excluded:
+                continue
+            for digest in (c["from_extras"], c["to_extras"]):
+                if digest:
+                    wanted_extras.add(digest)
+            extras_changes.write({
+                "id": c["seq"], "serverId": c["target_id"], "observedAt": c["observed_at"],
+                "fromExtrasDigest": c["from_extras"], "toExtrasDigest": c["to_extras"], "summaryJson": c["summary"],
+            })
+        for b in _pages(store, "SELECT digest, body FROM blobs WHERE kind = 'toolextras' AND digest > ? "
+                        "ORDER BY digest LIMIT ?", "digest", "", BLOB_PAGE):
+            if b["digest"] in wanted_extras:
+                tool_extras.write({"digest": b["digest"], "extrasJson": b["body"]})
+    extras_changes.close()
+    tool_extras.close()
 
     toolsets = _Writer(d / "toolsets.jsonl.gz")
     for b in _pages(store, "SELECT digest, body FROM blobs WHERE kind = 'toolset' AND digest > ? ORDER BY digest LIMIT ?",
@@ -209,7 +245,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
             (d / name).write_text(body, encoding="utf-8")
             extra.append(name)
 
-    writers = (servers, toolsets, changes, scans, classifications)
+    writers = (servers, toolsets, changes, scans, classifications, tool_extras, extras_changes)
     files = {w.path.name: {"sha256": _sha256(w.path), "bytes": w.path.stat().st_size, "rows": w.rows} for w in writers}
     for name in extra:
         files[name] = {"sha256": _sha256(d / name), "bytes": (d / name).stat().st_size}
@@ -234,6 +270,22 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
     return manifest
 
 
+def _extras_fields(f: dict[str, Any]) -> str:
+    """The card's lines for the extras files, when the snapshot has them."""
+    if "tool_extras.jsonl.gz" not in f:
+        return ""
+    return """
+- **tool_extras** — `digest`, `extrasJson`: `{"tools": {name: {member: value}}}`, every member a tool
+  carried beyond those four (`annotations`, `_meta`, `title`, `icons`, `execution`, vendor fields),
+  only for tools that carried one. Join from `servers.toolExtrasDigest`: `""` there means observed with
+  none, null not observed since HISTOR keeps them (2026-10-22). Not part of the MTL/1 digest or of any
+  label; its digest is SHA-256 over sorted-key JSON, not RFC 8785 (prices in `_meta` are fractions).
+- **extras_changes** — `serverId`, `observedAt`, `fromExtrasDigest` → `toExtrasDigest`, `summaryJson`:
+  per tool, every annotation that moved (`[before, after]`) and every other member added, removed or
+  changed; `escalations` names tools that stopped saying `readOnlyHint: true` or started saying
+  `destructiveHint: true`."""
+
+
 def _mb(n: int) -> str:
     return f"{n / 1_000_000:,.0f} MB" if n >= 1_000_000 else f"{n / 1000:,.0f} kB"
 
@@ -255,7 +307,8 @@ def dataset_card(m: dict[str, Any], doi: str | None = None) -> str:
     configs = "\n".join(
         f"- config_name: {name.split('.')[0]}\n  data_files: {name}"
         for name in ("servers.jsonl.gz", "toolsets.jsonl.gz", "changes.jsonl.gz", "scans.jsonl.gz",
-                     "classifications.jsonl.gz")
+                     "classifications.jsonl.gz", "tool_extras.jsonl.gz", "extras_changes.jsonl.gz")
+        if name in f  # a card regenerated for an older snapshot names only the files it has
     )
     return f"""---
 license: cc-by-4.0
@@ -313,7 +366,8 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
   `lastDetail` (the last attempt's outcome), `lastObserved`, `toolCount`, `toolSetDigest` (join to
   toolsets), `firstPinned`, `unchangedSince`, `attempts`, `observations`, `changes`,
   `blockMatches`/`adviseMatches`/`recordMatches`, `classifierFlags`, `chainLabel` (latest label id), `page`.
-- **toolsets** — `digest`, `toolsJson` (the tool list exactly as served: names, descriptions, input schemas).
+- **toolsets** — `digest`, `toolsJson`: per tool the four members the digest covers, as served
+  (`name`, `description`, `inputSchema`, and `outputSchema` when sent).{_extras_fields(f)}
 - **changes** — `serverId`, `observedAt`, `fromToolSetDigest` → `toToolSetDigest`, `summaryJson`
   (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).
 - **scans** — `toolSetDigest`, `patternSet`, `matchesJson` (rule code, tier, severity, tool, where).

@@ -80,7 +80,7 @@ flowchart LR
 （连续性）只在两个摘要不同这一机械意义上返回 `fail`。不读取源码，不解析软件包，不观测行为。变更以
 日期和差异呈现，绝不作为指控。详见：[docs/labels.zh.md](docs/labels.zh.md)。
 
-**一份工具列表要花多少钱。** 客户端每次请求模型时都会重新发送每个已连接服务器的工具列表。在日志中的 18,204 个软件包和 16,170 个远程服务器上，列表的中位数约为 1,300 token，第 90 百分位约为 8,000，有 31 个软件包超过 100,000：[docs/tool-list-cost.zh.md](docs/tool-list-cost.zh.md)。
+**一份工具列表要花多少钱。** 客户端每次请求模型时都会重新发送每个已连接服务器的工具列表。在日志中的 18,204 个软件包和 16,170 个远程服务器上，列表的中位数约为 1,300 token，第 90 百分位约为 8,000，有 31 个软件包超过 100,000：[docs/tool-list-cost.zh.md](docs/tool-list-cost.zh.md)。每次计数都拆分为名称、描述和输入 schema；每次变更都带有成本差异（`/api/v1/changes/<id>/cost`），`histor tool-cost check` 在软件包的 CI 中做同样的计数，并让使列表变重的发布失败。
 
 **下载数据。** 每月一次，日志所见的全部内容以文件形式发布在 [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/)：每个已登记的服务器、它展示过的每个工具集、每次记录的变更以及 WARDEN 扫描结果。格式为 JSON Lines（gzip），附带由日志密钥签名的清单；汇编部分采用 CC BY 4.0 许可。每个快照的 README 说明各字段，以及如何用 pandas 或 DuckDB 加载（[histor/dataset.py](histor/dataset.py)）。同一数据集也在 [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions) 上；引用请用 [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759)。
 

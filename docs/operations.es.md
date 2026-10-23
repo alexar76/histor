@@ -29,6 +29,27 @@ script etiqueta la imagen en marcha como `histor-histor:prev`, construye e inici
 satélite), emite el certificado con certbot si no existe, instala el temporizador de copias nocturnas (véase «Copias
 de seguridad») y, si había un rastreo en curso al empezar, lo reinicia; con lotes pierde como máximo un lote.
 
+## Un reinicio a mitad del rastreo
+
+Un reinicio (un despliegue, una caída, una muerte por memoria) no cuesta el rastreo. El resultado de cada
+objetivo se confirma en cuanto llega, y el siguiente arranque continúa el ciclo interrumpido:
+
+- **Lo leído queda leído.** La nueva ejecución solo marca lo que el ciclo aún no ha intentado. El ciclo se
+  continúa por mucho que lleve en marcha, mientras avanzaba: solo un proceso caído durante todo un
+  `HISTOR_CRAWL_INTERVAL_S` empieza un ciclo nuevo. (Hasta el 2026-10-23 un ciclo se descartaba en cuanto su
+  inicio tenía un día: el 22 de octubre, uno con 42 horas y seis reinicios se volvió a marcar desde el primer
+  servidor.)
+- **Los paquetes conservan su plan y su presupuesto.** Un ciclo planifica sus paquetes una vez (preguntar a
+  npm y PyPI por la versión de cada paquete conocido llevaba 59 minutos) y guarda el plan en `crawl_plans`;
+  una ejecución que continúa toma lo que queda, y `HISTOR_SANDBOX_MAX_PER_CRAWL` y el presupuesto del
+  clasificador son del ciclo, no de cada ejecución.
+- **Las cifras se conservan.** Una ejecución guarda sus recuentos cada 30 segundos, así que una ejecución
+  interrumpida dice lo que hizo. `/api/v1/stats` informa del ciclo: `lastRun` da lo que confirmaron todas sus
+  ejecuciones (con `cycle.startedAt` y `cycle.runs`), y `crawl.progress` cuenta el ciclo, con `thisRun` al lado.
+
+Un reinicio solo pierde el trabajo en curso: el lote de endpoints que se estaba leyendo y los paquetes que en
+ese momento corrían en un sandbox. Se vuelven a leer.
+
 ## Configuración
 
 | Variable | Valor por defecto | Notas |

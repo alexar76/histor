@@ -39,7 +39,12 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | 最新的在前；每条含 `summary.added`、`summary.removed`、`summary.modified[].fields`（描述按词比较差异，schema 按 JSON 路径比较差异） |
 | GET | `/api/v1/changes/<id>` | 单条变更 |
+| GET | `/api/v1/changes/<id>/cost` | 该变更对工具列表 token 成本的影响：前后各项合计（`sent`，拆分为 `names`、`descriptions`、`inputSchemas` 和 `structure`；另列 `outputSchemas` 和 `listed`），新增和移除的工具，以及每个计数有变化的工具（描述、输入 schema 以及该 schema 的每个顶层属性分开列出） |
+| GET | `/api/v1/servers/<id>/cost?limit=` | 当前列表按工具的成本，以及最近几次变更（最多 50 次）的合计 |
+| GET | `/api/v1/cost/toolsets/<digest>` | 一个已存储工具集的成本 |
 | GET | `/feed.xml` | 最近 50 条变更的 Atom 订阅源；`?watch=<id>,<id>,…`（最多 100 个目标 id，即 `/check` 和服务器页面给出的 id）只保留这些服务器和软件包——可在任意订阅阅读器中订阅 |
+
+计数方法同 [tool-list-cost.zh.md](tool-list-cost.zh.md)（`o200k_base`）。未安装 `cost` extra 的部署对这三个路径返回 503。
 
 ## 标签与证据
 

@@ -60,6 +60,49 @@ first and gets a schema when it is about to call that tool.
 - **Which servers people use.** Every listed server counts once. A popular server and an abandoned one weigh the
   same.
 
+## Where the tokens are, and what a release changed
+
+A total hides which part of a list grew. A reader (Raju Dandigam) asked for the parts apart and for a check
+that runs on every release, so HISTOR now splits each count into the tool names, the descriptions, the input
+schemas, and the keys and punctuation around them. The four add up to the total; output schemas and the list as
+listed are reported beside it. `@playwright/mcp` as HISTOR last observed it: 3,762 tokens, of which input schemas
+3,123 (83%), descriptions 394, names 120.
+
+In the crawl of the night of 22 to 23 October, 109 changes had a list on both sides. 95 made the list heavier, 30 of
+them by more than a tenth; with a 10% limit on the total, the descriptions and the input schemas each, 40 would have
+failed a check. In 56 of the 95 the input schemas grew more than the descriptions. One package added a `raw` flag to
+all 15 of its existing tools: 708 tokens per request, found by the per-property split below. A renamed tool counts as
+one removed and one added.
+
+**Every change HISTOR records carries its cost.** `/api/v1/changes/<id>/cost` gives each total before and after,
+the tools added and removed, and each tool whose count moved, with its description, its input schema and each
+top-level property of that schema apart. `/api/v1/servers/<id>/cost` gives the current list per tool and the totals
+of its last changes. For a package a change is a version HISTOR ran that lists different tools, so this is a
+per-release history of every package in the log, with nothing to install ([api.md](api.md#changes)).
+
+**Before the release, in your own CI**, `histor tool-cost` counts your server the same way and fails the job when
+the total, the descriptions or the input schemas grow past your limit:
+
+```bash
+pip install "aimarket-histor[cost]"
+# once, and again whenever you accept a growth: commit the snapshot
+histor tool-cost snapshot --stdio "node dist/index.js" -o tool-cost.json
+# in CI: compare, write the job summary, exit 1 on a regression
+histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js" --max-increase 10%
+```
+
+The tools come from `--stdio COMMAND` (started, asked `initialize` and `tools/list`, stopped), `--url URL`
+(streamable HTTP, local addresses allowed) or `--tools FILE` (a saved tools/list). Each total is checked on its
+own, so a schema that doubles fails the check even when shorter descriptions hide it in the sum. A growth under 50
+tokens never fails (`--noise`), `--budget N` caps the whole list, `--update` rewrites the baseline, and
+`histor tool-cost diff A B` compares two snapshots or saved lists. In GitHub or Gitea Actions:
+
+```yaml
+- run: pipx run --spec "aimarket-histor[cost]" histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js"
+```
+
+The table lands in the job summary.
+
 ## Reproduce
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) reads an export of the current tool lists (the

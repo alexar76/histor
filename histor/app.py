@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge
+from histor import __version__, badge, toolcost
 from histor.check import MAX_MATCHES, CheckError
 from histor.declared import public as declared_public
 from histor.labels import SHORT
@@ -414,6 +414,9 @@ def create_app(services: Services) -> FastAPI:
         }
         if run:
             s = run["stats"]
+            # A run that continued a cycle after a restart, or was interrupted itself, reports the
+            # cycle: what every run of it committed, not only this run's part.
+            c = s.get("cycle") or {}
             out["lastRun"] = {
                 "id": run["id"],
                 "startedAt": run["started_at"],
@@ -422,10 +425,11 @@ def create_app(services: Services) -> FastAPI:
                 "registryEndpoints": s.get("registry_endpoints"),
                 "curatedEndpoints": s.get("curated_endpoints", 0),
                 "notAttempted": s.get("not_attempted", {}),
-                "attempted": s.get("attempted"),
-                "statuses": s.get("statuses", {}),
-                "labelsIssued": s.get("labels_issued", {}),
-                "changes": s.get("changes"),
+                "attempted": c.get("attempted", s.get("attempted")),
+                "statuses": c.get("statuses", s.get("statuses", {})),
+                "labelsIssued": c.get("labels_issued", s.get("labels_issued", {})),
+                "changes": c.get("changes", s.get("changes")),
+                "cycle": {"startedAt": c.get("startedAt"), "runs": c.get("runs")} if c else None,
                 "sandboxHosts": s.get("sandbox_hosts"),
                 # Servers whose registry entry declares tool sets, and entries skipped with the reason.
                 "declaredToolSets": s.get("declared_tool_sets"),
@@ -470,6 +474,9 @@ def create_app(services: Services) -> FastAPI:
             "recordMatches": t["record_matches"], "state": state, "badgeText": message,
             "classifierModel": t["classifier_model"], "classifierFlags": t["classifier_flags"],
             "packageVersion": t.get("package_version"), "packageSignals": _json_or_none(t.get("package_signals")),
+            # Annotations, _meta and the other members MTL/1 does not digest (histor.extras); "" is
+            # "observed, none", null "not observed since HISTOR started keeping them".
+            "toolExtrasDigest": t.get("current_extras"),
         }
 
     @app.get("/api/v1/servers")
@@ -517,6 +524,8 @@ def create_app(services: Services) -> FastAPI:
             "labels": [{**lbl, "methodShort": SHORT.get(lbl["method"], lbl["method"])} for lbl in store.labels_for(target_id)],
             "timeline": list(reversed(runs))[:100],
             "changes": store.changes(limit=20, target_id=target_id),
+            "toolExtras": store.get_blob(t["current_extras"], "toolextras") if t.get("current_extras") else None,
+            "extrasChanges": store.extras_changes(target_id, limit=20),
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
             "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
@@ -568,7 +577,7 @@ def create_app(services: Services) -> FastAPI:
         return handler
 
     for kind, path in (("descriptor", "descriptors"), ("toolset", "toolsets"), ("pattern-set", "pattern-sets"),
-                       ("record-set", "record-sets")):
+                       ("record-set", "record-sets"), ("toolextras", "tool-extras")):
         app.add_api_route(f"/api/v1/{path}/{{digest:path}}", blob_route(kind), methods=["GET"])
 
     # -- changes --------------------------------------------------------------------
@@ -611,6 +620,57 @@ def create_app(services: Services) -> FastAPI:
         if row is None:
             raise HTTPException(status_code=404, detail="unknown change")
         return row
+
+    # -- what a tool list costs (histor.toolcost) -------------------------------------
+
+    costs = toolcost.CostCache()
+
+    def cost_of(digest: str | None) -> dict[str, Any] | None:
+        if not digest:
+            return None
+        try:
+            return costs.get(digest, lambda: store.blob_text(digest, "toolset"))
+        except toolcost.CostUnavailable as exc:
+            raise HTTPException(status_code=503, detail="this HISTOR counts no tokens (the cost extra is not installed)") from exc
+        except toolcost.CostBusy as exc:
+            raise HTTPException(status_code=503, detail="the token counter is busy; retry shortly",
+                                headers={"Retry-After": "10"}) from exc
+
+    def cost_diff(row: dict[str, Any]) -> dict[str, Any]:
+        return toolcost.diff(cost_of(row["from_toolset"]) or toolcost.empty(), cost_of(row["to_toolset"]) or toolcost.empty())
+
+    @app.get("/api/v1/cost/toolsets/{digest:path}")
+    def toolset_cost(digest: str) -> dict[str, Any]:
+        found = cost_of(digest)
+        if found is None:
+            raise HTTPException(status_code=404, detail="unknown toolset")
+        return {"toolSetDigest": digest, **found}
+
+    @app.get("/api/v1/changes/{change_id}/cost")
+    def change_cost(change_id: int) -> dict[str, Any]:
+        row = store.change(change_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="unknown change")
+        return {"change": {"id": row["id"], "targetId": row["target_id"], "name": row["name"], "endpoint": row["endpoint"],
+                           "observedAt": row["observed_at"], "fromToolSetDigest": row["from_toolset"],
+                           "toToolSetDigest": row["to_toolset"]},
+                **cost_diff(row)}
+
+    @app.get("/api/v1/servers/{target_id}/cost")
+    def server_cost(target_id: str, limit: int = Query(20, ge=1, le=50)) -> dict[str, Any]:
+        t = store.target(target_id)
+        if t is None:
+            raise HTTPException(status_code=404, detail="unknown server")
+        current = cost_of(t["current_toolset"])
+        history = []
+        for row in store.changes(limit=limit, target_id=target_id):
+            d = cost_diff(row)
+            history.append({"id": row["id"], "observedAt": row["observed_at"], "toolCount": d["toolCount"],
+                            "totals": {k: d["totals"][k] for k in toolcost.TOTALS},
+                            "added": len(d["added"]), "removed": len(d["removed"]), "changed": len(d["changed"]),
+                            "cost": f"/api/v1/changes/{row['id']}/cost"})
+        return {"server": target_summary(t), "toolSetDigest": t["current_toolset"],
+                "current": current, "changes": history}
 
     @app.get("/feed.xml")
     def feed(watch: str | None = Query(None, max_length=1800)) -> Response:

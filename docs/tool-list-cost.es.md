@@ -64,6 +64,51 @@ llamar a esa herramienta.
   tokens y un percentil 90 de 9 960.
 - **Qué servidores usa la gente.** Cada servidor listado cuenta una vez: uno popular y uno abandonado pesan lo mismo.
 
+## Dónde están los tokens y qué cambió una versión
+
+Un total esconde qué parte de una lista creció. Un lector (Raju Dandigam) pidió las partes por separado y una
+comprobación que corra en cada versión, así que HISTOR ahora desglosa cada recuento en los nombres de las
+herramientas, las descripciones, los esquemas de entrada, y las claves y la puntuación que los rodean. Las cuatro
+suman el total; los esquemas de salida y la lista tal como se sirve se muestran al lado. `@playwright/mcp` según la
+última observación de HISTOR: 3.762 tokens, de los cuales esquemas de entrada 3.123 (83%), descripciones 394,
+nombres 120.
+
+En el rastreo de la noche del 22 al 23 de octubre, 109 cambios tenían lista a ambos lados. 95 hicieron la lista más
+pesada, 30 de ellos en más de una décima parte; con un límite del 10% para el total, las descripciones y los esquemas
+de entrada por separado, 40 no habrían pasado la comprobación. En 56 de los 95 los esquemas de entrada crecieron más
+que las descripciones. Un paquete añadió una opción `raw` a sus 15 herramientas existentes: 708 tokens por petición,
+visibles en el desglose por propiedad de abajo. Una herramienta renombrada cuenta como una quitada y una añadida.
+
+**Cada cambio que HISTOR registra lleva su coste.** `/api/v1/changes/<id>/cost` da cada total antes y después, las
+herramientas añadidas y quitadas, y cada herramienta cuyo recuento se movió, con su descripción, su esquema de
+entrada y cada propiedad de primer nivel de ese esquema por separado. `/api/v1/servers/<id>/cost` da la lista actual por herramienta y los totales de sus últimos
+cambios. En un paquete, un cambio es una versión que HISTOR ejecutó y que lista otras herramientas, así que esto es
+un historial por versión de cada paquete del registro, sin instalar nada ([api.es.md](api.es.md)).
+
+**Antes de publicar, en tu propio CI,** `histor tool-cost` cuenta tu servidor igual y hace fallar el trabajo cuando
+el total, las descripciones o los esquemas de entrada crecen más de tu límite:
+
+```bash
+pip install "aimarket-histor[cost]"
+# una vez, y de nuevo cuando aceptes un crecimiento: haz commit de la instantánea
+histor tool-cost snapshot --stdio "node dist/index.js" -o tool-cost.json
+# en CI: comparar, escribir el resumen del trabajo, salir con 1 si hay regresión
+histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js" --max-increase 10%
+```
+
+Las herramientas vienen de `--stdio COMMAND` (se arranca, se le pide `initialize` y `tools/list`, se detiene),
+`--url URL` (streamable HTTP, direcciones locales permitidas) o `--tools FILE` (un tools/list guardado). Cada total
+se comprueba por separado, así que un esquema que se duplica hace fallar la comprobación aunque unas descripciones
+más cortas lo escondan en la suma. Un crecimiento de menos de 50 tokens nunca falla (`--noise`), `--budget N` limita
+la lista entera, `--update` reescribe la referencia y `histor tool-cost diff A B` compara dos instantáneas o listas
+guardadas. En GitHub o Gitea Actions:
+
+```yaml
+- run: pipx run --spec "aimarket-histor[cost]" histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js"
+```
+
+La tabla queda en el resumen del trabajo.
+
 ## Reproducir
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) lee una exportación de las listas de herramientas

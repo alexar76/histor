@@ -41,6 +41,7 @@ from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
 from histor.declared import DeclarationError, DeclarationFetcher
 from histor.exit_reasons import NODE_RUNTIMES, classify, excerpt
+from histor.extras import extras_diff, tool_extras
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
@@ -54,7 +55,7 @@ from histor.packages import (
 )
 from histor.registry import Target, curated_rank, curated_targets, harvest, load_opt_out, with_curated
 from histor.scanner import RuleSets, Scanner, ScannerError
-from histor.store import Store, dumps
+from histor.store import Store, dumps, sum_counts
 from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject
 from histor.untrusted import clean_text
 
@@ -235,7 +236,13 @@ class Crawler:
         self.clock = clock
         self._lock = threading.Lock()
         self.running_since: str | None = None
-        self.progress: dict[str, int] | None = None
+        self.progress: dict[str, Any] | None = None
+        # What the cycle had done before this run (targets, packages), so progress counts the cycle.
+        self._cycle_before = (0, 0)
+        self._endpoints_done = self._lane_done = 0
+        self._checkpoint_lock = threading.Lock()
+        self._checkpoint_at = 0.0
+        self._run_stats: dict[str, Any] | None = None   # the running crawl's stats; None outside run()
 
     def _harvest_with_curated(self, url: str) -> list[Target]:
         opt_out = load_opt_out(self.settings.opt_out, self.settings.opt_out_path)
@@ -255,6 +262,7 @@ class Crawler:
         finally:
             self.running_since = None
             self.progress = None
+            self._run_stats = None
             # The registry ETags this crawl learned, so the next one (or the next process) asks
             # with If-None-Match instead of downloading every unchanged package again.
             save = getattr(self.packages, "save_versions", None)
@@ -269,13 +277,19 @@ class Crawler:
         stats: dict[str, Any] = {"started_at": started}
         # A restart used to cost the whole cycle: the next run dialled every server again, the
         # same day. Continue the interrupted cycle instead, and say so in the run's stats at once,
-        # so a run interrupted in turn still names the cycle it belongs to.
-        # A cycle is one interval; with the scheduler off (interval 0, crawls by hand) it is a day.
+        # so a run interrupted in turn still names the cycle it belongs to. Only a process that was
+        # down for a whole interval (a day with the scheduler off) starts afresh (Store.resume_point).
         resume = self.store.resume_point(run_id, started, self.settings.crawl_interval_s or 86400)
-        stats["cycle_started_at"] = resume["cycle_started_at"] if resume else started
+        cycle = resume["cycle_started_at"] if resume else started
+        stats["cycle_started_at"] = cycle
         if resume:
             stats["resumed_from"] = resume["run_id"]
         self.store.set_run_stats(run_id, stats)
+        self._cycle_before = (0, 0)
+        self._endpoints_done = self._lane_done = 0
+        self._checkpoint_at = time.monotonic()
+        self._run_stats = stats
+        tally: _Tally | None = None
         try:
             targets = self.harvest_fn(self.settings.registry_url)
             official = [t for t in targets if t.registry != REGISTRY_CURATED]
@@ -299,14 +313,17 @@ class Crawler:
             dialable = [t for t in targets if not t.skip_reason]
             if self.settings.crawl_limit:
                 dialable = dialable[: self.settings.crawl_limit]
+            done: set[str] = set()
             if resume:
-                done = self.store.attempted_since(resume["cycle_started_at"])
+                done = self.store.attempted_since(cycle)
                 before = len(dialable)
                 dialable = [t for t in dialable if t.id not in done]
                 stats["skipped_already_attempted"] = before - len(dialable)
+            packages_before = sum(1 for t in targets if t.id in done and parse_package(t.endpoint))
+            self._cycle_before = (stats.get("skipped_already_attempted", 0), packages_before)
             packages = [t for t in dialable if parse_package(t.endpoint)]
             if packages:
-                due = self._packages_due(packages, stats)
+                due = self._cycle_packages(packages, stats, cycle, resumed=resume is not None, before=packages_before)
                 dialable = [t for t in dialable if not parse_package(t.endpoint)] + due
             # Packages run in their own lane, started now: the sandboxes work from the first minute
             # instead of after a round over 15 000 endpoint hosts, and each result is committed as
@@ -317,7 +334,9 @@ class Crawler:
             # instead of one batch spending an hour on a single host's 2 000 endpoints.
             endpoints = _interleave_by_host(endpoints)
             stats["attempted"] = len(endpoints) + len(lane_targets)
-            tally = _Tally(self.settings.classifier_max_per_crawl if self.classifier else 0)
+            # The classifier's budget is the cycle's: a restart must not buy a second day of model calls.
+            budget = self.settings.classifier_max_per_crawl if self.classifier else 0
+            tally = _Tally(max(0, budget - (resume["classified"] if resume else 0)))
             step = self.settings.crawl_batch
             take_counts = getattr(self.packages, "take_counts", None)
             if take_counts:
@@ -344,27 +363,23 @@ class Crawler:
                     self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
                 with tally.lock:
                     self._endpoints_done = start + len(prepared)
-                    self.progress = {"done": self._endpoints_done + self._lane_done, "of": total,
-                                     **({"packages": {"done": self._lane_done, "of": len(lane_targets)}} if lane_targets else {})}
+                    self._set_progress(total, len(lane_targets))
+                self._checkpoint(run_id, tally)
             if lane is not None:
                 lane.join()
             if lane_error:
                 raise lane_error[0]
-            self.progress = {"done": total, "of": total}
-            statuses, issued, internal, legacy_statuses = tally.statuses, tally.issued, tally.internal, tally.legacy_statuses
-            changes, classified = tally.changes, tally.classified
-            if internal:
-                stats["internal_errors"] = dict(internal)
-            if legacy_statuses:
-                stats["legacy_statuses"] = dict(legacy_statuses)
+            with tally.lock:
+                self._set_progress(total, len(lane_targets))
+            stats.update(self._tally_stats(tally))
             if take_counts:
                 stats["sandbox_hosts"] = take_counts()
-            stats["statuses"] = dict(statuses)
-            stats["labels_issued"] = dict(issued)
-            stats["changes"] = changes
             if self.classifier:
-                stats["classified"] = classified
                 stats["classifier_model"] = self.classifier.model
+            if resume:
+                # What the whole cycle did, not only this run's tail: read back from what was committed.
+                stats["cycle"] = {**self.store.cycle_totals(cycle), "runs": len(resume["runs"]) + 1,
+                                  "labels_issued": sum_counts([resume["labels_issued"], stats["labels_issued"]])}
             sth = self.logbook.publish_sth()
             cutoff = (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
             stats["client_reports_pruned"] = self.store.prune_client_reports(cutoff)
@@ -373,6 +388,10 @@ class Crawler:
             stats["error"] = f"{type(exc).__name__}: {exc}"[:500]
             raise
         finally:
+            if tally is not None and "statuses" not in stats:
+                # What it did before it failed or was stopped, as a checkpoint would have saved it.
+                stats.update(self._tally_stats(tally), done=self._endpoints_done + self._lane_done,
+                             progress_at=self.clock())
             stats["finished_at"] = self.clock()
             with self.store.db.transaction() as tx:
                 tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?", (stats["finished_at"], dumps(stats), run_id))
@@ -504,7 +523,80 @@ class Crawler:
             Store.set_meta(tx, "warden_package", rulesets.warden_package)
         return f"{rulesets.pattern_set_digest}|{rulesets.record_set_digest}"
 
-    def _packages_due(self, targets: list[Target], stats: dict[str, Any]) -> list[Target]:
+    def _cycle_packages(self, packages: list[Target], stats: dict[str, Any], cycle: str, *, resumed: bool,
+                        before: int) -> list[Target]:
+        """The packages this run takes. A cycle plans its packages once and keeps the plan; a run that
+        continues the cycle takes what is left of it. Planning asks npm and PyPI for every known
+        package's version (59 minutes for 42,490 on 2026-10-19) and spends a whole budget: done again
+        after every restart, it cost an hour each time and let a cycle with restarts run far more
+        packages than the budget. A continued cycle with no plan (one started by older code) is
+        planned now, with the budget its runs have not used."""
+        plan = self.store.crawl_plan(cycle) if resumed else None
+        if plan is not None:
+            by_id = {t.id: t for t in packages}
+            due = [by_id[i] for i in plan.get("due") or [] if i in by_id]
+            ids = {t.id for t in due}
+            self._due_versions = {i: v for i, v in (plan.get("versions") or {}).items() if i in ids}
+            self._due_config = {i: c for i, c in (plan.get("config") or {}).items() if i in ids}
+            self._due_legacy = {i for i in plan.get("legacy") or [] if i in ids}
+            self._seen_versions = {i: v for i, v in (plan.get("seen") or {}).items() if i in ids}
+            stats["packages"] = {**(plan.get("stats") or {}), "fromPlan": True, "doneBefore": before, "left": len(due)}
+            return due
+        cap = max(0, self.settings.sandbox_max_per_crawl - before) if resumed else None
+        due = self._packages_due(packages, stats, cap=cap)
+        if resumed:
+            stats["packages"]["doneBefore"] = before
+        self.store.save_crawl_plan(cycle, {
+            "due": [t.id for t in due], "versions": self._due_versions, "config": self._due_config,
+            "legacy": sorted(self._due_legacy), "seen": self._seen_versions, "stats": stats["packages"],
+        }, self.clock())
+        return due
+
+    def _set_progress(self, total: int, packages: int) -> None:
+        """Progress over the cycle, so a restart does not send it back to zero (caller holds the tally lock)."""
+        before, packages_before = self._cycle_before
+        here = self._endpoints_done + self._lane_done
+        progress: dict[str, Any] = {"done": before + here, "of": before + total}
+        if packages:
+            progress["packages"] = {"done": packages_before + self._lane_done, "of": packages_before + packages}
+        if before:
+            progress["thisRun"] = {"done": here, "of": total}
+        self.progress = progress
+
+    def _tally_stats(self, tally: _Tally) -> dict[str, Any]:
+        out: dict[str, Any] = {"statuses": dict(tally.statuses), "labels_issued": dict(tally.issued),
+                               "changes": tally.changes}
+        if self.classifier:
+            out["classified"] = tally.classified
+        if tally.internal:
+            out["internal_errors"] = dict(tally.internal)
+        if tally.legacy_statuses:
+            out["legacy_statuses"] = dict(tally.legacy_statuses)
+        return out
+
+    CHECKPOINT_S = 30.0
+
+    def _checkpoint(self, run_id: int, tally: _Tally) -> None:
+        """Save the run's counts so far, at most every CHECKPOINT_S. An interrupted run used to keep
+        nothing (its counts lived in memory until the end), so the desk showed an empty last run and
+        the cycle's numbers were lost with every restart. ``progress_at`` tells the next run's resume
+        rule that this cycle was still moving. Only a crawl's own run is saved: ``reobserve`` uses the
+        package lane too, attached to a run that may have finished long ago."""
+        stats = self._run_stats
+        if stats is None or not self._checkpoint_lock.acquire(blocking=False):
+            return
+        try:
+            now = time.monotonic()
+            if now - self._checkpoint_at < self.CHECKPOINT_S:
+                return
+            self._checkpoint_at = now
+            with tally.lock:
+                counts = {**self._tally_stats(tally), "done": self._endpoints_done + self._lane_done}
+            self.store.set_run_stats(run_id, {**stats, **counts, "progress_at": self.clock()})
+        finally:
+            self._checkpoint_lock.release()
+
+    def _packages_due(self, targets: list[Target], stats: dict[str, Any], cap: int | None = None) -> list[Target]:
         """The packages to run in the sandbox this crawl: a version not observed yet.
 
         A published npm or PyPI version cannot change, so an observed version is not run again
@@ -514,7 +606,7 @@ class Crawler:
         """
         assert self.packages is not None
         reader = self.packages
-        cap = self.settings.sandbox_max_per_crawl
+        cap = self.settings.sandbox_max_per_crawl if cap is None else cap
         unknown_by: Counter[str] = Counter()
 
         def latest(t: Target) -> tuple[Target, str | None]:
@@ -789,8 +881,8 @@ class Crawler:
                 self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
                 with tally.lock:
                     self._lane_done += 1
-                    self.progress = {"done": self._endpoints_done + self._lane_done, "of": total,
-                                     "packages": {"done": self._lane_done, "of": len(targets)}}
+                    self._set_progress(total, len(targets))
+                self._checkpoint(run_id, tally)
 
     def _scan(self, prepared: list[Prepared], sets: str) -> tuple[dict[str, dict[str, Any]], set[str]]:
         """Scan results by target id, and the targets whose scan failed.
@@ -957,16 +1049,27 @@ class Crawler:
         with self.store.db.transaction() as tx:
             state = tx.one("SELECT * FROM targets WHERE id=?", (t.id,)) or {}
             subject = p.subject
+            # Annotations, _meta and the other members MTL/1 does not digest (histor.extras).
+            # "" is "observed, and no tool carries any"; NULL is "not observed by this code" (failed
+            # observations, and every row from before migration 011).
+            extras_digest: str | None = None
+            extras_body: dict[str, Any] | None = None
+            if p.obs.status == "ok":
+                found, extras_body = tool_extras(p.obs.tools)
+                extras_digest = found or ""
+                if found:
+                    Store.put_blob(tx, found, "toolextras", extras_body)
             tx.execute(
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
-                "tool_count, pages, protocol, server_name, server_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_count, pages, protocol, server_name, server_version, extras) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
                  clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
                  len(p.obs.tools) if p.obs.tools is not None else None, p.obs.pages,
                  clean_text(p.obs.protocol_version, 40),
                  clean_text(p.obs.server_info.get("name") or "", 200) or None,
-                 clean_text(p.obs.server_info.get("version") or "", 100) or None),
+                 clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest),
             )
             update: dict[str, Any] = {
                 "last_attempt": p.observed_at,
@@ -1127,6 +1230,7 @@ class Crawler:
                 # continuity label is due one interval after it, not on the next crawl.
                 update.update(chain_label=obs_row["id"], last_continuity_at=p.observed_at)
 
+            self._settle_extras(tx, t.id, state, extras_digest, extras_body, p.observed_at, update)
             update.update(
                 last_status="ok", last_detail="", last_ok=p.observed_at,
                 current_subject=subject.digest, current_toolset=subject.tool_set_digest,
@@ -1173,6 +1277,33 @@ class Crawler:
             "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
             (target_id, observed_at, state.get("current_subject"), subject.digest, old_toolset,
              subject.tool_set_digest, dumps(summary), label_id),
+        )
+
+    @staticmethod
+    def _settle_extras(tx, target_id: str, state: dict[str, Any], digest: str | None, body: dict[str, Any] | None,
+                       observed_at: str, update: dict[str, Any]) -> None:
+        """Point the target at this observation's extras and record a change when they moved.
+
+        ``digest`` is ``""`` when no tool carries an extra member. A target whose ``current_extras``
+        is still NULL was never observed by this code: its first ok observation starts the record
+        and is not a change. Without that rule the first crawl after migration 011 would report
+        every server at once.
+        """
+        if digest is None:
+            return
+        previous = state.get("current_extras")
+        if digest == previous:
+            return
+        update["current_extras"] = digest
+        if previous is None:
+            return
+        old_body = None
+        if previous:
+            row = tx.one("SELECT body FROM blobs WHERE digest=? AND kind='toolextras'", (previous,))
+            old_body = json.loads(row["body"]) if row else None
+        tx.execute(
+            "INSERT INTO extras_changes(target_id, observed_at, from_extras, to_extras, summary) VALUES(?, ?, ?, ?, ?)",
+            (target_id, observed_at, previous or None, digest or None, dumps(extras_diff(old_body, body))),
         )
 
     @staticmethod

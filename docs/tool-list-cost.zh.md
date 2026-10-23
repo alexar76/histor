@@ -46,6 +46,45 @@
 - **客户端实际发送的内容。** 有的客户端会删掉字段或缩短长描述，有的还会发送输出 schema。如果按列出的完整定义计数，软件包列表的中位数为 1,390 token，第 90 百分位为 9,960。
 - **人们实际使用哪些服务器。** 每个被列出的服务器只计一次：热门的和被弃用的权重相同。
 
+## token 花在哪里，一次发布改变了什么
+
+总数看不出列表的哪一部分变大了。一位读者（Raju Dandigam）希望把各部分分开，并在每次发布时都运行检查，所以
+HISTOR 现在把每次计数拆分为工具名称、描述、输入 schema，以及它们周围的键名和标点。这四部分相加等于总数；输出
+schema 和原样列出的列表另列在旁。以 HISTOR 最近一次观测到的 `@playwright/mcp` 为例：3,762 个 token，其中输入
+schema 3,123 个（83%），描述 394 个，名称 120 个。
+
+在 10 月 22 日至 23 日夜间的一次抓取中，有 109 次变更前后都有列表。其中 95 次让列表变重，30 次增幅超过十分之一；
+如果对总数、描述和输入 schema 分别设置 10% 的上限，会有 40 次无法通过检查。在这 95 次中，有 56 次输入 schema 的增长
+大于描述。有一个软件包给它原有的全部 15 个工具都加了一个 `raw` 参数：每次请求多 708 个 token，下面按属性的拆分能看到
+这一点。重命名的工具算作一个移除和一个新增。
+
+**HISTOR 记录的每次变更都带有它的成本。** `/api/v1/changes/<id>/cost` 给出前后各项合计、新增和移除的工具，以及每个
+计数有变化的工具（描述、输入 schema 以及该 schema 的每个顶层属性分开）。`/api/v1/servers/<id>/cost` 给出当前列表按工具的成本和最近几次变更的
+合计。对软件包而言，一次变更就是 HISTOR 运行过的、列出不同工具的一个版本，因此这就是日志中每个软件包按发布的历史，
+无需安装任何东西（[api.zh.md](api.zh.md)）。
+
+**发布之前，在你自己的 CI 中，** `histor tool-cost` 以同样的方法统计你的服务器，当总数、描述或输入 schema 的增长
+超过你设定的上限时让任务失败：
+
+```bash
+pip install "aimarket-histor[cost]"
+# 一次，以后每当你接受一次增长时再做一次：提交快照
+histor tool-cost snapshot --stdio "node dist/index.js" -o tool-cost.json
+# 在 CI 中：比较、写入任务摘要，出现回退时以 1 退出
+histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js" --max-increase 10%
+```
+
+工具来自 `--stdio COMMAND`（启动后发送 `initialize` 和 `tools/list`，然后停止）、`--url URL`（streamable
+HTTP，允许本地地址）或 `--tools FILE`（保存的 tools/list）。每项合计单独检查，所以即使更短的描述在总和中掩盖了
+它，翻倍的 schema 也会让检查失败。少于 50 个 token 的增长从不算失败（`--noise`），`--budget N` 限制整个列表，
+`--update` 重写基准，`histor tool-cost diff A B` 比较两个快照或保存的列表。在 GitHub 或 Gitea Actions 中：
+
+```yaml
+- run: pipx run --spec "aimarket-histor[cost]" histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js"
+```
+
+表格会出现在任务摘要中。
+
 ## 复现
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) 读取当前工具列表的导出（查询语句在其 docstring 中）并写出摘要。我们的摘要（不含服务器名称）：[`tool-list-tokens-2026-10-19.json`](tool-list-tokens-2026-10-19.json)。

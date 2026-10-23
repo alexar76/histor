@@ -39,7 +39,12 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/changes?limit=&before=` | newest first; each with `summary.added`, `summary.removed`, `summary.modified[].fields` (word diff of descriptions, JSON-path diff of schemas) |
 | GET | `/api/v1/changes/<id>` | one change |
+| GET | `/api/v1/changes/<id>/cost` | what the change did to the tool list's token cost: every total before and after (`sent`, split into `names`, `descriptions`, `inputSchemas` and `structure`; `outputSchemas` and `listed` beside it), tools added and removed, and each tool whose count moved, with its description, its input schema and each top-level property of that schema apart |
+| GET | `/api/v1/servers/<id>/cost?limit=` | the current list's cost per tool, and the totals of its last changes (up to 50) |
+| GET | `/api/v1/cost/toolsets/<digest>` | the cost of one stored tool set |
 | GET | `/feed.xml` | Atom feed of the latest 50 changes; `?watch=<id>,<id>,…` (up to 100 target ids, as `/check` and the server pages give them) keeps only those servers and packages — a subscription in any feed reader |
+
+Counted as [tool-list-cost.md](tool-list-cost.md) counts (`o200k_base`). A deployment without the `cost` extra answers these three with 503.
 
 ## Labels and evidence
 
