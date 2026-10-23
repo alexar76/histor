@@ -1,0 +1,13 @@
+{
+  "package": "@aimarket/warden",
+  "version": "0.20.0",
+  "sourceCommit": "a635f19cf34802ca9fd13da57e80eaca57b7ba12",
+  "buildDigest": "a018d58995e8337cdace5258fbca1b7509cf32bdfe5fbd502e5578c71ef9ed3f",
+  "tarball": "aimarket-warden-0.20.0-a635f19.tgz",
+  "sha256": "53bc4dacc050e2822139f62357d978298d9ca4ac1a8335eca2503eb3059c91ce",
+  "distribution": "local source build; differs from npm 0.20.0",
+  "changes": [
+    "Preserve screen text after large binary blocks",
+    "Refresh element maps from pointer and keyboard results"
+  ]
+}
