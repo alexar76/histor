@@ -63,6 +63,7 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_OPERATOR_TOKEN` | empty | prod: ≥ 24 characters; guards `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; used in badges, feed, federation |
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = only on operator request |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | the least time after a finished cycle before the next one starts; the monthly snapshot (`deploy/export_dataset.sh`) is taken in that gap |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | how often publishers' declaration files are read between crawls ([api](api.md#declaring-tool-sets-publishers)); `0` = only at the crawl |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: a fresh instance waits one interval before its first crawl |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | politeness: a host with 2 000 endpoints is never hit more than twice at once |

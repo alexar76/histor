@@ -98,3 +98,34 @@ def test_an_interrupted_run_is_closed_and_retried_soon(world):
     assert wait_for(lambda: s.store.last_successful_run() is not None)
     s.stop.set()
     t.join(timeout=5)
+
+
+def test_a_cycle_longer_than_the_interval_leaves_a_gap_before_the_next(world):
+    # Production, October 2026: a cycle took 25.7 h, the next started two minutes after it, and the monthly
+    # snapshot, which waits for a moment between two cycles, never found one.
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    s = world["services"]
+    world["mcp"].tools["/a"] = [tool("x", "x")]
+    world["targets"].append(make_target("io.example/x", "/a"))
+    started = (datetime.now(UTC) - timedelta(hours=26)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    finished = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with s.store.db.transaction() as tx:
+        tx.execute("INSERT INTO runs(started_at, finished_at, stats) VALUES(?, ?, ?)",
+                   (started, finished, json.dumps({"cycle_started_at": started})))
+    before = s.store.last_run()["id"]
+    s.settings = replace(s.settings, crawl_interval_s=86400, crawl_on_start=True, crawl_min_gap_s=3600)
+    t = threading.Thread(target=scheduler, args=(s,), kwargs={"first_wait": 0.01, "tick": 0.02}, daemon=True)
+    t.start()
+    assert not wait_for(lambda: s.store.last_run(finished_only=False)["id"] != before, timeout=0.4)
+    s.stop.set()
+    t.join(timeout=5)
+    # With no gap the overdue cycle starts at once, as before.
+    s.stop.clear()
+    s.settings = replace(s.settings, crawl_min_gap_s=0)
+    t = threading.Thread(target=scheduler, args=(s,), kwargs={"first_wait": 0.01, "tick": 0.02}, daemon=True)
+    t.start()
+    assert wait_for(lambda: s.store.last_run(finished_only=False)["id"] != before)
+    s.stop.set()
+    t.join(timeout=5)

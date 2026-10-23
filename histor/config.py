@@ -124,6 +124,10 @@ class Settings:
     # Pages the deployment serves beside the app that sitemap-site.xml should name too, e.g.
     # /datasets/ (nginx, from deploy/export_dataset.sh). Paths only, comma-separated.
     sitemap_extra: tuple[str, ...] = ()
+    # After a successful cycle, at least this long before the next one starts. A cycle that outlasts the interval would
+    # otherwise start the next at once, and the monthly snapshot (deploy/export_dataset.sh) never finds a moment
+    # between two cycles to take a coherent copy.
+    crawl_min_gap_s: int = 1800
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -175,6 +179,7 @@ def load_settings() -> Settings:
         operator_token=os.environ.get("HISTOR_OPERATOR_TOKEN", "").strip(),
         registry_url=os.environ.get("HISTOR_REGISTRY_URL", "https://registry.modelcontextprotocol.io").strip().rstrip("/"),
         crawl_interval_s=_int("HISTOR_CRAWL_INTERVAL_S", 86400, minimum=0),
+        crawl_min_gap_s=_int("HISTOR_CRAWL_MIN_GAP_S", 1800, minimum=0),
         crawl_on_start=_truthy("HISTOR_CRAWL_ON_START", "1"),
         crawl_workers=_int("HISTOR_CRAWL_WORKERS", 12, minimum=1),
         crawl_per_host=_int("HISTOR_CRAWL_PER_HOST", 2, minimum=1),

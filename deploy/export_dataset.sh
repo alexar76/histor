@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Monthly open-data snapshot of the log (histor/dataset.py), published at
 # https://histor.modelmarket.dev/datasets/. Installed as /usr/local/sbin/histor-export-dataset and
-# run daily by histor-export-dataset.timer: it does nothing once this month's snapshot exists, and
-# a day the crawl is still running is skipped (exit 0) until a later run finds the window.
+# run every 10 minutes by histor-export-dataset.timer (deploy/histor-export-dataset.{service,timer}):
+# it does nothing once this month's snapshot exists, and nothing while a crawl runs. A snapshot is a
+# copy of a finished cycle, so it is taken in the gap the service leaves after each one
+# (HISTOR_CRAWL_MIN_GAP_S, 30 minutes): until 2026-10-23 the timer ran once a day at 15:30 UTC, and a
+# cycle longer than a day started the next two minutes after it, so that window never came.
 #
 #   histor-export-dataset          this month's snapshot, if missing and no crawl is running
 #   histor-export-dataset --now    a snapshot dated today even if this month has one (still waits for the crawl)
@@ -39,6 +42,11 @@ install -d -m 0755 "$DIR"
 install -d -m 0700 -o "${UIDGID%%:*}" -g "${UIDGID##*:}" "$DIR/.staging"
 rm -rf "${DIR:?}/.staging/$day"
 
+# Cheap first: ask the service. The export itself refuses a running crawl too (exit 75 below).
+if curl -sf --max-time 5 http://127.0.0.1:9490/health 2> /dev/null | grep -q '"crawl_running":true'; then
+  exit 0
+fi
+
 image="$(docker inspect "$APP" --format '{{.Config.Image}}')"
 mounts=(-v "$VOLUME:/data:ro" -v "$DIR/.staging:/export")
 if ! docker run --rm --entrypoint python "$image" -c 'import histor.dataset' 2> /dev/null; then
@@ -62,7 +70,7 @@ docker run --rm --name "histor-export-$day" --user "$UIDGID" --read-only --tmpfs
 rc=$?
 set -e
 if [[ $rc -eq 75 ]]; then
-  echo "crawl running; the timer tries again tomorrow"
+  echo "crawl running; the timer tries again in 10 minutes"
   exit 0
 fi
 [[ $rc -eq 0 ]] || exit "$rc"

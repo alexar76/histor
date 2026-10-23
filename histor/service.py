@@ -102,7 +102,8 @@ def crawl_in_background(services: Services) -> bool:
 
 
 def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300.0) -> None:
-    """Crawl every ``crawl_interval_s``, counted from the start of the last SUCCESSFUL crawl.
+    """Crawl every ``crawl_interval_s``, counted from the start of the last SUCCESSFUL crawl, and never sooner than
+    ``crawl_min_gap_s`` after it finished: a cycle that outlasts the interval leaves that gap for the monthly snapshot.
 
     A crawl that failed (registry down, crash) is retried after at most an hour instead of
     waiting a full interval — otherwise one bad night costs a day of history. One interrupted by a
@@ -128,6 +129,10 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
                 return True
             return (now - parse(last["finished_at"])).total_seconds() >= retry
         if ok:
+            # A cycle longer than the interval would start the next one at once: wait a gap after it, the moment the
+            # monthly snapshot (deploy/export_dataset.sh) needs to copy a finished cycle.
+            if ok.get("finished_at") and (now - parse(ok["finished_at"])).total_seconds() < services.settings.crawl_min_gap_s:
+                return False
             # Counted from the start of the cycle, so a resumed run keeps the daily rhythm.
             start = ok["stats"].get("cycle_started_at") or ok["started_at"]
             return (now - parse(start)).total_seconds() >= interval

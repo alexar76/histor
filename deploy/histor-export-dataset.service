@@ -1,0 +1,10 @@
+# /etc/systemd/system/histor-export-dataset.service — runs deploy/export_dataset.sh (installed as
+# /usr/local/sbin/histor-export-dataset). One snapshot a month, taken between two crawl cycles.
+[Unit]
+Description=HISTOR monthly open-data snapshot (/datasets/)
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/histor-export-dataset
+Nice=10
+IOSchedulingClass=idle
