@@ -50,6 +50,11 @@ objetivo se confirma en cuanto llega, y el siguiente arranque continúa el ciclo
 Un reinicio solo pierde el trabajo en curso: el lote de endpoints que se estaba leyendo y los paquetes que en
 ese momento corrían en un sandbox. Se vuelven a leer.
 
+`tests/integration/test_restart.py` lo comprueba con un proceso real: mata HISTOR con SIGKILL a mitad de
+un ciclo (endpoints y paquetes confirmados, otros en curso), lo arranca de nuevo y no encuentra nada
+confirmado leído dos veces, ninguna consulta de versiones, el presupuesto de paquetes del ciclo respetado y el
+ciclo informado entero; en SQLite y PostgreSQL. Con el código anterior a este cambio falla.
+
 ## Configuración
 
 | Variable | Valor por defecto | Notas |

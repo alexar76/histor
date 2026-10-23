@@ -49,6 +49,11 @@ committed when it is in, and the next start continues the interrupted cycle:
 What a restart loses is the work in flight: the batch of endpoints being read and the packages running in a
 sandbox at that moment. They are read again.
 
+`tests/integration/test_restart.py` checks this on a real process: it kills HISTOR with SIGKILL in the
+middle of a cycle (endpoints and packages committed, more in flight), starts it again and finds nothing
+committed read twice, no version lookups, the cycle's package budget kept and the cycle reported whole; on
+SQLite and PostgreSQL. On the code before this change it fails.
+
 ## Configuration
 
 | Variable | Default | Notes |

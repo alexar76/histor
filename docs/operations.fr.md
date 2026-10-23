@@ -51,6 +51,11 @@ résultat de chaque cible est enregistré dès qu'il arrive, et le démarrage su
 Un redémarrage ne perd que le travail en cours : le lot de points de terminaison en lecture et les paquets qui
 tournaient à ce moment dans un bac à sable. Ils sont relus.
 
+`tests/integration/test_restart.py` le vérifie sur un vrai processus : il tue HISTOR par SIGKILL au
+milieu d'un cycle (points de terminaison et paquets enregistrés, d'autres en cours), le relance et ne trouve
+rien d'enregistré lu deux fois, aucune demande de version, le budget de paquets du cycle respecté et le cycle
+rapporté en entier ; sous SQLite et PostgreSQL. Sur le code d'avant ce changement, il échoue.
+
 ## Configuration
 
 | Variable | Défaut | Remarques |

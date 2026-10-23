@@ -7,6 +7,7 @@ pagination, and the WARDEN sidecar reading real definitions.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import socket
 import threading
@@ -30,7 +31,8 @@ class World:
     def __init__(self) -> None:
         self.port = free_port()
         self.base = f"http://127.0.0.1:{self.port}"
-        # server name -> {"tools": [...], "sse": bool, "status": int | None, "page": int | None}
+        # server name -> {"tools": [...], "sse": bool, "status": int | None, "page": int | None,
+        #                 "delay": seconds before a tools/list answer}
         self.servers: dict[str, dict[str, Any]] = {}
         self.calls: list[tuple[str, str]] = []
         app = Starlette(routes=[
@@ -88,6 +90,8 @@ class World:
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
                       "serverInfo": {"name": name, "version": "1.0.0"}}
         elif method == "tools/list":
+            if spec.get("delay"):
+                await asyncio.sleep(spec["delay"])
             tools = spec["tools"]
             size = spec.get("page")
             if size:
