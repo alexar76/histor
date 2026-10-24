@@ -552,7 +552,7 @@ class Store:
     def last_successful_run(self) -> dict[str, Any] | None:
         """The newest finished run whose stats carry no error — what the crawl interval counts from."""
         with self.db.read() as tx:
-            rows = tx.execute("SELECT * FROM runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 50")
+            rows = tx.execute("SELECT * FROM runs WHERE kind='crawl' AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 50")
         for row in rows:
             stats = json.loads(row["stats"]) if row.get("stats") else {}
             if not stats.get("error"):
@@ -566,12 +566,13 @@ class Store:
         The counts it saved while running stay, and it gets its cycle's totals so far from the
         database, so the last run on the desk is not an empty bar until the cycle ends."""
         with self.db.read() as tx:
-            rows = tx.execute("SELECT id, started_at, stats FROM runs WHERE finished_at IS NULL")
+            rows = tx.execute("SELECT id, started_at, stats, kind FROM runs WHERE finished_at IS NULL")
         for row in rows:
             stats = json.loads(row["stats"]) if row.get("stats") else {}
             stats["error"] = "interrupted: the process restarted before the crawl finished"
-            stats["cycle"] = {**(stats.get("cycle") or {}),
-                              **self.cycle_totals(stats.get("cycle_started_at") or row["started_at"])}
+            if row["kind"] == "crawl":
+                stats["cycle"] = {**(stats.get("cycle") or {}),
+                                  **self.cycle_totals(stats.get("cycle_started_at") or row["started_at"])}
             with self.db.transaction() as tx:
                 tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?", (now, dumps(stats), row["id"]))
         return len(rows)
@@ -595,7 +596,7 @@ class Store:
         if window_s <= 0:
             return None
         with self.db.read() as tx:
-            rows = tx.execute("SELECT * FROM runs WHERE id < ? ORDER BY id DESC LIMIT 50", (run_id,))
+            rows = tx.execute("SELECT * FROM runs WHERE kind='crawl' AND id < ? ORDER BY id DESC LIMIT 50", (run_id,))
         parse = lambda ts: datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
         cycle: str | None = None
         known = False   # the cycle start was recorded by a run, not inferred from older runs' starts
@@ -625,7 +626,8 @@ class Store:
 
     def last_attempt_since(self, since: str) -> str | None:
         with self.db.read() as tx:
-            row = tx.one("SELECT MAX(last_attempt) AS at FROM targets WHERE last_attempt >= ?", (since,))
+            row = tx.one("SELECT MAX(a.attempted_at) AS at FROM crawl_attempts a JOIN runs r ON r.id=a.run_id "
+                         "WHERE r.kind='crawl' AND r.started_at>=?", (since,))
         return row["at"] if row else None
 
     def cycle_totals(self, since: str) -> dict[str, Any]:
@@ -633,9 +635,12 @@ class Store:
         and the status each was last left in, and the changes recorded. Exact however many restarts
         the cycle had, and whatever code wrote its runs."""
         with self.db.read() as tx:
-            rows = tx.execute("SELECT last_status, COUNT(*) AS n FROM targets WHERE last_attempt >= ? "
-                              "GROUP BY last_status", (since,))
-            changes = tx.one("SELECT COUNT(*) AS n FROM changes WHERE observed_at >= ?", (since,))
+            rows = tx.execute("SELECT last_status, COUNT(*) AS n FROM targets WHERE id IN "
+                              "(SELECT a.target_id FROM crawl_attempts a JOIN runs r ON r.id=a.run_id "
+                              "WHERE r.kind='crawl' AND r.started_at>=?) GROUP BY last_status", (since,))
+            changes = tx.one("SELECT COUNT(*) AS n FROM changes WHERE observed_at >= ? "
+                             "AND (run_id IS NULL OR run_id IN (SELECT id FROM runs WHERE kind='crawl' AND started_at>=?))",
+                             (since, since))
         statuses = {str(r["last_status"]): int(r["n"]) for r in rows if r["last_status"]}
         return {"startedAt": since, "attempted": sum(statuses.values()), "statuses": statuses,
                 "changes": int(changes["n"] or 0)}
@@ -654,20 +659,30 @@ class Store:
         return json.loads(row["body"]) if row else None
 
     def attempted_since(self, since: str) -> set[str]:
-        """Targets dialled (or run in the sandbox) at or after ``since``: committed, so really done."""
+        """Committed attempts belonging to daily crawl runs started at/after the cycle start."""
         with self.db.read() as tx:
-            return {r["id"] for r in tx.execute("SELECT id FROM targets WHERE last_attempt >= ?", (since,))}
+            return {r["id"] for r in tx.execute(
+                "SELECT a.target_id AS id FROM crawl_attempts a JOIN runs r ON r.id=a.run_id "
+                "WHERE r.kind='crawl' AND r.started_at>=?", (since,))}
+
+    @staticmethod
+    def record_attempt(tx: Tx, target_id: str, run_id: int, at: str) -> None:
+        # Explicit run membership avoids counting the previous cycle's final observation when
+        # its timestamp and the next cycle's start land in the same second. Includes legacy runs.
+        tx.execute("INSERT INTO crawl_attempts(target_id, run_id, attempted_at) VALUES(?, ?, ?) "
+                   "ON CONFLICT(run_id, target_id) DO UPDATE SET attempted_at=excluded.attempted_at",
+                   (target_id, run_id, at))
 
     def set_run_stats(self, run_id: int, stats: dict[str, Any]) -> None:
         with self.db.transaction() as tx:
             tx.execute("UPDATE runs SET stats=? WHERE id=?", (dumps(stats), run_id))
 
-    def last_run(self, finished_only: bool = True) -> dict[str, Any] | None:
-        sql = "SELECT * FROM runs"
+    def last_run(self, finished_only: bool = True, *, kind: str = "crawl") -> dict[str, Any] | None:
+        sql = "SELECT * FROM runs WHERE kind=?"
         if finished_only:
-            sql += " WHERE finished_at IS NOT NULL"
+            sql += " AND finished_at IS NOT NULL"
         with self.db.read() as tx:
-            row = tx.one(sql + " ORDER BY id DESC LIMIT 1")
+            row = tx.one(sql + " ORDER BY id DESC LIMIT 1", (kind,))
         if row is None:
             return None
         row["stats"] = json.loads(row["stats"]) if row.get("stats") else {}

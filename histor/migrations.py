@@ -348,6 +348,23 @@ MIGRATION_012: tuple[str, ...] = (
     "CREATE TABLE crawl_plans (cycle_started_at TEXT PRIMARY KEY, created_at TEXT NOT NULL, body TEXT NOT NULL)",
 )
 
+# Remote checks have their own durable queue; they must not become the daily package run.
+MIGRATION_013: tuple[str, ...] = (
+    "ALTER TABLE runs ADD COLUMN kind TEXT NOT NULL DEFAULT 'crawl'",
+    "ALTER TABLE changes ADD COLUMN run_id BIGINT",
+    "CREATE INDEX runs_kind ON runs(kind, id)",
+    "CREATE INDEX changes_run ON changes(run_id)",
+    "CREATE TABLE crawl_attempts (target_id TEXT NOT NULL, run_id BIGINT NOT NULL, attempted_at TEXT NOT NULL, "
+    "PRIMARY KEY(run_id, target_id))",
+    "INSERT INTO crawl_attempts(target_id, run_id, attempted_at) SELECT target_id, run_id, MAX(observed_at) "
+    "FROM observations WHERE run_id IS NOT NULL GROUP BY target_id, run_id",
+    "CREATE TABLE remote_schedule (target_id TEXT PRIMARY KEY, host TEXT NOT NULL, next_due TEXT NOT NULL, "
+    "hot_until TEXT, failures INTEGER NOT NULL DEFAULT 0, last_checked TEXT, last_gap_s INTEGER)",
+    "CREATE INDEX remote_schedule_due ON remote_schedule(next_due)",
+    "CREATE TABLE remote_host_backoff (host TEXT PRIMARY KEY, until_at TEXT NOT NULL)",
+    "CREATE TABLE classifier_daily_budget (day TEXT PRIMARY KEY, used INTEGER NOT NULL DEFAULT 0)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -362,6 +379,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (10, "010_declaration_urls", MIGRATION_010),
     (11, "011_tool_extras", MIGRATION_011),
     (12, "012_crawl_plans", MIGRATION_012),
+    (13, "013_remote_schedule", MIGRATION_013),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

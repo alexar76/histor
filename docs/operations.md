@@ -62,7 +62,9 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_DATABASE_URL` | empty (SQLite) | prod: `postgresql://…` — required |
 | `HISTOR_OPERATOR_TOKEN` | empty | prod: ≥ 24 characters; guards `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; used in badges, feed, federation |
-| `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = only on operator request |
+| `HISTOR_CRAWL_INTERVAL_S` | `86400` | registry discovery and packages; `0` = only on operator request |
+| `HISTOR_REMOTE_INTERVAL_S` | `21600` | independent remote queue, six-hour target; `0` puts remotes back in the daily crawl |
+| `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `_CHANGE_WINDOW_S` | `1800` / `604800` | 30-minute target after at least two observed changes in seven days; [details and measured gaps](remote-polling.md) |
 | `HISTOR_CRAWL_MIN_GAP_S` | `1800` | the least time after a finished cycle before the next one starts; the monthly snapshot (`deploy/export_dataset.sh`) is taken in that gap |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | how often publishers' declaration files are read between crawls ([api](api.md#declaring-tool-sets-publishers)); `0` = only at the crawl |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: a fresh instance waits one interval before its first crawl |
@@ -77,7 +79,7 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_ALLOW_PRIVATE_TARGETS` | `0` | tests only; refused under `prod` |
 | `HISTOR_CLASSIFIER_MODEL` | empty | OpenRouter model id (e.g. `deepseek/deepseek-chat`, `minimax/minimax-m1`). Off unless this, a key and a budget are all set |
 | `HISTOR_OPENROUTER_API_KEY` | empty | OpenRouter key (or `OPENROUTER_API_KEY`); stays in the host `.env`, never in the image |
-| `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | paid-call ceiling per crawl. `0` disables the classifier; distinct tool sets only (a shared or already-judged set is reused free) |
+| `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | paid-call ceiling per crawl; with independent remote polling, also a shared durable ceiling per UTC day. `0` disables the classifier; cached verdicts are free |
 | `HISTOR_CLASSIFIER_MODEL` / `_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | — / `https://openrouter.ai/api/v1` / `30` / `60` | the meaning-based, language-independent classifier; its verdict is advisory and never enters the signed log |
 
 ## Migrations
@@ -160,9 +162,13 @@ purpose: move the database AND the key and marker aside, together.
 ## Being a good crawler
 
 HISTOR identifies itself (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)`),
-sends three JSON-RPC messages per endpoint per day, never calls a tool, follows no redirects and keeps at most
+sends `initialize`, the initialized notification and `tools/list` per observation (plus pagination), never calls a tool, follows no redirects and keeps at most
 two connections per host. One observation has one deadline across every request and page, and the tool set is
 capped at 3 MiB and 5 000 tools.
+
+Remote targets have an independent schedule: six hours normally, 30 minutes after repeated recent changes.
+These are target intervals, subject to backlog, failure backoff and host limits. `/api/v1/stats` exposes
+`remotePolling` with overdue work and actual observation gaps; intermediate states can still be missed.
 
 An operator who wants their endpoint left out says so in an issue. Add the host (which covers its subdomains) or
 a URL prefix to `HISTOR_OPT_OUT` (comma-separated) or to `opt-out.txt` on the data volume (one per line, `#`

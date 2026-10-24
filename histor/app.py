@@ -411,7 +411,20 @@ def create_app(services: Services) -> FastAPI:
                 "lastError": last_crawl_error(),
                 "sandboxHosts": (1 + len(settings.sandbox_extra)) if settings.sandbox_enabled else 0,
             },
+            "remotePolling": {
+                "enabled": settings.remote_interval_s > 0,
+                "runningSince": services.crawler.remote_running_since,
+                "intervalSeconds": settings.remote_interval_s,
+                "changedIntervalSeconds": min(settings.remote_interval_s, settings.remote_changed_interval_s),
+                "changeWindowSeconds": settings.remote_change_window_s,
+                "minimumChanges": 2,
+                "lastError": services.remote_error,
+                **services.crawler.remote_schedule.stats(datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")),
+            },
         }
+        remote_run = store.last_run(kind="remote")
+        if remote_run:
+            out["remotePolling"]["lastRun"] = remote_run
         if run:
             s = run["stats"]
             # A run that continued a cycle after a restart, or was interrupted itself, reports the
@@ -424,6 +437,7 @@ def create_app(services: Services) -> FastAPI:
                 "registryServers": s.get("registry_servers"),
                 "registryEndpoints": s.get("registry_endpoints"),
                 "curatedEndpoints": s.get("curated_endpoints", 0),
+                "remoteSchedule": s.get("remote_schedule"),
                 "notAttempted": s.get("not_attempted", {}),
                 "attempted": c.get("attempted", s.get("attempted")),
                 "statuses": c.get("statuses", s.get("statuses", {})),
@@ -937,9 +951,9 @@ def create_app(services: Services) -> FastAPI:
     # -- operator -------------------------------------------------------------------
 
     @app.post("/api/v1/admin/crawl")
-    def admin_crawl(request: Request) -> JSONResponse:
+    def admin_crawl(request: Request, include_remote: bool = True) -> JSONResponse:
         operator(request)
-        started = crawl_in_background(services)
+        started = crawl_in_background(services, include_remote=include_remote)
         return JSONResponse({"started": started, "runningSince": services.crawler.running_since},
                             status_code=202 if started else 409)
 

@@ -42,6 +42,7 @@ class Services:
     receipts: ReceiptLog | None = None
     stop: threading.Event = field(default_factory=threading.Event)
     last_error: str | None = None
+    remote_error: str | None = None
 
     def close(self) -> None:
         self.stop.set()
@@ -81,14 +82,14 @@ def build(settings: Settings, *, crawler_kwargs: dict | None = None, backend: Ba
                     receipts=receipts)
 
 
-def crawl_in_background(services: Services) -> bool:
+def crawl_in_background(services: Services, *, include_remote: bool = True) -> bool:
     """Start one crawl on a thread. False when one is already running."""
     if services.crawler.running_since is not None:
         return False
 
     def work() -> None:
         try:
-            stats = services.crawler.run()
+            stats = services.crawler.run(include_remote=include_remote)
             services.last_error = None
             log.warning("crawl finished: %s", {k: stats.get(k) for k in ("attempted", "changes", "tree_size")})
         except CrawlInProgress:
@@ -101,6 +102,23 @@ def crawl_in_background(services: Services) -> bool:
     return True
 
 
+def remote_worker(services: Services, *, idle_wait: float = 30.0) -> None:
+    """Drain due remote work without waiting for the daily package run or its scheduler tick."""
+    while not services.stop.is_set():
+        wait = idle_wait
+        try:
+            result = services.crawler.poll_remote()
+            services.remote_error = None
+            if result is not None:
+                wait = 0.1  # another batch may already be due; no multi-minute queue stall
+        except Exception as exc:  # noqa: BLE001 - retry infrastructure failures, without spinning
+            services.remote_error = f"{type(exc).__name__}: {exc}"[:500]
+            log.exception("remote polling failed")
+            wait = max(idle_wait, 60)
+        if services.stop.wait(wait):
+            return
+
+
 def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300.0) -> None:
     """Crawl every ``crawl_interval_s``, counted from the start of the last SUCCESSFUL crawl, and never sooner than
     ``crawl_min_gap_s`` after it finished: a cycle that outlasts the interval leaves that gap for the monthly snapshot.
@@ -111,7 +129,8 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
     automatic crawl; an operator can still trigger one by hand.
     """
     interval = services.settings.crawl_interval_s
-    if interval <= 0:
+    remote = services.settings.remote_interval_s > 0
+    if interval <= 0 and not remote:
         return
     retry = min(interval, 3600)
     booted = datetime.now(UTC)
@@ -155,10 +174,12 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
 
     if services.stop.wait(first_wait):
         return
+    if remote:
+        threading.Thread(target=remote_worker, args=(services,), name="histor-remote", daemon=True).start()
     while True:
         try:
-            if due():
-                crawl_in_background(services)
+            if interval > 0 and due():
+                crawl_in_background(services, include_remote=not remote)
             if refresh and time.monotonic() - refreshed[0] >= refresh and not refreshing.locked():
                 refreshed[0] = time.monotonic()
                 threading.Thread(target=refresh_declarations, name="histor-declared", daemon=True).start()

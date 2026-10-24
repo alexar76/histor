@@ -88,6 +88,12 @@ flowchart LR
 - **Answers** `/check`: send the tools your client received; get back, signed, whether HISTOR
   observed the same set at that endpoint, an earlier one, or none.
 
+Remote checks run independently of the daily registry/package cycle. The default target interval
+is six hours; endpoints with at least two observed changes in the last seven days are checked
+every 30 minutes. These are scheduling targets: host limits, failures and queue capacity can
+make actual gaps longer. Intermediate states can still be missed. See
+[remote polling operations](docs/remote-polling.md) for configuration and measured intervals.
+
 ## What a label does not say
 
 The profile forbids the words *safe, secure, audited, certified, approved* and *trusted*, and so

@@ -46,6 +46,24 @@ def test_identity_columns_generate_keys_on_both_engines(backend):
     assert int(b) == int(a) + 1
 
 
+def test_remote_queue_upgrade_preserves_existing_run_membership(backend, monkeypatch):
+    import histor.migrations as m
+
+    monkeypatch.setattr(m, "MIGRATIONS", m.MIGRATIONS[:12])
+    apply_migrations(backend)
+    with backend.transaction() as tx:
+        run_id = tx.one("INSERT INTO runs(started_at) VALUES(?) RETURNING id", ("2026-10-20T00:00:00Z",))["id"]
+        for at in ("2026-10-20T01:00:00Z", "2026-10-20T02:00:00Z"):
+            tx.execute("INSERT INTO observations(target_id, run_id, observed_at, status) VALUES(?, ?, ?, 'ok')",
+                       ("previous-target", run_id, at))
+    monkeypatch.undo()
+    apply_migrations(backend)
+    with backend.read() as tx:
+        assert tx.one("SELECT kind FROM runs WHERE id=?", (run_id,))["kind"] == "crawl"
+        rows = tx.execute("SELECT * FROM crawl_attempts")
+        assert len(rows) == 1 and rows[0]["attempted_at"] == "2026-10-20T02:00:00Z"
+
+
 def test_a_failed_transaction_leaves_nothing_behind(backend):
     apply_migrations(backend)
     with pytest.raises(RuntimeError), backend.transaction() as tx:

@@ -128,6 +128,9 @@ class Settings:
     # otherwise start the next at once, and the monthly snapshot (deploy/export_dataset.sh) never finds a moment
     # between two cycles to take a coherent copy.
     crawl_min_gap_s: int = 1800
+    remote_interval_s: int = 21600
+    remote_changed_interval_s: int = 1800
+    remote_change_window_s: int = 604800
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -180,6 +183,9 @@ def load_settings() -> Settings:
         registry_url=os.environ.get("HISTOR_REGISTRY_URL", "https://registry.modelcontextprotocol.io").strip().rstrip("/"),
         crawl_interval_s=_int("HISTOR_CRAWL_INTERVAL_S", 86400, minimum=0),
         crawl_min_gap_s=_int("HISTOR_CRAWL_MIN_GAP_S", 1800, minimum=0),
+        remote_interval_s=_int("HISTOR_REMOTE_INTERVAL_S", 21600),
+        remote_changed_interval_s=_int("HISTOR_REMOTE_CHANGED_INTERVAL_S", 1800, minimum=60),
+        remote_change_window_s=_int("HISTOR_REMOTE_CHANGE_WINDOW_S", 604800, minimum=60),
         crawl_on_start=_truthy("HISTOR_CRAWL_ON_START", "1"),
         crawl_workers=_int("HISTOR_CRAWL_WORKERS", 12, minimum=1),
         crawl_per_host=_int("HISTOR_CRAWL_PER_HOST", 2, minimum=1),

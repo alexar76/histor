@@ -18,6 +18,36 @@ def rows(path):
         return [json.loads(line) for line in fh]
 
 
+def test_export_keeps_one_snapshot_while_remote_observations_commit(world, tmp_path, monkeypatch):
+    from tests.test_remote_schedule import enable
+
+    s = enable(world)
+    target = make_target("io.example/live", "/a")
+    world["targets"].append(target)
+    world["mcp"].tools["/a"] = [tool("old")]
+    s.crawler.run()
+    before = s.store.target(target.id)["current_toolset"]
+    original_pages = dataset._pages
+    wrote = []
+
+    def pages(*args, **kwargs):
+        for row in original_pages(*args, **kwargs):
+            yield row
+            if "FROM targets" in args[1] and not wrote:
+                world["clock"].advance(hours=6)
+                world["mcp"].tools["/a"] = [tool("new")]
+                s.crawler.poll_remote()
+                wrote.append(True)
+
+    monkeypatch.setattr(dataset, "_pages", pages)
+    out = tmp_path / "concurrent"
+    dataset.export(s.store, s.key, out)
+    assert wrote and s.store.target(target.id)["changes"] == 1
+    assert rows(out / "servers.jsonl.gz")[0]["toolSetDigest"] == before
+    assert rows(out / "changes.jsonl.gz") == []
+    assert {r["digest"] for r in rows(out / "toolsets.jsonl.gz")} == {before}
+
+
 def crawl_with_a_change(world):
     s, mcp, clock = world["services"], world["mcp"], world["clock"]
     mcp.tools["/a"] = [tool("get_weather", "Return the weather."), tool("list_cities", "List cities.")]

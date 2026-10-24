@@ -53,7 +53,17 @@ from histor.packages import (
     sandbox_readers,
     version_signals,
 )
-from histor.registry import Target, curated_rank, curated_targets, harvest, load_opt_out, with_curated
+from histor.registry import (
+    OPT_OUT,
+    Target,
+    curated_rank,
+    curated_targets,
+    harvest,
+    load_opt_out,
+    opted_out,
+    with_curated,
+)
+from histor.remote_schedule import RemoteSchedule
 from histor.scanner import RuleSets, Scanner, ScannerError
 from histor.store import Store, dumps, sum_counts
 from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject
@@ -235,6 +245,11 @@ class Crawler:
         self.harvest_fn = harvest_fn or self._harvest_with_curated
         self.clock = clock
         self._lock = threading.Lock()
+        # Hold through observe, scan and commit: overlapping reads of one endpoint must not
+        # commit in reverse order. Packages have their own lane and never take this lock.
+        self._remote_lock = threading.Lock()
+        self.remote_schedule = RemoteSchedule(store, settings)
+        self.remote_running_since: str | None = None
         self.running_since: str | None = None
         self.progress: dict[str, Any] | None = None
         # What the cycle had done before this run (targets, packages), so progress counts the cycle.
@@ -252,13 +267,13 @@ class Crawler:
 
     # -- orchestration ----------------------------------------------------------------
 
-    def run(self) -> dict[str, Any]:
+    def run(self, *, include_remote: bool = True) -> dict[str, Any]:
         if not self._lock.acquire(blocking=False):
             raise CrawlInProgress("a crawl is already running")
         try:
             self.running_since = self.clock()
             self.progress = None
-            return self._run()
+            return self._run(include_remote=include_remote)
         finally:
             self.running_since = None
             self.progress = None
@@ -270,7 +285,7 @@ class Crawler:
                 save()
             self._lock.release()
 
-    def _run(self) -> dict[str, Any]:
+    def _run(self, *, include_remote: bool = True) -> dict[str, Any]:
         started = self.clock()
         with self.store.db.transaction() as tx:
             run_id = int(tx.one("INSERT INTO runs(started_at) VALUES(?) RETURNING id", (started,))["id"])
@@ -313,6 +328,9 @@ class Crawler:
             dialable = [t for t in targets if not t.skip_reason]
             if self.settings.crawl_limit:
                 dialable = dialable[: self.settings.crawl_limit]
+            if not include_remote:
+                stats["remote_schedule"] = "independent"
+                dialable = [t for t in dialable if parse_package(t.endpoint)]
             done: set[str] = set()
             if resume:
                 done = self.store.attempted_since(cycle)
@@ -355,12 +373,8 @@ class Crawler:
                 lane = threading.Thread(target=run_lane, name="histor-package-lane", daemon=True)
                 lane.start()
             for start in range(0, len(endpoints), step):
-                prepared = self._observe(endpoints[start : start + step])
-                scans, scan_failed = self._scan(prepared, sets)
-                with tally.classify_lock:
-                    classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
-                for item in prepared:
-                    self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+                with self._remote_lock:
+                    prepared = self._remote_batch(endpoints[start : start + step], run_id, rulesets, sets, tally)
                 with tally.lock:
                     self._endpoints_done = start + len(prepared)
                     self._set_progress(total, len(lane_targets))
@@ -397,6 +411,62 @@ class Crawler:
                 tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?", (stats["finished_at"], dumps(stats), run_id))
             self.store.db.maintenance()
         return stats
+
+    def _remote_batch(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,
+                      tally: _Tally) -> list[Prepared]:
+        prepared = self._observe(targets)
+        scans, scan_failed = self._scan(prepared, sets)
+        with tally.classify_lock:
+            classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
+        for item in prepared:
+            before_errors = sum(tally.internal.values())
+            self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+            status = "internal-error" if sum(tally.internal.values()) > before_errors else item.obs.status
+            self.remote_schedule.record(item.target.id, item.observed_at, status)
+        return prepared
+
+    def poll_remote(self) -> dict[str, Any] | None:
+        """One short batch from the persistent queue, without registry or sandbox work."""
+        if not self._remote_lock.acquire(blocking=False):
+            return None
+        run_id = None
+        stats: dict[str, Any] = {"started_at": self.clock()}
+        tally = _Tally(self.settings.classifier_max_per_crawl if self.classifier else 0)
+        try:
+            targets = self.remote_schedule.due(self.clock(), min(self.settings.crawl_batch, self.settings.crawl_workers * 2))
+            opt_out = load_opt_out(self.settings.opt_out, self.settings.opt_out_path)
+            excluded = [t for t in targets if opted_out(t.endpoint, opt_out)]
+            if excluded:
+                # Apply a new opt-out immediately and drain past it, rather than letting these
+                # oldest entries hold the entire queue until the next registry harvest.
+                with self.store.db.transaction() as tx:
+                    for target in excluded:
+                        tx.execute("UPDATE targets SET skip_reason=? WHERE id=?", (OPT_OUT, target.id))
+                targets = [t for t in targets if t not in excluded]
+            if not targets:
+                return {"attempted": 0} if excluded else None
+            self.remote_running_since = self.clock()
+            with self.store.db.transaction() as tx:
+                run_id = int(tx.one("INSERT INTO runs(started_at, kind) VALUES(?, 'remote') RETURNING id",
+                                    (self.remote_running_since,))["id"])
+            rulesets = self.scanner.rulesets()
+            sets = self._register_rulesets(rulesets)
+            self._remote_batch(targets, run_id, rulesets, sets, tally)
+            stats.update(self._tally_stats(tally), attempted=len(targets))
+            sth = self.logbook.publish_sth()
+            stats["tree_size"] = sth["treeSize"] if sth else 0
+            return stats
+        except Exception as exc:
+            stats["error"] = f"{type(exc).__name__}: {exc}"[:500]
+            raise
+        finally:
+            if run_id is not None:
+                stats["finished_at"] = self.clock()
+                with self.store.db.transaction() as tx:
+                    tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?",
+                               (stats["finished_at"], dumps(stats), run_id))
+            self.remote_running_since = None
+            self._remote_lock.release()
 
     def _read_declaration_files(self, urls: set[str]) -> dict[str, tuple[list[dict[str, Any]] | None, str | None]]:
         """url → (sets, None) or (None, why it could not be read). Read before any transaction opens:
@@ -437,6 +507,7 @@ class Crawler:
                     (t.id, t.name, t.endpoint, t.transport, t.registry, t.title, t.description, t.version,
                      t.repository, t.website, now, now, t.skip_reason),
                 )
+                self.remote_schedule.add(tx, t, now)
             # Only after a successful harvest: a registry outage must not delist everything.
             tx.execute("UPDATE targets SET delisted=1 WHERE last_listed < ?", (now,))
             # Curated targets have no registry entry, so nothing of theirs is declared.
@@ -495,10 +566,8 @@ class Crawler:
                     self._seen_versions[t.id] = state["package_version"]
             self._package_lane(packages, int(run["id"]), rulesets, sets, tally, len(packages))
         if endpoints:
-            prepared = self._observe(endpoints)
-            scans, scan_failed = self._scan(prepared, sets)
-            for item in prepared:
-                self._settle(item, int(run["id"]), rulesets, scans, scan_failed, sets, {}, tally)
+            with self._remote_lock:
+                self._remote_batch(endpoints, int(run["id"]), rulesets, sets, tally)
         out = []
         for t in targets:
             after = self.store.target(t.id) or {}
@@ -839,7 +908,7 @@ class Crawler:
         if item.target.id in self._due_legacy:
             with tally.lock:
                 tally.legacy_statuses[item.obs.status] += 1
-            self._commit_legacy(item, scans)
+            self._commit_legacy(item, scans, run_id)
             return
         if item.target.id in scan_failed:
             with tally.lock:
@@ -953,6 +1022,16 @@ class Crawler:
                 continue
             if budget <= 0:
                 continue
+            if self.settings.remote_interval_s > 0:
+                # With independent runs, a per-run budget would be spent again each short batch.
+                # Reserve before the network call, shared with packages and durable across restarts.
+                with self.store.db.transaction() as tx:
+                    day = self.clock()[:10]
+                    tx.execute("INSERT INTO classifier_daily_budget(day) VALUES(?) ON CONFLICT(day) DO NOTHING", (day,))
+                    reserved = tx.one("UPDATE classifier_daily_budget SET used=used+1 WHERE day=? AND used<? RETURNING used",
+                                      (day, self.settings.classifier_max_per_crawl))
+                if not reserved:
+                    continue
             try:
                 verdict = self.classifier.classify(p.subject.entries)
             except ClassifierError as exc:
@@ -971,6 +1050,7 @@ class Crawler:
         """Record an observation OUR side could not process, without touching the target's chain."""
         try:
             with self.store.db.transaction() as tx:
+                Store.record_attempt(tx, p.target.id, run_id, p.observed_at)
                 tx.execute(
                     "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages) VALUES(?, ?, ?, ?, ?, ?)",
                     (p.target.id, run_id, p.observed_at, "internal-error", clean_text(why, 300), p.obs.pages),
@@ -979,7 +1059,7 @@ class Crawler:
         except Exception:  # noqa: BLE001 - even the record of a failure must not end the crawl
             log.exception("could not record the internal error for target %s", p.target.id)
 
-    def _commit_legacy(self, p: Prepared, scans: dict[str, dict[str, Any]]) -> None:
+    def _commit_legacy(self, p: Prepared, scans: dict[str, dict[str, Any]], run_id: int) -> None:
         """A run with a legacy pin (mcp<2): kept beside the record, never a label or the target's status.
 
         What a fresh install gets stays the observation; this says what the same version did when
@@ -988,6 +1068,7 @@ class Crawler:
         t = p.target
         try:
             with self.store.db.transaction() as tx:
+                Store.record_attempt(tx, t.id, run_id, p.observed_at)
                 state = tx.one("SELECT package_signals, last_status, last_detail FROM targets WHERE id=?", (t.id,)) or {}
                 try:
                     previous = json.loads(state.get("package_signals") or "{}")
@@ -1047,6 +1128,7 @@ class Crawler:
         classified = 0
         t = p.target
         with self.store.db.transaction() as tx:
+            Store.record_attempt(tx, t.id, run_id, p.observed_at)
             state = tx.one("SELECT * FROM targets WHERE id=?", (t.id,)) or {}
             subject = p.subject
             # Annotations, _meta and the other members MTL/1 does not digest (histor.extras).
@@ -1145,7 +1227,7 @@ class Crawler:
                         ))
                     if state.get("current_subject"):
                         changed = 1
-                        self._record_change(tx, t.id, state, fallback, p.observed_at, link["id"])
+                        self._record_change(tx, t.id, state, fallback, p.observed_at, link["id"], run_id)
                         update["changes"] = int(state.get("changes") or 0) + 1
                     update.update(
                         chain_label=link["id"], last_continuity_at=p.observed_at, current_subject=fallback.digest,
@@ -1190,6 +1272,9 @@ class Crawler:
                 )
 
             # Advisory classifier verdict — stored beside the log, never a label in it.
+            if new_subject:
+                # A verdict on yesterday's tools cannot mark a new, budget-deferred set judged.
+                update.update(classifier_model=None, classifier_flags=None)
             cls = (classifications or {}).get(t.id)
             if cls is not None and self.classifier is not None and subject.tool_set_digest:
                 model = self.classifier.model
@@ -1223,7 +1308,7 @@ class Crawler:
                 # undigestible set this one replaces) — the diff then compares names only.
                 if new_subject and state.get("current_subject"):
                     changed = 1
-                    self._record_change(tx, t.id, state, subject, p.observed_at, row["id"])
+                    self._record_change(tx, t.id, state, subject, p.observed_at, row["id"], run_id)
                     update["changes"] = int(state.get("changes") or 0) + 1
             elif not prior_id and obs_row is not None:
                 # The observation starts the chain and counts as its first link: the next
@@ -1257,7 +1342,7 @@ class Crawler:
         return json.loads(row["body"])
 
     def _record_change(self, tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
-                       label_id: str) -> None:
+                       label_id: str, run_id: int) -> None:
         old_toolset = state.get("current_toolset")
         old_entries = None
         if old_toolset:
@@ -1273,10 +1358,10 @@ class Crawler:
                      {"toolSetDigest": subject.tool_set_digest, "subjectDigest": subject.digest}, kind="definitions")
         summary = diffing.tool_set_diff(old_entries, subject.entries, old_names, subject.names)
         tx.execute(
-            "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id, run_id) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (target_id, observed_at, state.get("current_subject"), subject.digest, old_toolset,
-             subject.tool_set_digest, dumps(summary), label_id),
+             subject.tool_set_digest, dumps(summary), label_id, run_id),
         )
 
     @staticmethod

@@ -47,6 +47,7 @@ def settings(tmp_path, monkeypatch, backend_kind):
     monkeypatch.setenv("HISTOR_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("HISTOR_OPERATOR_TOKEN", "t" * 32)
     monkeypatch.setenv("HISTOR_CRAWL_INTERVAL_S", "0")
+    monkeypatch.setenv("HISTOR_REMOTE_INTERVAL_S", "0")
     monkeypatch.setenv("HISTOR_CRAWL_WORKERS", "4")
     monkeypatch.setenv("HISTOR_ALLOW_PRIVATE_TARGETS", "1")
     monkeypatch.delenv("HISTOR_DATABASE_URL", raising=False)

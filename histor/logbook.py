@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -77,6 +78,7 @@ class Logbook:
         self.store = store
         self.key = key
         self.marker_path = marker_path
+        self._head_lock = threading.Lock()
 
     def append(self, tx: Tx, document: dict[str, Any], *, target_id: str | None) -> dict[str, Any]:
         """Append one secured label inside *tx*; returns the row as stored."""
@@ -104,6 +106,11 @@ class Logbook:
 
     def publish_sth(self, *, timestamp: str | None = None) -> dict[str, Any] | None:
         """Sign a head over the current tree if it grew. Returns the latest head either way."""
+        # Keep marker replacement in publication order across the two observation lanes.
+        with self._head_lock:
+            return self._publish_sth(timestamp=timestamp)
+
+    def _publish_sth(self, *, timestamp: str | None = None) -> dict[str, Any] | None:
         with self.store.db.transaction() as tx:
             tx.lock_log()
             size = Store.log_size(tx)

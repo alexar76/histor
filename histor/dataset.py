@@ -32,10 +32,12 @@ import json
 import os
 import shutil
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 
+from histor.db import Tx
 from histor.logbook import sign_document
 from histor.registry import OPT_OUT, load_opt_out, opted_out
 from histor.store import Store
@@ -120,19 +122,33 @@ def _has_extras(store: Store) -> bool:
     return row is not None
 
 
+class _SnapshotReads:
+    """Keep all export pages on one database snapshot while remote polling continues."""
+
+    def __init__(self, tx: Tx) -> None:
+        self.tx = tx
+
+    @contextmanager
+    def read(self) -> Iterator[Tx]:
+        yield self.tx
+
+
 def export(store: Store, key: Any, out: Path, *, opt_out: tuple[str, ...] = (), now: str | None = None) -> dict[str, Any]:
     """Write a snapshot into ``out`` (which must not exist yet) and return its signed manifest."""
     out = Path(out)
     if out.exists():
         raise FileExistsError(f"{out} exists; a snapshot is written once")
     now = now or _utcnow()
-    sth = store.latest_sth()
     partial = out.with_name(out.name + f".partial-{os.getpid()}")
     if partial.exists():
         shutil.rmtree(partial)
     partial.mkdir(parents=True, mode=0o755)
     try:
-        manifest = _write(store, key, partial, opt_out=opt_out, now=now, sth=sth)
+        with store.db.read() as tx:
+            tx.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+                       if tx.backend_type == "postgresql" else "BEGIN")
+            snapshot = Store(_SnapshotReads(tx))
+            manifest = _write(snapshot, key, partial, opt_out=opt_out, now=now, sth=snapshot.latest_sth())
         os.replace(partial, out)
     except BaseException:
         shutil.rmtree(partial, ignore_errors=True)
@@ -338,7 +354,7 @@ configs:
 # HISTOR snapshot {day}: what MCP servers advertise, and when it changes
 
 HISTOR reads the tool list (`tools/list`) of every remote MCP server in the official MCP registry
-once a day, and of npm/PyPI MCP packages run in a sandbox once per published version (new versions
+on a polling schedule, and of npm/PyPI MCP packages run in a sandbox once per published version (new versions
 first, a few hundred a day). It records the exact tool definitions,
 pins them by digest, and writes a signed label to a public RFC 9162 Merkle log whenever a tool set
 first appears, stays the same, or changes. This snapshot is that record as files.
@@ -391,7 +407,8 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
   (`required`, `enum`). Other members (`title`, `annotations`, `_meta`, `icons`) are not in the digest;
   {_extras_counting(f)}
 - **When.** A change is a successful read whose digest differs from the server's previous successful
-  read. Remote servers are read once a day, packages once per published version. Every change is
+  read. Remote polling cadence depends on the observer configuration and available capacity; packages are read
+  once per published version. States between polls can be missed. Every recorded change is
   recorded, including one that goes back to a list the server showed before.
 - **Failed reads.** A timeout, an HTTP error, a server that asks for credentials or one HISTOR does not
   dial is never a change: the server keeps its last list, and `lastStatus` says how the last attempt
