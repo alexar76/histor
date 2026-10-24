@@ -117,7 +117,7 @@ flowchart LR
     T["histor-backup.timer<br/>chaque nuit 03:40 UTC"] --> S["/usr/local/sbin/histor-backup"]
     S --> D["pg_dump -Fc<br/>vérifié par pg_restore --list"]
     S --> K["tar du volume histor-data<br/>issuer.key · clés du fournisseur · sth-marker.json"]
-    D --> B[("/var/backups/histor<br/>0700 · 14 jours")]
+    D --> B[("/var/backups/histor<br/>0700 · 5 jours")]
     K --> B
     B -. "votre copie hors de l’hôte" .-> O[("une autre machine")]
 ```

@@ -104,7 +104,7 @@ flowchart LR
     T["histor-backup.timer<br/>每晚 03:40 UTC"] --> S["/usr/local/sbin/histor-backup"]
     S --> D["pg_dump -Fc<br/>用 pg_restore --list 校验"]
     S --> K["histor-data 卷的 tar<br/>issuer.key · 提供方密钥 · sth-marker.json"]
-    D --> B[("/var/backups/histor<br/>0700 · 14 天")]
+    D --> B[("/var/backups/histor<br/>0700 · 5 天")]
     K --> B
     B -. "您的主机外副本" .-> O[("另一台机器")]
 ```

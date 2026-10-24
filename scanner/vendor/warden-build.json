@@ -1,13 +1,14 @@
 {
   "package": "@aimarket/warden",
   "version": "0.20.0",
-  "sourceCommit": "a635f19cf34802ca9fd13da57e80eaca57b7ba12",
-  "buildDigest": "a018d58995e8337cdace5258fbca1b7509cf32bdfe5fbd502e5578c71ef9ed3f",
-  "tarball": "aimarket-warden-0.20.0-a635f19.tgz",
-  "sha256": "53bc4dacc050e2822139f62357d978298d9ca4ac1a8335eca2503eb3059c91ce",
-  "distribution": "local source build; differs from npm 0.20.0",
+  "sourceCommit": "446c2135f9e897b2617313b443a4f6e4280c4b58",
+  "buildDigest": "b5e450670bc939c6546cfd90fd3540a673d14d3b4c8c0f4ce340d57a628ee316",
+  "tarball": "aimarket-warden-0.20.0-446c2135f.tgz",
+  "sha256": "e64961670f18ad05f41dea5349e58caa2d5efcac1b569431a7d0dfb73dfa4645",
+  "distribution": "local source build; differs from npm 0.20.0; no npm publication",
   "changes": [
-    "Preserve screen text after large binary blocks",
-    "Refresh element maps from pointer and keyboard results"
+    "Secret fragment and encoding egress protection, bounded screen policies and atomic target protocol",
+    "Native macOS dispatch, modality, target identity and revision hardening; SDK sources included",
+    "Linux scanner JavaScript from reviewed source commit; native SDK runtime tested separately on macOS"
   ]
 }
