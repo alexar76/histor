@@ -9,13 +9,16 @@ Standard library only. Every change goes into exactly one kind, checked in this 
     names     only tool names were readable (the list could not be fully digested)
     addrm     a tool was added or removed
     text      a tool description, or a parameter description in the input schema, changed
-              (beyond digits and whitespace)
+              (beyond digits and whitespace); other schema fields may have changed with it
     shape     input types, enums, required fields, defaults or limits changed, no description text
     noise     only digits or whitespace in a description, or only $schema / title / examples
     output    only the output schema changed
 
-Kinds are by field, not by meaning: a typo fix in a description counts as "text". The second
-table is per remote server listed and observed from the first day of the snapshot's changes.
+Kinds are by field, not by meaning: a typo fix in a description counts as "text". "text" is not
+"description only": a change that also moved a type or a required field is "text" as well. The
+strict count follows the table: changes in which nothing but descriptions moved, first tool
+descriptions alone, then with parameter descriptions. The last lines are per remote server listed
+and observed from the first day of the snapshot's changes.
 """
 
 from __future__ import annotations
@@ -31,7 +34,7 @@ DIGITS = re.compile(r"^[\s\d.,:\-/]*$")
 COSMETIC = {"$schema", "title", "examples", "$comment", "$id"}
 ORDER = ("text", "addrm", "noise", "names", "output", "shape")
 LABEL = {
-    "text": "a tool or parameter description changed",
+    "text": "a tool or parameter description changed (other fields may have too)",
     "addrm": "tools added or removed",
     "noise": "only digits/whitespace in a description, or $schema/title/examples",
     "names": "only tool names readable",
@@ -93,6 +96,30 @@ def kind(summary: dict) -> str:
     return "output" if "output" in seen else "noise"
 
 
+def descriptions_only(summary: dict) -> str | None:
+    """``"tool"`` when only tool descriptions moved, ``"param"`` when parameter descriptions did too.
+
+    None for anything else: a tool added, removed or renamed (a rename is both), a list that could
+    not be digested, or any schema member other than a description.
+    """
+    if summary.get("detail") != "full" or summary.get("added") or summary.get("removed"):
+        return None
+    tools = summary.get("modified") or []
+    if not tools:
+        return None
+    params = False
+    for tool in tools:
+        for field, diff in (tool.get("fields") or {}).items():
+            if field == "description":
+                continue
+            if field not in ("inputSchema", "outputSchema") or not diff:
+                return None
+            if any(leaf(entry.get("path", "")) != "description" or entry.get("path") == "…" for entry in diff):
+                return None
+            params = True
+    return "param" if params else "tool"
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0].startswith("-"):
         print(__doc__.split("\n\n")[1], file=sys.stderr)
@@ -101,11 +128,14 @@ def main(argv: list[str]) -> int:
     servers = {r["id"]: r for r in rows(d / "servers.jsonl.gz")}
     changes = list(rows(d / "changes.jsonl.gz"))
     total = Counter()
+    only = Counter()
     per: dict[str, Counter] = defaultdict(Counter)
     for c in changes:
-        k = kind(json.loads(c["summaryJson"]))
+        summary = json.loads(c["summaryJson"])
+        k = kind(summary)
         total[k] += 1
         per[c["serverId"]][k] += 1
+        only[descriptions_only(summary)] += 1
     first_day = min(c["observedAt"] for c in changes)[:10] + "T23:59:59Z"
     remote = [r for r in servers.values() if r["transport"] != "stdio" and not r["delisted"]
               and r["toolSetDigest"] and r["firstPinned"] and r["firstPinned"] <= first_day]
@@ -117,6 +147,7 @@ def main(argv: list[str]) -> int:
     out = {
         "changes": len(changes),
         "kinds": {k: total[k] for k in ORDER},
+        "descriptionsOnly": {"toolDescriptions": only["tool"], "withParameterDescriptions": only["tool"] + only["param"]},
         "remote": {"observed": len(remote), "changed": len(changed(remote)),
                    "changedText": sum(1 for r in changed(remote) if per[r["id"]]["text"]),
                    "addedOrRemoved": sum(1 for r in changed(remote) if per[r["id"]]["addrm"])},
@@ -131,6 +162,11 @@ def main(argv: list[str]) -> int:
     for k in ORDER:
         n = total[k]
         print(f"  {n:7,}  {100 * n / len(changes):5.1f}%  {LABEL[k]}")
+    strict = out["descriptionsOnly"]
+    print("nothing but descriptions changed (no tool added, removed or renamed, no other schema member):")
+    print(f"  {strict['toolDescriptions']:7,}  {100 * strict['toolDescriptions'] / len(changes):5.1f}%  tool descriptions only")
+    print(f"  {strict['withParameterDescriptions']:7,}  {100 * strict['withParameterDescriptions'] / len(changes):5.1f}%  "
+          "tool or parameter descriptions only")
     for name in ("remote", "packages"):
         g = out[name]
         print(f"{name}: {g['changed']:,} of {g['observed']:,} changed; {g['changedText']:,} changed description text; "

@@ -37,12 +37,20 @@ des tokens. Les « environ 24 outils par serveur » de l’étude étaient la mo
 La liste est renvoyée à chaque requête, donc son coût vaut tokens × prix × requêtes. Pour 1 000 requêtes, aux prix
 catalogue du 2026-10-19 (OpenRouter) :
 
-| La liste d’un serveur | Tokens | 0,10 $ le million (Claude Haiku 5.5) | 2 $ le million (Claude Sonnet 5.5) | Sonnet 5.5, lue en cache (0,10 $ le million) |
-|---|---|---|---|---|
-| paquet médian | 1 272 | 0,13 $ | 2,54 $ | 0,13 $ |
-| paquet moyen | 3 812 | 0,38 $ | 7,62 $ | 0,38 $ |
-| 90e centile | 8 361 | 0,84 $ | 16,72 $ | 0,84 $ |
-| 99e centile | 39 612 | 3,96 $ | 79,22 $ | 3,96 $ |
+| La liste d’un serveur | Tokens | 0,10 $ le million (Claude Haiku 5.5) | 2 $ le million (Claude Sonnet 5.5) | Sonnet 5.5 avec cache, requêtes à moins de 5 minutes d’intervalle | Idem, à plus de 5 minutes |
+|---|---|---|---|---|---|
+| paquet médian | 1 272 | 0,13 $ | 2,54 $ | 0,13 $ | 3,18 $ |
+| paquet moyen | 3 812 | 0,38 $ | 7,62 $ | 0,39 $ | 9,53 $ |
+| 90e centile | 8 361 | 0,84 $ | 16,72 $ | 0,86 $ | 20,90 $ |
+| 99e centile | 39 612 | 3,96 $ | 79,22 $ | 4,06 $ | 99,03 $ |
+
+Les colonnes avec cache utilisent les prix de cache de Sonnet 5.5 : 2,50 $ le million pour écrire le cache de 5
+minutes (1,25 fois le prix d’entrée) et 0,10 $ pour le lire. Le cache garde un préfixe cinq minutes après la dernière
+requête qui l’a utilisé : 1 000 requêtes à moins de cinq minutes d’intervalle paient une écriture et 999 lectures ;
+plus espacées, elles le réécrivent à chaque fois, un quart de plus que sans cache. Le cache d’une heure couvre des
+intervalles jusqu’à une heure, avec des écritures au double du prix d’entrée. Les outils viennent en premier dans le
+prompt, avant le prompt système et la conversation : une liste modifiée (un autre ordre, ou une relecture après
+`notifications/tools/list_changed`) réécrit tout dans le cache.
 
 Un client avec cinq serveurs médians envoie environ 6 400 tokens de définitions d’outils avant le premier mot de
 l’utilisateur. Les plus grandes listes ne tiennent même pas : 304 780 tokens dépassent une fenêtre de contexte de

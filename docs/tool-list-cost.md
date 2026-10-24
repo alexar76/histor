@@ -36,12 +36,19 @@ larger set the mean is 18.5 and the median 8.
 The list is resent with every request, so its cost is tokens × price × requests. Per 1,000 requests, at list prices
 on 2026-10-19 (OpenRouter):
 
-| One server's list | Tokens | $0.10 per million (Claude Haiku 5.5) | $2 per million (Claude Sonnet 5.5) | Sonnet 5.5, read from cache ($0.10 per million) |
-|---|---|---|---|---|
-| median package | 1,272 | $0.13 | $2.54 | $0.13 |
-| mean package | 3,812 | $0.38 | $7.62 | $0.38 |
-| 90th percentile | 8,361 | $0.84 | $16.72 | $0.84 |
-| 99th percentile | 39,612 | $3.96 | $79.22 | $3.96 |
+| One server's list | Tokens | $0.10 per million (Claude Haiku 5.5) | $2 per million (Claude Sonnet 5.5) | Sonnet 5.5 with a prompt cache, requests under 5 minutes apart | The same, more than 5 minutes apart |
+|---|---|---|---|---|---|
+| median package | 1,272 | $0.13 | $2.54 | $0.13 | $3.18 |
+| mean package | 3,812 | $0.38 | $7.62 | $0.39 | $9.53 |
+| 90th percentile | 8,361 | $0.84 | $16.72 | $0.86 | $20.90 |
+| 99th percentile | 39,612 | $3.96 | $79.22 | $4.06 | $99.03 |
+
+The cache columns use Sonnet 5.5's cache prices: $2.50 per million to write the 5-minute cache (1.25 times the input
+price) and $0.10 to read it. The cache keeps a prefix for five minutes after the last request that used it, so 1,000
+requests that start less than five minutes apart pay one write and 999 reads; requests further apart write it every
+time, a quarter more than no cache at all. The 1-hour cache covers gaps of up to an hour at twice the input price per
+write. The tools come first in the prompt, ahead of the system prompt and the conversation: a changed list (another
+order, or a refetch after `notifications/tools/list_changed`) writes all of it to the cache again.
 
 A client with five median servers sends about 6,400 tokens of tool definitions before the user's first word. The
 largest lists do not fit at all: 304,780 tokens is more than a 200,000-token context window.

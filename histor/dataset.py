@@ -270,6 +270,13 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
     return manifest
 
 
+def _extras_counting(f: dict[str, Any]) -> str:
+    """Where the members outside the digest went, for the card's counting section."""
+    if "tool_extras.jsonl.gz" in f:
+        return "they are kept in `tool_extras`, and their changes in `extras_changes`."
+    return "this snapshot does not record them, so a change to them alone is not in it."
+
+
 def _extras_fields(f: dict[str, Any]) -> str:
     """The card's lines for the extras files, when the snapshot has them."""
     if "tool_extras.jsonl.gz" not in f:
@@ -375,6 +382,27 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
 - **classifications** — `toolSetDigest`, `model`, `verdictJson`: an LLM's advisory reading of the
   tool set. Not reproducible, so it never enters the signed log.
 
+## How a change is counted
+
+- **What is compared.** Per tool, the members in `toolsets`: `name`, `description`, `inputSchema`, and
+  `outputSchema` when the server sent one. Tools are sorted by name and the set is hashed in its RFC 8785
+  form, so tool order, object key order and JSON whitespace never make a change. Strings are compared as
+  sent (a description that only gains a space is a change), and so is the order of arrays inside a schema
+  (`required`, `enum`). Other members (`title`, `annotations`, `_meta`, `icons`) are not in the digest;
+  {_extras_counting(f)}
+- **When.** A change is a successful read whose digest differs from the server's previous successful
+  read. Remote servers are read once a day, packages once per published version. Every change is
+  recorded, including one that goes back to a list the server showed before.
+- **Failed reads.** A timeout, an HTTP error, a server that asks for credentials or one HISTOR does not
+  dial is never a change: the server keeps its last list, and `lastStatus` says how the last attempt
+  went. A server that never answered without credentials has no tool set.
+- **One client.** HISTOR reads without credentials, from one host. Lists that differ by user, account or
+  region are not seen; a list that differs per session shows up as changes alternating between two digests.
+- **What moved.** In `summaryJson`, a modified tool names the members that moved: `description` as a
+  word diff, `inputSchema`/`outputSchema` as JSON paths (a parameter description is a path ending in
+  `"description"`). A renamed tool is a removal plus an addition. `detail` is `names-only` when one side
+  could not be digested; that change compares names only.
+
 ## Load it
 
 ```python
@@ -387,7 +415,15 @@ changes = pd.read_json("changes.jsonl.gz", lines=True)
 -- DuckDB
 SELECT name, count(*) AS changes FROM 'changes.jsonl.gz' c
 JOIN 'servers.jsonl.gz' s ON s.id = c.serverId GROUP BY name ORDER BY changes DESC LIMIT 20;
+
+-- Changes in which nothing moved but tool descriptions
+SELECT count(*) FROM (SELECT summaryJson::JSON AS s FROM 'changes.jsonl.gz')
+WHERE s->>'detail' = 'full' AND json_array_length(s->'added') = 0 AND json_array_length(s->'removed') = 0
+  AND json_array_length(s->'modified') > 0
+  AND list_bool_and(list_transform(from_json(s->'modified', '["JSON"]'), m -> json_keys(m->'fields') = ['description']));
 ```
+
+`scripts/change_kinds.py` in the code repository sorts every change by the fields it touched.
 
 ## What it is not
 

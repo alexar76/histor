@@ -37,12 +37,20 @@ tokens. Las «unas 24 herramientas por servidor» del estudio eran la media de l
 La lista se reenvía con cada petición, así que su coste es tokens × precio × peticiones. Por cada 1 000 peticiones,
 a precios de lista del 2026-10-19 (OpenRouter):
 
-| La lista de un servidor | Tokens | 0,10 USD por millón (Claude Haiku 5.5) | 2 USD por millón (Claude Sonnet 5.5) | Sonnet 5.5, leída de caché (0,10 USD por millón) |
-|---|---|---|---|---|
-| paquete mediano | 1 272 | 0,13 USD | 2,54 USD | 0,13 USD |
-| paquete medio | 3 812 | 0,38 USD | 7,62 USD | 0,38 USD |
-| percentil 90 | 8 361 | 0,84 USD | 16,72 USD | 0,84 USD |
-| percentil 99 | 39 612 | 3,96 USD | 79,22 USD | 3,96 USD |
+| La lista de un servidor | Tokens | 0,10 USD por millón (Claude Haiku 5.5) | 2 USD por millón (Claude Sonnet 5.5) | Sonnet 5.5 con caché, peticiones a menos de 5 minutos | Lo mismo, a más de 5 minutos |
+|---|---|---|---|---|---|
+| paquete mediano | 1 272 | 0,13 USD | 2,54 USD | 0,13 USD | 3,18 USD |
+| paquete medio | 3 812 | 0,38 USD | 7,62 USD | 0,39 USD | 9,53 USD |
+| percentil 90 | 8 361 | 0,84 USD | 16,72 USD | 0,86 USD | 20,90 USD |
+| percentil 99 | 39 612 | 3,96 USD | 79,22 USD | 4,06 USD | 99,03 USD |
+
+Las columnas con caché usan los precios de caché de Sonnet 5.5: 2,50 USD por millón por escribir la caché de 5 minutos
+(1,25 veces el precio de entrada) y 0,10 USD por leerla. La caché guarda un prefijo cinco minutos desde la última
+petición que lo usó, así que 1 000 peticiones que empiezan a menos de cinco minutos entre sí pagan una escritura y 999
+lecturas; las más espaciadas la escriben cada vez, una cuarta parte más que sin caché. La caché de 1 hora cubre huecos
+de hasta una hora, con escrituras al doble del precio de entrada. Las herramientas van primero en el prompt, antes del
+prompt de sistema y la conversación: una lista cambiada (otro orden, o una nueva lectura tras
+`notifications/tools/list_changed`) vuelve a escribirlo todo en la caché.
 
 Un cliente con cinco servidores medianos envía unos 6 400 tokens de definiciones de herramientas antes de la primera
 palabra del usuario. Las listas más grandes ni siquiera caben: 304 780 tokens superan una ventana de contexto de
