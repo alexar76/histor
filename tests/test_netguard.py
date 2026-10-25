@@ -16,7 +16,9 @@ def resolver(*addresses):
 
 
 @pytest.mark.parametrize("address", ["127.0.0.1", "10.1.2.3", "172.18.0.1", "192.168.1.1", "169.254.169.254",
-                                     "::1", "fe80::1", "::ffff:127.0.0.1", "100.64.0.1", "0.0.0.0"])
+                                     "::1", "fe80::1", "::ffff:127.0.0.1", "100.64.0.1", "0.0.0.0",
+                                     # NAT64 (Python calls it global) and 6to4 forms of private IPv4
+                                     "64:ff9b::7f00:1", "64:ff9b::a00:5", "2002:a9fe:a9fe::"])
 def test_private_and_special_addresses_are_refused(address):
     with pytest.raises(BlockedAddress):
         resolve_public("https://evil.example/mcp", resolver=resolver(address))

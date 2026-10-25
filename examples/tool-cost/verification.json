@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-10-24T21:47:10.435621+00:00",
+  "histor_image_version": "0.4.0",
+  "tiktoken_version": "0.14.0",
+  "network_during_validation": "none",
+  "normal_exit_code": 0,
+  "reverse_exit_code": 1,
+  "all_totals_match_public_api": true,
+  "module_sha256": {
+    "histor.toolcost": "88b669a8131758e44754cf6d1211f7fc0f7d89c8207c0bfe03e6269487bf7f50",
+    "histor.toolcost_cli": "37fba1633de6a48f6299b3c08aa89139b1304f9f21ce47c8acdc70ad79cabcc1"
+  },
+  "published_cli_version": "0.3.1",
+  "published_cli_modules_identical": true,
+  "source_change": "https://histor.modelmarket.dev/api/v1/changes/28848/cost",
+  "fetch_digest_validation_passed": true,
+  "python_version": "3.11.2",
+  "python_version_source": "Probe of the same immutable container image"
+}

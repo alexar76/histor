@@ -95,6 +95,11 @@ flowchart LR
 
 **Скачать данные.** Раз в месяц всё, что видит журнал, выкладывается файлами на [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): каждый сервер из реестра, каждый показанный им набор инструментов, каждое записанное изменение и сканы WARDEN. Формат — JSON Lines (gzip) и манифест, подписанный ключом журнала; лицензия на подборку — CC BY 4.0. README каждого снимка описывает поля и показывает загрузку в pandas или DuckDB ([histor/dataset.py](histor/dataset.py)). Тот же набор есть на [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); для цитирования: [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759).
 
+**Признаки поведения плательщиков (ещё не выпущено).** Локальная команда `histor payer-audit`
+проверяет receipts в Base USDC и показывает основания для оценки поведения кошельков, сохраняя
+суммы платежей и категорию unknown. Ей не нужны производственная база или кошелёк:
+[docs/payer-audit.md](docs/payer-audit.md).
+
 ## Быстрый старт
 
 ```bash

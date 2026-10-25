@@ -110,6 +110,12 @@ tokens never fails (`--noise`), `--budget N` caps the whole list, `--update` rew
 
 The table lands in the job summary.
 
+A [complete example using textokit's two observed lists](../examples/tool-cost/README.md) reproduces a
+5,565 → 3,776-token reduction and shows a passing check and a deliberately reversed failing check.
+It uses immutable public snapshots and executes no textokit tools.
+
+The [self-contained public tutorial](https://dev.to/alexar76/a-copyable-mcp-tool-cost-check-for-ci-with-passing-and-failing-examples-3hl5) includes the complete fetch script, pinned versions and passing/failing commands, with no repository checkout required.
+
 ## Reproduce
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) reads an export of the current tool lists (the

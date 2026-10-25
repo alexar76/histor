@@ -29,8 +29,8 @@ import re
 import threading
 import time
 from collections import Counter, defaultdict, deque
-from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections.abc import Callable, Iterator
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -139,7 +139,7 @@ RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", 
 # The sandbox's trace reader (behaviour.observer). gvisor-trace/2 listed the byte asyncio writes
 # to its own socketpair as a send it could not place, which read as "reached out at startup" for
 # nearly every Python server; a package it left with such sends is traced again, once.
-TRACE_OBSERVER = "gvisor-trace/8"
+TRACE_OBSERVER = "gvisor-trace/9"
 UNPLACED_SEND = ("sendto(", "sendmsg(", "sendmmsg(")
 # Evidence that cannot be this run's: another run's canary recipient, or a name only MOMUS's
 # red-team fixtures use. gvisor-trace/3 and older matched trap records by address from before
@@ -153,6 +153,12 @@ def _unplaced_sends(behaviour: Any) -> bool:
     counted as outside the sandbox, which WARDEN shows as persistence (node-gyp's
     buildcheck.gypi, a package's own cache)."""
     if not isinstance(behaviour, dict) or behaviour.get("observer") == TRACE_OBSERVER:
+        return False
+    if behaviour.get("observer") == "gvisor-trace/8":
+        # 9 adds what 8 did not record at all (renames, links, creat; .pth and post-install code
+        # writes as persistence): nothing in an 8 trace says which runs missed it, so its verdict
+        # stands. Taking 9 for an older reader instead re-traced every 9 run with a relative
+        # write on every crawl.
         return False
     phases = [behaviour[p] for p in ("installScripts", "startup", "calls") if isinstance(behaviour.get(p), dict)]
     foreign = any(isinstance(e, str) and FOREIGN_CANARY.match(e) for ph in phases for e in ph.get("unexpectedRecipients") or [])
@@ -374,9 +380,9 @@ class Crawler:
                 lane.start()
             for start in range(0, len(endpoints), step):
                 with self._remote_lock:
-                    prepared = self._remote_batch(endpoints[start : start + step], run_id, rulesets, sets, tally)
+                    processed = self._remote_batch(endpoints[start : start + step], run_id, rulesets, sets, tally)
                 with tally.lock:
-                    self._endpoints_done = start + len(prepared)
+                    self._endpoints_done = start + processed
                     self._set_progress(total, len(lane_targets))
                 self._checkpoint(run_id, tally)
             if lane is not None:
@@ -413,17 +419,18 @@ class Crawler:
         return stats
 
     def _remote_batch(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,
-                      tally: _Tally) -> list[Prepared]:
-        prepared = self._observe(targets)
-        scans, scan_failed = self._scan(prepared, sets)
-        with tally.classify_lock:
-            classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
-        for item in prepared:
-            before_errors = sum(tally.internal.values())
-            self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
-            status = "internal-error" if sum(tally.internal.values()) > before_errors else item.obs.status
-            self.remote_schedule.record(item.target.id, item.observed_at, status)
-        return prepared
+                      tally: _Tally) -> int:
+        processed = 0
+        for prepared in self._observe(targets):
+            scans, scan_failed = self._scan(prepared, sets)
+            with tally.classify_lock:
+                classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
+            for item in prepared:
+                # A package failure in the parallel lane must not back off this remote.
+                status = self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+                self.remote_schedule.record(item.target.id, item.observed_at, status)
+            processed += len(prepared)
+        return processed
 
     def poll_remote(self) -> dict[str, Any] | None:
         """One short batch from the persistent queue, without registry or sandbox work."""
@@ -461,6 +468,7 @@ class Crawler:
             raise
         finally:
             if run_id is not None:
+                stats.update(self._tally_stats(tally), attempted=sum(tally.statuses.values()))
                 stats["finished_at"] = self.clock()
                 with self.store.db.transaction() as tx:
                     tx.execute("UPDATE runs SET finished_at=?, stats=? WHERE id=?",
@@ -855,7 +863,12 @@ class Crawler:
             log.warning("registry facts unavailable for %s:%s@%s", package[0], package[1], version)
             return None
 
-    def _observe(self, targets: list[Target]) -> list[Prepared]:
+    def _observe(self, targets: list[Target]) -> Iterator[list[Prepared]]:
+        """Yield only completed observations, without waiting for the slowest endpoint.
+
+        Batch results already ready together for WARDEN; do not start a Node subprocess for
+        every fast response. Bound outstanding results as well as network concurrency.
+        """
         per_host: dict[str, threading.Semaphore] = defaultdict(
             lambda: threading.Semaphore(self.settings.crawl_per_host)
         )
@@ -865,8 +878,31 @@ class Crawler:
         def one(t: Target) -> Prepared:
             return self._observe_one(t, per_host, guard)
 
+        remaining = iter(enumerate(targets))
         with ThreadPoolExecutor(max_workers=self.settings.crawl_workers) as pool:
-            return list(pool.map(one, targets))
+            pending = {}
+
+            def refill() -> None:
+                while len(pending) < self.settings.crawl_workers * 2:
+                    entry = next(remaining, None)
+                    if entry is None:
+                        break
+                    index, target = entry
+                    pending[pool.submit(one, target)] = index
+
+            refill()
+            while pending:
+                ready, _ = wait(pending, return_when=FIRST_COMPLETED)
+                # Preserve input order among results ready together; never wait for a missing one.
+                ordered = sorted(ready, key=pending.__getitem__)
+                prepared = []
+                for future in ordered:
+                    del pending[future]
+                    prepared.append(future.result())
+                del ready, ordered, future
+                yield prepared
+                del prepared
+                refill()
 
     def _observe_one(self, t: Target, per_host: Any, guard: threading.Lock) -> Prepared:
         with guard:
@@ -894,7 +930,7 @@ class Crawler:
         return item
 
     def _settle(self, item: Prepared, run_id: int, rulesets: RuleSets, scans: dict[str, dict[str, Any]],
-                scan_failed: set[str], sets: str, classifications: dict[str, dict[str, Any]], tally: _Tally) -> None:
+                scan_failed: set[str], sets: str, classifications: dict[str, dict[str, Any]], tally: _Tally) -> str:
         """Record one observation. One target must never take the crawl down: whatever a stranger's
         server made us do, it is recorded against that target and the crawl moves on."""
         with tally.lock:
@@ -904,17 +940,17 @@ class Crawler:
             with tally.lock:
                 tally.internal["sandbox"] += 1
             self._commit_internal(item, run_id, item.obs.detail or "the package sandbox failed")
-            return
+            return "internal-error"
         if item.target.id in self._due_legacy:
             with tally.lock:
                 tally.legacy_statuses[item.obs.status] += 1
             self._commit_legacy(item, scans, run_id)
-            return
+            return item.obs.status
         if item.target.id in scan_failed:
             with tally.lock:
                 tally.internal["scan-failed"] += 1
             self._commit_internal(item, run_id, "the WARDEN sidecar failed on this tool set")
-            return
+            return "internal-error"
         try:
             result = self._commit(item, run_id, rulesets, scans, sets, classifications)
         except Exception as exc:  # noqa: BLE001
@@ -922,11 +958,12 @@ class Crawler:
             with tally.lock:
                 tally.internal[type(exc).__name__] += 1
             self._commit_internal(item, run_id, f"internal error ({type(exc).__name__})")
-            return
+            return "internal-error"
         with tally.lock:
             tally.issued.update(result["labels"])
             tally.changes += result["changed"]
             tally.classified += result.get("classified", 0)
+        return item.obs.status
 
     def _package_lane(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,
                       tally: _Tally, total: int) -> None:

@@ -33,10 +33,20 @@ class PinnedTarget:
     address: str
 
 
+_NAT64 = ipaddress.ip_network("64:ff9b::/96")
+
+
 def _is_public(addr: str) -> bool:
+    """Global, and so is any IPv4 address it carries: IPv4-mapped, 6to4 (2002::/16) and
+    NAT64 (64:ff9b::/96, where 64:ff9b::a00:5 is 10.0.0.5) all reach that IPv4 address on a
+    host that routes them, and Python calls the NAT64 form global."""
     ip = ipaddress.ip_address(addr)
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = ip.ipv4_mapped or ip.sixtofour
+        if embedded is None and ip in _NAT64:
+            embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if embedded is not None:
+            ip = embedded
     return bool(ip.is_global) and not ip.is_multicast
 
 

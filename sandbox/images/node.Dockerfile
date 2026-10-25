@@ -1,3 +1,4 @@
+# Node security baseline: 22.23.4 (2026-10-21 security release).
 # The image HISTOR starts npm packages in, built on each sandbox host by install.sh.
 #
 # Debian, not Alpine: most users run Node on glibc (macOS, Windows, Debian/Ubuntu), and the
@@ -5,7 +6,7 @@
 # downloaded servers — do not load on Alpine's musl. Plus the programs a developer's machine has
 # and MCP servers start: bash, git, Python 3, a Java 21 runtime. Never Docker: the socket would be
 # a way out of the sandbox.
-ARG NODE=22
+ARG NODE=22.23.4
 FROM eclipse-temurin:21-jre AS java
 FROM node:${NODE}-bookworm-slim
 RUN apt-get update \

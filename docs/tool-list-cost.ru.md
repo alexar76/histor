@@ -114,6 +114,10 @@ histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js" --
 
 Таблица попадает в сводку задачи.
 
+Готовый [пример на двух наблюдённых списках textokit](../examples/tool-cost/README.md) воспроизводит
+сокращение с 5 565 до 3 776 токенов и проверяет оба исхода CI: успешный и намеренно обращённый,
+завершающийся ошибкой. Он использует неизменяемые публичные снимки и не вызывает tools textokit.
+
 ## Повторить
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) читает выгрузку текущих списков инструментов

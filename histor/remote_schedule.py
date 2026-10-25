@@ -66,7 +66,10 @@ class RemoteSchedule:
             # A failing endpoint backs off to at most a day. A 429 also pauses its whole host.
             delay = max(60, interval)
             if failures:
-                delay = min(86400, (3600 if status == "http-429" else delay) * 2 ** min(failures - 1, 8))
+                # A rate limit must never make us retry sooner than the normal cadence,
+                # including endpoints that qualified for the faster change-watching interval.
+                base = max(3600, cfg.remote_interval_s, delay) if status == "http-429" else delay
+                delay = min(max(86400, base), base * 2 ** min(failures - 1, 8))
             if status in {"http-401", "http-403"}:
                 delay = max(delay, 86400)
             gap = None

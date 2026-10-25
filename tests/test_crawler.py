@@ -302,7 +302,16 @@ def test_each_batch_is_saved_before_the_next_one_is_read(world):
     _five_servers(world)
     s.crawler.settings = dataclasses.replace(s.crawler.settings, crawl_batch=2)
     seen: list[dict] = []
-    _die_on_scan_call(world["scanner"], 2, seen, s.crawler)
+    original = s.crawler._remote_batch
+
+    def interrupt_second_batch(*args, **kwargs):
+        # One configured batch may now scan several groups as replies arrive.
+        seen.append(dict(s.crawler.progress or {}))
+        if len(seen) == 2:
+            raise Killed("process killed")
+        return original(*args, **kwargs)
+
+    s.crawler._remote_batch = interrupt_second_batch
     with pytest.raises(Killed):
         s.crawler.run()
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import threading
 from dataclasses import replace
 
+import pytest
+
 from histor.remote_schedule import RemoteSchedule, after
 from histor.service import remote_worker
 from tests.conftest import make_target, tool
@@ -81,15 +83,82 @@ def test_rate_limit_pauses_the_host_and_errors_back_off_durably(world):
     now = world["clock"]()
     queue.record(a.id, now, "http-429")
     assert {t.id for t in queue.due(now, 20)} == {other.id}
-    world["clock"].advance(hours=1)
+    world["clock"].advance(hours=6)
     assert {t.id for t in queue.due(world["clock"](), 20)} == {a.id, b.id, other.id}
     queue.record(a.id, world["clock"](), "http-429")
-    assert state(s, a)["next_due"] == after(world["clock"](), 7200)
+    assert state(s, a)["next_due"] == after(world["clock"](), 43200)
     queue.record(other.id, now, "timeout")
     queue.record(other.id, after(now, 21600), "timeout")
     assert state(s, other)["next_due"] == after(now, 21600 + 43200)
     queue.record(other.id, after(now, 64800), "ok")
     assert state(s, other)["failures"] == 0
+
+
+@pytest.mark.parametrize("independent", [True, False])
+def test_completed_remote_is_saved_while_another_endpoint_is_still_waiting(world, independent):
+    s = enable(world)
+    fast, slow = make_target("io.example/fast", "/fast"), make_target("io.example/slow", "/slow")
+    world["targets"].extend([fast, slow])
+    world["mcp"].tools.update({"/fast": [tool("fast")], "/slow": [tool("slow")]})
+    s.crawler.run(include_remote=False)
+    world["clock"].advance(hours=1)
+    entered, release, saved = threading.Event(), threading.Event(), threading.Event()
+    original_reader = s.crawler.reader.list_tools
+    original_record = s.crawler.remote_schedule.record
+
+    def read(url):
+        if url.endswith("/slow"):
+            entered.set()
+            assert release.wait(10)
+        return original_reader(url)
+
+    def record(target_id, *args):
+        original_record(target_id, *args)
+        if target_id == fast.id:
+            saved.set()
+
+    s.crawler.reader.list_tools = read
+    s.crawler.remote_schedule.record = record
+    errors, results = [], []
+
+    def run():
+        try:
+            results.append(s.crawler.poll_remote() if independent else s.crawler.run())
+        except BaseException as exc:
+            errors.append(exc)
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    try:
+        assert entered.wait(5)
+        assert saved.wait(5), "the completed response waited for the slow server"
+        assert worker.is_alive()
+        assert s.store.target(fast.id)["last_status"] == "ok"
+        assert s.store.target(slow.id)["last_attempt"] is None
+    finally:
+        release.set()
+        worker.join(10)
+    assert not worker.is_alive() and not errors
+    assert results[0]["attempted"] == 2 and results[0]["statuses"] == {"ok": 2}
+    assert s.store.target(slow.id)["last_status"] == "ok"
+
+
+@pytest.mark.parametrize("normal_interval", [21600, 172800])
+def test_rate_limit_never_shortens_normal_interval_even_for_frequent_servers(world, normal_interval):
+    s = enable(world)
+    s.crawler.remote_schedule.settings = replace(s.settings, remote_interval_s=normal_interval)
+    target = make_target("io.example/frequent", "/a")
+    world["targets"].append(target)
+    s.crawler.run(include_remote=False)
+    now = world["clock"]()
+    with s.store.db.transaction() as tx:
+        for offset in (60, 120):
+            tx.execute("INSERT INTO changes(target_id, observed_at, summary) VALUES(?, ?, '{}')",
+                       (target.id, after(now, -offset)))
+    for _ in range(3):
+        s.crawler.remote_schedule.record(target.id, now, "http-429")
+        assert state(s, target)["hot_until"] is not None
+        assert state(s, target)["next_due"] >= after(now, normal_interval)
 
 
 def test_package_planning_does_not_block_remote_worker(world):

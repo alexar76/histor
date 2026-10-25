@@ -1,7 +1,8 @@
+# Node security baseline: 22.23.4 (2026-10-21 security release).
 # HISTOR: the Python service and the WARDEN scanner sidecar in one image. The sidecar is a
 # Node subprocess per batch, so the base is Node and Python comes from Debian (3.11 on bookworm,
 # which pyproject allows): one libc, one libstdc++, no copied binaries.
-FROM node:22-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*

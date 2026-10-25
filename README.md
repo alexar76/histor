@@ -94,6 +94,8 @@ every 30 minutes. These are scheduling targets: host limits, failures and queue 
 make actual gaps longer. Intermediate states can still be missed. See
 [remote polling operations](docs/remote-polling.md) for configuration and measured intervals.
 
+Release changes and upgrade notes: [CHANGELOG.md](CHANGELOG.md).
+
 ## What a label does not say
 
 The profile forbids the words *safe, secure, audited, certified, approved* and *trusted*, and so
@@ -105,6 +107,10 @@ is shown as a date and a diff, never as an accusation. Details: [docs/labels.md]
 **What a tool list costs.** A client resends every connected server's tool list with each model request. Over the 18,204 packages and 16,170 remote servers in the log, a list's median is about 1,300 tokens, the 90th percentile about 8,000, and 31 packages list over 100,000: [docs/tool-list-cost.md](docs/tool-list-cost.md). Each count is split into names, descriptions and input schemas; every change carries its cost diff (`/api/v1/changes/<id>/cost`), and `histor tool-cost check` runs the same count in a package's CI and fails a release that makes the list heavier: [docs/tool-list-cost.md](docs/tool-list-cost.md#where-the-tokens-are-and-what-a-release-changed).
 
 **Download the data.** Once a month the log's whole view is published as files at [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): every listed server, every tool set it showed, every recorded change and the WARDEN scans. The files are JSON Lines (gzip) with a manifest signed by the log's key; the compilation is CC BY 4.0. Each snapshot's README lists the fields and loads in pandas or DuckDB ([histor/dataset.py](histor/dataset.py)). Also on [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); to cite: [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759).
+
+**Public payer evidence (unreleased).** The local `histor payer-audit` command checks Base USDC
+receipts and exports sourced behavioural indications while retaining payment totals and unknown
+cases. It needs no production database or wallet: [docs/payer-audit.md](docs/payer-audit.md).
 
 ## Quick start
 

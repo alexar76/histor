@@ -449,7 +449,10 @@ def test_a_package_an_older_trace_reader_left_with_unplaced_sends_is_traced_agai
     assert not _unplaced_sends({**old, "observer": "gvisor-trace/7"}), "7's verdict on sends stands"
     inherited = {"observer": "gvisor-trace/7", "startup": {"unexpectedRecipients": ["canary-aaaaaaaaaaaa@histor-trap.invalid"]}}
     assert _unplaced_sends(inherited), "8 no longer lets a run inherit the previous holder's canary"
-    assert not _unplaced_sends({**inherited, "observer": "gvisor-trace/8"}), "the current reader's verdict stands"
+    assert not _unplaced_sends({**inherited, "observer": "gvisor-trace/8"}), "8 read inherited canaries right"
+    current = {"observer": "gvisor-trace/9", "startup": {"writes": ["cache.json"], "network": old["startup"]["network"]}}
+    assert not _unplaced_sends(current), "the current reader's verdict stands, relative writes included"
+    assert not _unplaced_sends({**current, "observer": "gvisor-trace/8"}), "8 cannot show what 9 adds"
     assert not _unplaced_sends({"observer": "gvisor-trace/2", "startup": {"network": ["api.example.com:443"]}})
     assert not _unplaced_sends(None)
 

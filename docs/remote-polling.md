@@ -20,9 +20,15 @@ a backlog; neither the configured cadence nor a worker count establishes achieve
 The queue prioritizes endpoints with recent repeated changes, then the oldest due time. State
 survives restarts. Unchanged successful checks use the normal/frequent interval. Failures back
 off exponentially, to at most a day; unauthenticated/forbidden responses wait at least a day.
-HTTP 429 starts a one-hour exponential backoff and pauses new batches for the entire hostname.
+HTTP 429 starts an exponential backoff of at least the normal remote interval (six hours by
+default, and at least one hour for shorter configurations) and pauses new batches for the entire hostname.
+The cap is one day, or the configured normal interval when that is longer than a day.
 Requests already in flight may finish. The reader still enforces its existing request timeout
 and private-address restrictions. Opted-out, unsupported and delisted targets are excluded.
+
+Observations are scanned and committed as they finish. Results already ready together share a
+WARDEN scan; an unfinished endpoint does not hold the completed results. Outstanding work is
+bounded to twice the remote worker count, including during a full manual crawl.
 
 All observations use the existing canonicalization, WARDEN scans, label chain and Merkle log.
 Remote runs have a separate `runs.kind`: they do not replace the public daily `lastRun` or cause

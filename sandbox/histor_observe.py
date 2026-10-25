@@ -127,7 +127,7 @@ MAX_NOISE = 4096               # bytes of non-protocol stdout kept to say why a 
 # The trace reader's own generation: 3 resolves relative opens and reads socketpair ends as local
 # (2 listed asyncio's self-pipe as a destination). HISTOR runs a package traced by an older
 # reader again when that left it with sends it could not place.
-TRACE_OBSERVER = "gvisor-trace/8"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs; 6: a socket's family follows the socket, not its fd number; 7: an accepted connection's peer; 8: a trap record carrying another run's tag is not this run's evidence, and leaves it incomplete
+TRACE_OBSERVER = "gvisor-trace/9"  # 4: evidence matched to the address only while this container held it; 5: its start read while it runs; 6: a socket's family follows the socket, not its fd number; 7: an accepted connection's peer; 8: a trap record carrying another run's tag is not this run's evidence, and leaves it incomplete; 9: renames, links, symlinks and creat are traced and their targets judged as writes, a .pth/sitecustomize written outside /tmp or code written into the installed package after install is persistence, and a trace runtime that does not record those calls leaves the run incomplete
 
 
 class Refused(Exception):
@@ -309,6 +309,33 @@ QUIET_SOCKETS = ("/var/run/nscd/socket", "/run/nscd/socket", "/var/run/dbus/syst
 # Writes that would make the package outlive the sandbox on a real machine.
 PERSIST = (".bashrc", ".bash_profile", ".profile", ".zshrc", ".zprofile", ".ssh/authorized_keys", ".config/autostart/",
            "Library/LaunchAgents/", ".config/systemd/user/", ".npmrc", ".gitconfig")
+# Files an interpreter runs by itself on every start, wherever they land on its path: the
+# installed package lives under /work, so a .pth written there ran unreported (Vulnetix
+# GCVE-110-PYPI-2026-022091).
+AUTORUN_NAMES = ("sitecustomize.py", "usercustomize.py")
+AUTORUN_SUFFIXES = (".pth",)
+# Code written into the installed package once it is installed changes what the next run executes.
+PKG_IN = "/work/pkg"
+CODE_SUFFIXES = (".py", ".pth", ".js", ".mjs", ".cjs", ".node", ".so")
+# Calls that move or create a file under another name. The trace runtime must record them (see
+# install.sh); a runtime that does not leaves every run incomplete rather than clean.
+FILE_MOVE_CALLS = ("rename", "renameat", "renameat2", "link", "linkat", "symlink", "symlinkat", "creat")
+TRACED_SYSCALLS = ("socket", "connect", "openat", "open", "creat", "execve", "execveat", "sendto", "sendmsg",
+                   "sendmmsg", "bind", "unlinkat", "rename", "renameat", "renameat2", "link", "linkat",
+                   "symlink", "symlinkat", "mkdirat", "socketpair", "accept", "accept4")
+
+
+def persistent_write(path: str, phase: str) -> bool:
+    """Would this write let the package act again after the run, on a real machine?"""
+    rel = path[len(HOME_IN) + 1:] if path.startswith(HOME_IN + "/") else None
+    if rel and rel.startswith(PERSIST):
+        return True
+    name = os.path.basename(path)
+    if (name in AUTORUN_NAMES or name.endswith(AUTORUN_SUFFIXES)) and not path.startswith(("/tmp/", "/proc/", "/dev/")):
+        return True
+    if path.startswith(PKG_IN + "/") and phase != "installScripts" and name.endswith(CODE_SUFFIXES):
+        return True
+    return not path.startswith(("/tmp", HOME_IN, "/work", "/dev/", "/proc/"))
 
 
 # -- the DNS logger -------------------------------------------------------------------------------
@@ -401,11 +428,57 @@ _CONNECT = re.compile(r" X connect\(0x[0-9a-f]+ [^,]*, 0x[0-9a-f]+ \{Family: (AF
 # /home/histor/.aws" — so a relative name is resolved from the trace itself, never guessed.
 _OPEN = re.compile(r" X (?:openat\((?:AT_FDCWD|0x[0-9a-f]+)(?: (/[^,]*))?, |open\()0x[0-9a-f]+ (.+?), (O_[A-Z_|0-9]+(?:\|0x[0-9a-f]+)*)")
 _SOCKET = re.compile(r" X socket\((AF_\w+), .*\) = (\d+) ")
+# rename(0xb3a320 a, 0xb3a350 b); renameat(0x3 /tmp/w, 0x7e… .bashrc, 0x3, 0xb3a380 c): the second
+# directory is printed without its path when it repeats; renameat2's may come as the number
+# 0xffffffffffffff9c (AT_FDCWD) with no path; creat(0x7e… /tmp/w/x.pth, 0o644) = 4. Captured from
+# runsc's own strace on 2026-10-25.
+_FILE_MOVE = re.compile(r" X (renameat2|renameat|rename|linkat|link|symlinkat|symlink|creat)\((.*)\) = (-?\d+|0x[0-9a-f]+)")
+_PTR_PATH = re.compile(r"^0x[0-9a-f]+ (.+)$")
+_DIR_ARG = re.compile(r"^(AT_FDCWD|0x[0-9a-f]+)(?: (/.*))?$")
+_AT_FDCWD_NUM = "0xffffffffffffff9c"
 _SOCK_FD = re.compile(r" X (?:connect|sendto|sendmsg|sendmmsg)\((0x[0-9a-f]+) socket:\[(\d+)\]")
 # accept4(0x3 socket:[1], 0x7e… {Family: AF_INET, Addr: 127.0.0.1, Port: 41192}, 0x7e… {length=16},
 # SOCK_CLOEXEC) = 5 (0x5): gVisor prints the peer on exit, and the new fd as the result.
 _ACCEPT = re.compile(r" X accept4?\(0x[0-9a-f]+ socket:\[\d+\], .*\) = (\d+) ")
 _ADDRESS = re.compile(r"\{Family: (AF_\w+), Addr: ([^,}]*)(?:, Port: (\d+))?")
+
+
+def file_move_target(call: str, args: str) -> tuple[str | None, str]:
+    """(resolved absolute target or None, the target as printed) for a file-moving call."""
+    parts = [p.strip() for p in args.split(", ")]
+
+    def ptr(i: int) -> str:
+        m = _PTR_PATH.match(parts[i]) if i < len(parts) else None
+        return m.group(1).strip().strip('"') if m else ""
+
+    def directory(i: int, like: int | None = None) -> str | None:
+        m = _DIR_ARG.match(parts[i]) if i < len(parts) else None
+        if not m:
+            return None
+        if m.group(2):
+            return m.group(2).strip()
+        if like is not None:
+            # The same descriptor as the first directory, printed once.
+            first = _DIR_ARG.match(parts[like]) if like < len(parts) else None
+            if first and first.group(1) == m.group(1) and first.group(2):
+                return first.group(2).strip()
+        return None
+
+    if call in ("rename", "link", "symlink"):
+        target, base = ptr(1), None
+    elif call == "creat":
+        target, base = ptr(0), None
+    elif call in ("renameat", "renameat2", "linkat"):
+        target, base = ptr(3), directory(2, like=0)
+    else:  # symlinkat(target, newdirfd, linkpath)
+        target, base = ptr(2), directory(1)
+    if not target:
+        return None, ""
+    if target.startswith("/"):
+        return os.path.normpath(target), target
+    if base:
+        return os.path.normpath(os.path.join(base, target)), target
+    return None, target
 
 
 def _stamp(line: str, year: int) -> float | None:
@@ -553,9 +626,29 @@ def read_trace(container_id: str, phases: list[tuple[str, float, float]], entry:
                     # A path still relative here is unknown (and already makes the run incomplete),
                     # not a write outside the sandbox: gvisor-trace/2 listed node-gyp's
                     # buildcheck.gypi as persistence that way.
-                    if writing and path.startswith("/") and ((rel and rel.startswith(PERSIST)) or not path.startswith(("/tmp", HOME_IN, "/work", "/dev/", "/proc/"))):
+                    if writing and path.startswith("/") and persistent_write(path, phase):
                         a["writes"].add(path[:160])
-                elif any(f" X {call}(" in line for call in ("sendto", "sendmsg", "sendmmsg", "execveat", "unlinkat", "renameat", "mkdirat", "chdir", "fchdir")):
+                elif (m := _FILE_MOVE.search(line)):
+                    call, args, result = m.group(1), m.group(2), m.group(3)
+                    if result.startswith("-"):
+                        continue  # failed: nothing moved
+                    target, printed = file_move_target(call, args)
+                    if target is None:
+                        if not printed:
+                            issues.add("unparsed-syscall")
+                            a["exec"].add(line.split(" X ", 1)[1][:200])
+                            continue
+                        # gVisor prints no cwd for these: where it landed is unknown, so the run is
+                        # not clean, and a name that persists is reported whatever its directory.
+                        issues.add("relative-path-unresolved")
+                        name = os.path.basename(printed)
+                        if (name.startswith(".") and any(p.startswith(name) for p in PERSIST)) or \
+                                name in AUTORUN_NAMES or name.endswith(AUTORUN_SUFFIXES):
+                            a["writes"].add(f"{printed[:150]} ({call}, directory unknown)")
+                        continue
+                    if persistent_write(target, phase):
+                        a["writes"].add(f"{target[:150]} ({call})" if call != "creat" else target[:160])
+                elif any(f" X {call}(" in line for call in ("sendto", "sendmsg", "sendmmsg", "execveat", "unlinkat", "mkdirat", "chdir", "fchdir")):
                     # Preserve unparsed activity without claiming successful or complete attribution.
                     issues.add("unparsed-syscall")
                     a["network" if "send" in line else "exec"].add(line.split(" X ", 1)[1][:200])
@@ -858,9 +951,25 @@ class Session:
         raise EOFError
 
 
+def trace_syscall_gaps(runtimes_json: str) -> list[str]:
+    """Syscalls the trace runtime does not record, from `docker info`'s runtimes: every one of
+    TRACED_SYSCALLS must be in its --strace-syscalls, or a rename onto .bashrc is invisible."""
+    try:
+        args = json.loads(runtimes_json).get(TRACE_RUNTIME, {}).get("runtimeArgs") or []
+    except (ValueError, AttributeError):
+        return list(TRACED_SYSCALLS)
+    listed = {c for a in args if a.startswith("--strace-syscalls=") for c in a.split("=", 1)[1].split(",")}
+    if any(a == "--strace" for a in args) and not any(a.startswith("--strace-syscalls=") for a in args):
+        return []  # --strace with no filter records every call
+    return [c for c in TRACED_SYSCALLS if c not in listed]
+
+
 def traced_available() -> bool:
-    """The tracing runtime, the internal network and the DNS logger are all there."""
+    """The tracing runtime (recording every call the parser needs), the internal network and
+    the DNS logger are all there."""
     runtimes = docker("info", "--format", "{{json .Runtimes}}").stdout
+    if trace_syscall_gaps(runtimes):
+        return False
     try:
         health = Path("/run/histor-firewall/healthy.json")
         verified = json.loads(health.read_text())
@@ -1219,7 +1328,8 @@ def selftest() -> dict[str, Any]:
     probe = docker("run", "--rm", "--runtime", RUNTIME, "--network", "none", IMAGES["npm"], "uname", "-r", timeout=120)
     return {"type": "histor.sandbox-selftest/v1", "observer": VERSION, "runsc": RUNTIME in info,
             "kernel": probe.stdout.strip(), "gvisor": "gvisor" in probe.stdout,
-            "trace": TRACE_RUNTIME in info, "dnsLogger": DNS is not None,
+            "trace": TRACE_RUNTIME in info, "traceSyscallGaps": trace_syscall_gaps(info),
+            "dnsLogger": DNS is not None,
             "observeNetwork": docker("network", "inspect", OBSERVE_NETWORK).returncode == 0,
             "images": {k: image_digest(k) for k in IMAGES},
             "runtimeImages": {f"{r}:{n}": image_digest(r, img) for r, by in RUNTIMES.items() for n, img in by.items()}}

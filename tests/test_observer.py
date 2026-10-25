@@ -523,3 +523,69 @@ def test_the_traps_reasons_join_the_traces_and_a_clean_run_stays_clean(monkeypat
     section = {"complete": True, "incompleteReasons": []}
     obs.merge_sink(section, "10.231.0.7", 0.0, 1.0, "bbbbbbbbbbbb")
     assert not section["complete"] and section["incompleteReasons"] == ["sink-unavailable"]
+
+
+# -- GCVE-110-PYPI-2026-022091: renames, links, symlinks, creat and writes under /work -----------
+# The call shapes below are runsc's own strace output, captured on the sandbox host on
+# 2026-10-25 (paths changed to the sandbox's).
+
+def test_a_rename_onto_bashrc_is_a_persistent_write(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, [
+        "rename(0x7ed079d67ec0 /home/histor/x, 0x7ed079d8d310 /home/histor/.bashrc) = 0 (0x0) (54µs)"])
+    assert r["writes"] == ["/home/histor/.bashrc (rename)"] and r["complete"]
+
+
+def test_renameat_reuses_the_directory_printed_once(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, [
+        "renameat(0x3 /home/histor, 0x7ed079d67ec0 x, 0x3, 0xb3a380 .bashrc) = 0 (0x0) (85µs)"])
+    assert r["writes"] == ["/home/histor/.bashrc (renameat)"] and r["complete"]
+
+
+def test_renameat2_link_symlink_and_creat_are_judged_like_writes(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, [
+        "renameat2(AT_FDCWD /tmp, 0xb3a380 c, 0xffffffffffffff9c, 0x7ed0 /home/histor/.profile, 0x0) = 0 (0x0) (75µs)",
+        "linkat(0x3 /home/histor, 0xb3a380 c, 0x3, 0x7ed0 .zshrc, 0x400) = 0 (0x0) (19µs)",
+        "symlinkat(0xb3a380 /tmp/c, 0x3 /home/histor/.config/autostart, 0x7ed0 run.desktop) = 0 (0x0) (21µs)",
+        "creat(0x7ed079d9a850 /work/pkg/evil.pth, 0o644) = 4 (0x4) (132µs)",
+        "creat(0x7ed079d9a850 /tmp/scratch.pth, 0o644) = 4 (0x4) (132µs)",
+    ])
+    assert r["writes"] == ["/home/histor/.config/autostart/run.desktop (symlinkat)",
+                           "/home/histor/.profile (renameat2)", "/home/histor/.zshrc (linkat)",
+                           "/work/pkg/evil.pth"]
+    assert r["complete"]
+
+
+def test_a_relative_move_is_never_clean_and_a_persistent_name_is_still_reported(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, [
+        "rename(0xb3a320 a, 0xb3a350 .bashrc) = 0 (0x0) (115µs)",
+        "link(0xb3a380 c, 0x7ed079d67ec0 hard) = 0 (0x0) (24µs)",
+    ])
+    assert not r["complete"] and r["incompleteReasons"] == ["relative-path-unresolved"]
+    assert r["writes"] == [".bashrc (rename, directory unknown)"]
+
+
+def test_a_failed_rename_moved_nothing(tmp_path, monkeypatch):
+    r = _trace(tmp_path, monkeypatch, [
+        "rename(0x7e /home/histor/x, 0x7e /home/histor/.bashrc) = -1 ENOENT (no such file) (5µs)"])
+    assert "writes" not in r and r["complete"]
+
+
+def test_code_written_into_the_installed_package_after_install_is_reported(tmp_path, monkeypatch):
+    line = "openat(AT_FDCWD /work/pkg, 0x7e mod/patched.py, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC, 0o644) = 5 (0x5) (40µs)"
+    assert _trace(tmp_path, monkeypatch, [line])["writes"] == ["/work/pkg/mod/patched.py"]
+    data = "openat(AT_FDCWD /work/pkg, 0x7e mod/cache.json, O_WRONLY|O_CREAT, 0o644) = 5 (0x5) (40µs)"
+    assert "writes" not in _trace(tmp_path, monkeypatch, [data])
+
+
+def test_a_trace_runtime_that_does_not_record_file_moves_is_not_a_trace_runtime():
+    import json
+
+    old = ("socket,connect,openat,open,execve,execveat,sendto,sendmsg,sendmmsg,bind,unlinkat,renameat,"
+           "mkdirat,socketpair,accept,accept4")
+    runtimes = {obs.TRACE_RUNTIME: {"runtimeArgs": ["--strace", f"--strace-syscalls={old}"]}}
+    gaps = obs.trace_syscall_gaps(json.dumps(runtimes))
+    assert set(gaps) == {"creat", "rename", "renameat2", "link", "linkat", "symlink", "symlinkat"}
+    installed = (Path(obs.__file__).parent / "install.sh").read_text()
+    listed = installed.split("--strace-syscalls=", 1)[1].split('"', 1)[0].split(",")
+    assert obs.trace_syscall_gaps(json.dumps(
+        {obs.TRACE_RUNTIME: {"runtimeArgs": ["--strace", f"--strace-syscalls={','.join(listed)}"]}})) == []

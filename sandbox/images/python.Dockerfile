@@ -1,3 +1,4 @@
+# Node security baseline: 22.23.4 (2026-10-21 security release).
 # The image HISTOR starts PyPI packages in, built on each sandbox host by install.sh, one per
 # Python a package may require (3.12 by default, 3.13 and 3.14 when Requires-Python says so).
 #
@@ -6,7 +7,7 @@
 # socket would be a way out of the sandbox.
 ARG PYTHON=3.12
 FROM eclipse-temurin:21-jre AS java
-FROM node:22-bookworm-slim AS node
+FROM node:22.23.4-bookworm-slim AS node
 FROM python:${PYTHON}-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates \
