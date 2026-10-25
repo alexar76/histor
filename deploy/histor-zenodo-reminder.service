@@ -1,0 +1,8 @@
+# /etc/systemd/system/histor-zenodo-reminder.service — runs deploy/zenodo_reminder.sh (installed as
+# /usr/local/sbin/histor-zenodo-reminder): a Telegram reminder while the month's snapshot is not on Zenodo.
+[Unit]
+Description=HISTOR: remind the operator to archive the month's snapshot on Zenodo
+After=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/histor-zenodo-reminder

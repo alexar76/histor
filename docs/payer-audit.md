@@ -2,8 +2,8 @@
 
 `histor payer-audit` is a local, deterministic report generator. It keeps payment totals and
 behavioural indications separate. It does not identify people, establish buyer intent or block
-payments. This command is **unreleased source code**. The PyPI check on 2026-10-25 returned 0.3.1,
-which does not include it; a local version string does not establish publication.
+payments. It ships in aimarket-histor 0.4.1 (PyPI, 2026-10-25): `pip install aimarket-histor`, then
+`histor payer-audit`.
 
 Essential interpretation is available in five languages: [English](measurement-limits.md),
 [Русский](measurement-limits.ru.md), [Español](measurement-limits.es.md),

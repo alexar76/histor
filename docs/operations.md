@@ -65,7 +65,7 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | registry discovery and packages; `0` = only on operator request |
 | `HISTOR_REMOTE_INTERVAL_S` | `21600` | independent remote queue, six-hour target; `0` puts remotes back in the daily crawl |
 | `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `_CHANGE_WINDOW_S` | `1800` / `604800` | 30-minute target after at least two observed changes in seven days; [details and measured gaps](remote-polling.md) |
-| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | the least time after a finished cycle before the next one starts; the monthly snapshot (`deploy/export_dataset.sh`) is taken in that gap |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | the least time after a finished cycle before the next one starts; the weekly snapshot (`deploy/export_dataset.sh`) is taken in that gap |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | how often publishers' declaration files are read between crawls ([api](api.md#declaring-tool-sets-publishers)); `0` = only at the crawl |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: a fresh instance waits one interval before its first crawl |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | politeness: a host with 2 000 endpoints is never hit more than twice at once |
@@ -81,6 +81,10 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_OPENROUTER_API_KEY` | empty | OpenRouter key (or `OPENROUTER_API_KEY`); stays in the host `.env`, never in the image |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | paid-call ceiling per crawl; with independent remote polling, also a shared durable ceiling per UTC day. `0` disables the classifier; cached verdicts are free |
 | `HISTOR_CLASSIFIER_MODEL` / `_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | — / `https://openrouter.ai/api/v1` / `30` / `60` | the meaning-based, language-independent classifier; its verdict is advisory and never enters the signed log |
+
+## Open-data snapshots
+
+Once an ISO week, `histor-export-dataset` (`deploy/export_dataset.sh`, timer every 10 minutes) copies a finished crawl cycle into `/var/lib/histor-datasets/<date>/`, serves it at `/datasets/` and, with `/etc/histor-hf/` set up, uploads it to Hugging Face (tag `snapshot-<date>`). The eight newest stay on the host (`HISTOR_DATASET_KEEP`); `HISTOR_DATASET_PERIOD=month` brings back one per month. The first snapshot of each month is archived on Zenodo by hand, as a new version of the concept record: when it is written, `histor-notify` sends a Telegram message, and `histor-zenodo-reminder` (daily at 09:00 UTC) repeats it until Zenodo has that snapshot. Both read the bot token and chat from `/etc/histor-notify.env` (0600: `AICOM_ALERT_TELEGRAM_TOKEN`, `AICOM_ALERT_TELEGRAM_CHAT`); without that file nothing is sent. `histor-export-dataset --due` and `histor-zenodo-reminder --dry` say what they would do.
 
 Remote polling observes samples, not every transition: A→B→A between checks is invisible. The independent remote queue does not turn package planning into 30-minute reinstallations. Backlog, host limits and failure backoff affect achieved gaps; use `remotePolling` in `/api/v1/stats`. [Interpretation limits](measurement-limits.md) distinguish configured cadence from measured coverage.
 

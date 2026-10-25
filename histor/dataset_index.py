@@ -26,7 +26,7 @@ CODE = "https://github.com/alexar76/histor"
 CREATOR = "Aleksandr Artamokhov"
 NAME = "HISTOR: MCP tool definitions and how they change"
 DESCRIPTION = (
-    "Monthly snapshots of a public transparency log of Model Context Protocol (MCP) servers: every "
+    "Weekly snapshots of a public transparency log of Model Context Protocol (MCP) servers: every "
     "remote server in the official MCP registry and every npm/PyPI MCP package HISTOR observes, the "
     "exact tool definitions each one served, every recorded change field by field, WARDEN pattern "
     "scans and advisory classifier verdicts. JSON Lines (gzip) with a manifest signed by the log's key."
@@ -139,7 +139,7 @@ p code,li code{{overflow-wrap:anywhere}}.cite a{{overflow-wrap:anywhere}}
 </style></head><body><main>
 <h1>MCP tool definitions and how they change</h1>
 <p class="lead">HISTOR reads the tool list of every remote MCP server in the official MCP registry once a day, and runs every
-new version of npm and PyPI MCP packages in a sandbox. Once a month the whole record is published here as files:
+new version of npm and PyPI MCP packages in a sandbox. Once a week the whole record is published here as files:
 what each server advertised, and every change, field by field. Free under CC BY 4.0.</p>
 <div class="stats">
 <div class="stat"><b>{c['listed']:,}</b><span>listed servers and packages</span></div>

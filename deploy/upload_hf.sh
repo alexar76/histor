@@ -12,7 +12,7 @@
 # venv at /opt/histor-hf/venv (huggingface_hub pinned below).
 #
 # Each upload replaces the files at the repository root (the dataset card is the snapshot's
-# README.md) and tags the commit snapshot-<date>, so every month stays citable by revision.
+# README.md) and tags the commit snapshot-<date>, so every snapshot stays citable by revision.
 set -euo pipefail
 
 CONF="${HISTOR_HF_CONF:-/etc/histor-hf}"

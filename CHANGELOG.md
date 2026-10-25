@@ -1,13 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 — 2026-10-25
 
 - Add the offline `histor payer-audit` command and a bounded, read-only Base USDC evidence
   collector. Export transaction-scoped source annotations, explicit heuristic labels,
   settlement checks and coverage limits without excluding payments from totals or inferring
   buyer identities. See [payer audit](docs/payer-audit.md).
-
-## 0.4.1 — 2026-10-25
 
 - **Fix: the crawler took the new trace reader for an old one.** The sandbox answers `gvisor-trace/9`
   but the crawler still called `gvisor-trace/8` current, so it re-traced every 9 run that listed a

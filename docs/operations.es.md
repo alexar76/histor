@@ -66,7 +66,7 @@ ciclo informado entero; en SQLite y PostgreSQL. Con el código anterior a este c
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | descubrimiento del registro y paquetes; `0` = solo a petición del operador |
 | `HISTOR_REMOTE_INTERVAL_S` | `21600` | cola HTTP remota independiente, objetivo de seis horas; `0` devuelve remotes al ciclo diario |
 | `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | objetivo de 30 minutos tras dos cambios observados en siete días; [límites](measurement-limits.es.md) |
-| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | el tiempo mínimo tras un ciclo terminado antes de empezar el siguiente; en ese hueco se toma la instantánea mensual (`deploy/export_dataset.sh`) |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | el tiempo mínimo tras un ciclo terminado antes de empezar el siguiente; en ese hueco se toma la instantánea semanal (`deploy/export_dataset.sh`) |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | cada cuánto se leen entre rastreos los archivos de declaración de los editores ([api](api.es.md)); `0` = solo en el rastreo |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: una instancia nueva espera un intervalo antes de su primer rastreo |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | cortesía: un host con 2 000 endpoints nunca recibe más de dos conexiones a la vez |
@@ -82,6 +82,10 @@ ciclo informado entero; en SQLite y PostgreSQL. Con el código anterior a este c
 | `HISTOR_OPENROUTER_API_KEY` | vacío | clave de OpenRouter (o `OPENROUTER_API_KEY`); permanece en el `.env` del host, no en la imagen |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | tope de llamadas de pago por rastreo. `0` lo desactiva; solo cuentan conjuntos distintos (uno compartido o ya evaluado se reutiliza gratis) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | el clasificador semántico e independiente del idioma; su veredicto es informativo y nunca entra en el registro firmado |
+
+## Instantáneas de datos abiertos
+
+Una vez por semana ISO, `histor-export-dataset` (`deploy/export_dataset.sh`, temporizador cada 10 minutos) copia un ciclo de rastreo terminado en `/var/lib/histor-datasets/<fecha>/`, lo sirve en `/datasets/` y, con `/etc/histor-hf/` configurado, lo sube a Hugging Face (etiqueta `snapshot-<fecha>`). En el host se guardan las ocho más recientes (`HISTOR_DATASET_KEEP`); `HISTOR_DATASET_PERIOD=month` vuelve a una por mes. La primera instantánea de cada mes se archiva a mano en Zenodo, como nueva versión del registro conceptual: al escribirse, `histor-notify` envía un mensaje de Telegram y `histor-zenodo-reminder` (cada día a las 09:00 UTC) lo repite hasta que Zenodo la tenga. Ambos leen el token del bot y el chat de `/etc/histor-notify.env` (0600: `AICOM_ALERT_TELEGRAM_TOKEN`, `AICOM_ALERT_TELEGRAM_CHAT`); sin ese archivo no se envía nada. `histor-export-dataset --due` y `histor-zenodo-reminder --dry` dicen qué harían.
 
 El sondeo observa muestras, no todas las transiciones: A→B→A entre lecturas es invisible. La cola remota independiente no reinstala paquetes cada 30 minutos. Retrasos, límites por host y backoff alargan los huecos; revise `remotePolling` en `/api/v1/stats`. Los [límites](measurement-limits.es.md) separan frecuencia configurada de cobertura medida.
 

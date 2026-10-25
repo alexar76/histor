@@ -1,0 +1,8 @@
+# /etc/systemd/system/histor-zenodo-reminder.timer
+[Unit]
+Description=Each morning, remind about a monthly HISTOR snapshot that is not on Zenodo yet
+[Timer]
+OnCalendar=*-*-* 09:00:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target

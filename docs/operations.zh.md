@@ -56,7 +56,7 @@ flowchart LR
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | 注册表发现与软件包；`0` = 仅在运营方请求时抓取 |
 | `HISTOR_REMOTE_INTERVAL_S` | `21600` | 独立远程 HTTP 队列，目标六小时；`0` 恢复每日 remote 抓取 |
 | `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | 七天内两次已观察变化后，目标 30 分钟；[测量边界](measurement-limits.zh.md) |
-| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | 一轮完成后到下一轮开始前的最短间隔；每月快照（`deploy/export_dataset.sh`）在这段间隔里生成 |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | 一轮完成后到下一轮开始前的最短间隔；每周快照（`deploy/export_dataset.sh`）在这段间隔里生成 |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | 两次爬取之间读取发布者声明文件的间隔（[api](api.zh.md)）；`0` = 仅在爬取时读取 |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`：新实例会先等待一个间隔，再进行首次抓取 |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | 礼貌策略：即使一个主机承载 2000 个端点，同一时刻也最多只被访问两次 |
@@ -72,6 +72,10 @@ flowchart LR
 | `HISTOR_OPENROUTER_API_KEY` | 空 | OpenRouter 密钥（或 `OPENROUTER_API_KEY`）；留在主机 `.env`，不进镜像 |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | 每次抓取的付费调用上限。`0` 表示关闭；只计不同的工具集（共享或已判定过的免费复用） |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | 基于语义、与语言无关的分类器；其判定为参考，绝不进入已签名日志 |
+
+## 开放数据快照
+
+每个 ISO 周一次，`histor-export-dataset`（`deploy/export_dataset.sh`，计时器每 10 分钟运行一次）把一轮已完成的抓取复制到 `/var/lib/histor-datasets/<日期>/`，在 `/datasets/` 提供，并在配置了 `/etc/histor-hf/` 时上传到 Hugging Face（标签 `snapshot-<日期>`）。主机上保留最新的八份（`HISTOR_DATASET_KEEP`）；`HISTOR_DATASET_PERIOD=month` 可改回每月一份。每月的第一份快照手动归档到 Zenodo，作为概念记录的新版本：写出时 `histor-notify` 发送一条 Telegram 消息，`histor-zenodo-reminder`（每天 09:00 UTC）会重复提醒，直到 Zenodo 上有这份快照。两者都从 `/etc/histor-notify.env`（0600：`AICOM_ALERT_TELEGRAM_TOKEN`、`AICOM_ALERT_TELEGRAM_CHAT`）读取机器人令牌和聊天 ID；没有这个文件就什么也不发送。`histor-export-dataset --due` 和 `histor-zenodo-reminder --dry` 会说明它们将做什么。
 
 轮询观察采样，不是每次变化：两次检查之间的 A→B→A 不可见。独立 remote 队列不表示每 30 分钟重装软件包。积压、每主机限制和 backoff 会拉长实际间隔；查看 `/api/v1/stats` 的 `remotePolling`。[边界说明](measurement-limits.zh.md) 区分配置频率与已测覆盖。
 

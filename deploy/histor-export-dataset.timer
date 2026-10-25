@@ -1,9 +1,9 @@
 # /etc/systemd/system/histor-export-dataset.timer
 [Unit]
-Description=Try the HISTOR monthly snapshot every 10 minutes; it writes one a month, between two crawl cycles
+Description=Try the HISTOR weekly snapshot every 10 minutes; it writes one a week, between two crawl cycles
 [Timer]
 # The service waits HISTOR_CRAWL_MIN_GAP_S (30 minutes) after each cycle; a run in that gap takes the snapshot.
-# Outside it the script returns at once: the month already has one, or a crawl is running.
+# Outside it the script returns at once: the week already has one, or a crawl is running.
 OnCalendar=*:0/10
 Persistent=true
 [Install]

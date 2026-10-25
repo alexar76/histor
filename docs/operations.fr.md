@@ -67,7 +67,7 @@ rapporté en entier ; sous SQLite et PostgreSQL. Sur le code d'avant ce changeme
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | découverte du registre et paquets ; `0` = uniquement à la demande de l’opérateur |
 | `HISTOR_REMOTE_INTERVAL_S` | `21600` | file HTTP distante indépendante, cible de six heures ; `0` remet les remotes au cycle quotidien |
 | `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | cible de 30 minutes après deux changements observés sur sept jours ; [limites](measurement-limits.fr.md) |
-| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | le délai minimal après un cycle terminé avant le suivant ; l’instantané mensuel (`deploy/export_dataset.sh`) est pris dans cet intervalle |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | le délai minimal après un cycle terminé avant le suivant ; l’instantané hebdomadaire (`deploy/export_dataset.sh`) est pris dans cet intervalle |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | fréquence de lecture, entre deux passages, des fichiers de déclaration des éditeurs ([api](api.fr.md)) ; `0` = seulement au passage |
 | `HISTOR_CRAWL_ON_START` | `1` | `0` : une instance neuve attend un intervalle avant sa première exploration (crawl) |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | politesse : un hôte qui porte 2 000 points de terminaison (endpoints) n’est jamais sollicité plus de deux fois à la fois |
@@ -83,6 +83,10 @@ rapporté en entier ; sous SQLite et PostgreSQL. Sur le code d'avant ce changeme
 | `HISTOR_OPENROUTER_API_KEY` | vide | clé OpenRouter (ou `OPENROUTER_API_KEY`) ; reste dans le `.env` de l'hôte, jamais dans l'image |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | plafond d'appels payants par passage. `0` le désactive ; seuls les ensembles distincts comptent (un ensemble partagé ou déjà jugé est réutilisé sans frais) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | le classifieur sémantique, indépendant de la langue ; son verdict est indicatif et n'entre jamais dans le journal signé |
+
+## Instantanés de données ouvertes
+
+Une fois par semaine ISO, `histor-export-dataset` (`deploy/export_dataset.sh`, minuterie toutes les 10 minutes) copie un cycle d’exploration terminé dans `/var/lib/histor-datasets/<date>/`, le sert sur `/datasets/` et, si `/etc/histor-hf/` est configuré, le téléverse sur Hugging Face (étiquette `snapshot-<date>`). Les huit plus récents restent sur l’hôte (`HISTOR_DATASET_KEEP`) ; `HISTOR_DATASET_PERIOD=month` revient à un par mois. Le premier instantané de chaque mois est archivé à la main sur Zenodo, comme nouvelle version de l’enregistrement conceptuel : quand il est écrit, `histor-notify` envoie un message Telegram, et `histor-zenodo-reminder` (chaque jour à 09:00 UTC) le répète jusqu’à ce que Zenodo l’ait. Les deux lisent le jeton du bot et le chat dans `/etc/histor-notify.env` (0600 : `AICOM_ALERT_TELEGRAM_TOKEN`, `AICOM_ALERT_TELEGRAM_CHAT`) ; sans ce fichier, rien n’est envoyé. `histor-export-dataset --due` et `histor-zenodo-reminder --dry` disent ce qu’ils feraient.
 
 Le sondage observe des échantillons, pas chaque transition : A→B→A entre deux lectures est invisible. La file distante indépendante ne réinstalle pas les paquets toutes les 30 minutes. Retards, limites par hôte et backoff allongent les écarts ; consulter `remotePolling` dans `/api/v1/stats`. Les [limites](measurement-limits.fr.md) distinguent cadence configurée et couverture mesurée.
 

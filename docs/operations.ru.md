@@ -64,7 +64,7 @@ flowchart LR
 | `HISTOR_CRAWL_INTERVAL_S` | `86400` | discovery реестра и пакеты; `0` = только по запросу оператора |
 | `HISTOR_REMOTE_INTERVAL_S` | `21600` | отдельная очередь remote HTTP, цель шесть часов; `0` возвращает remotes в суточный обход |
 | `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | цель 30 минут после как минимум двух наблюдавшихся изменений за семь дней; [границы измерений](measurement-limits.ru.md) |
-| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | минимальная пауза после завершённого цикла перед следующим; в эту паузу снимается ежемесячный снимок (`deploy/export_dataset.sh`) |
+| `HISTOR_CRAWL_MIN_GAP_S` | `1800` | минимальная пауза после завершённого цикла перед следующим; в эту паузу снимается еженедельный снимок (`deploy/export_dataset.sh`) |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | как часто между обходами перечитываются файлы заявлений издателей ([api](api.ru.md)); `0` = только при обходе |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: новый экземпляр ждёт один интервал до первого обхода |
 | `HISTOR_CRAWL_WORKERS` / `_PER_HOST` / `_TIMEOUT_S` | `12` / `2` / `20` | вежливость: хост с 2 000 эндпоинтов никогда не получает больше двух запросов одновременно |
@@ -80,6 +80,10 @@ flowchart LR
 | `HISTOR_OPENROUTER_API_KEY` | пусто | ключ OpenRouter (или `OPENROUTER_API_KEY`); остаётся в `.env` хоста, не в образе |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | потолок платных вызовов за обход. `0` — выключено; считаются только различные наборы (общий или уже оценённый переиспользуется бесплатно) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | смысловой языконезависимый классификатор; вердикт справочный и не попадает в подписанный лог |
+
+## Снимки открытых данных
+
+Раз в ISO-неделю `histor-export-dataset` (`deploy/export_dataset.sh`, таймер каждые 10 минут) копирует завершённый цикл обхода в `/var/lib/histor-datasets/<дата>/`, отдаёт его на `/datasets/` и, если настроен `/etc/histor-hf/`, загружает на Hugging Face (тег `snapshot-<дата>`). На хосте хранятся восемь последних (`HISTOR_DATASET_KEEP`); `HISTOR_DATASET_PERIOD=month` возвращает один снимок в месяц. Первый снимок каждого месяца архивируется на Zenodo вручную, новой версией концептуальной записи: когда он записан, `histor-notify` отправляет сообщение в Telegram, а `histor-zenodo-reminder` (каждый день в 09:00 UTC) повторяет его, пока снимок не появится на Zenodo. Оба берут токен бота и чат из `/etc/histor-notify.env` (0600: `AICOM_ALERT_TELEGRAM_TOKEN`, `AICOM_ALERT_TELEGRAM_CHAT`); без этого файла ничего не отправляется. `histor-export-dataset --due` и `histor-zenodo-reminder --dry` показывают, что они сделали бы.
 
 Remote polling наблюдает выборку, не каждый переход: A→B→A между проверками невидимо. Отдельная remote-очередь не означает переустановку пакетов каждые 30 минут. Очередь, лимиты хоста и backoff увеличивают фактические пробелы; проверяйте `remotePolling` в `/api/v1/stats`. [Границы](measurement-limits.ru.md) разделяют настроенную частоту и измеренное покрытие.
 
