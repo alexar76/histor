@@ -61,7 +61,9 @@ flowchart LR
 | `HISTOR_DATABASE_URL` | пусто (SQLite) | prod: `postgresql://…` — обязательно |
 | `HISTOR_OPERATOR_TOKEN` | пусто | prod: ≥ 24 символов; защищает `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; используется в бейджах, ленте, федерации |
-| `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = только по запросу оператора |
+| `HISTOR_CRAWL_INTERVAL_S` | `86400` | discovery реестра и пакеты; `0` = только по запросу оператора |
+| `HISTOR_REMOTE_INTERVAL_S` | `21600` | отдельная очередь remote HTTP, цель шесть часов; `0` возвращает remotes в суточный обход |
+| `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | цель 30 минут после как минимум двух наблюдавшихся изменений за семь дней; [границы измерений](measurement-limits.ru.md) |
 | `HISTOR_CRAWL_MIN_GAP_S` | `1800` | минимальная пауза после завершённого цикла перед следующим; в эту паузу снимается ежемесячный снимок (`deploy/export_dataset.sh`) |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | как часто между обходами перечитываются файлы заявлений издателей ([api](api.ru.md)); `0` = только при обходе |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: новый экземпляр ждёт один интервал до первого обхода |
@@ -78,6 +80,8 @@ flowchart LR
 | `HISTOR_OPENROUTER_API_KEY` | пусто | ключ OpenRouter (или `OPENROUTER_API_KEY`); остаётся в `.env` хоста, не в образе |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | потолок платных вызовов за обход. `0` — выключено; считаются только различные наборы (общий или уже оценённый переиспользуется бесплатно) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | смысловой языконезависимый классификатор; вердикт справочный и не попадает в подписанный лог |
+
+Remote polling наблюдает выборку, не каждый переход: A→B→A между проверками невидимо. Отдельная remote-очередь не означает переустановку пакетов каждые 30 минут. Очередь, лимиты хоста и backoff увеличивают фактические пробелы; проверяйте `remotePolling` в `/api/v1/stats`. [Границы](measurement-limits.ru.md) разделяют настроенную частоту и измеренное покрытие.
 
 ## Миграции
 

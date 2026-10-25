@@ -2,9 +2,11 @@
 
 > 🌐 [English](tool-list-cost.md) · [Русский](tool-list-cost.ru.md) · [Español](tool-list-cost.es.md) · [Français](tool-list-cost.fr.md) · **中文**
 
-客户端连接的每个 MCP 服务器都会列出自己的工具：每个工具有名称、描述和输入 schema。无论用户问什么，客户端都会把这份列表放进每一次模型请求的提示词里。我们 12,915 个软件包调查的一位读者（Paul Irolla）建议用 token 来算这笔账。HISTOR 保存着它观察到的每个服务器当前的工具列表，所以我们算了。
+客户端连接的每个 MCP 服务器都会列出自己的工具：每个工具有名称、描述和输入 schema。客户端可能发送完整列表、子集或按需加载 tools；本研究计数的是所说明的完整表示。我们 12,915 个软件包调查的一位读者（Paul Irolla）建议用 token 来算这笔账。HISTOR 保存着它观察到的每个服务器当前的工具列表，所以我们算了。
 
 ## 数字
+
+Raju 的 CI 需求有[独立完整公开示例](https://dev.to/alexar76/a-copyable-mcp-tool-cost-check-for-ci-with-passing-and-failing-examples-3hl5)：固定 CLI／tokenizer，分别检查总量、描述和 schema。正常方向退出 0；故意反向比较退出 1，不表示后续真实版本回退。估算不是账单：[测量边界](measurement-limits.zh.md) 说明客户端选择、缓存和实际用量记录。
 
 2026-10-19 的快照：日志中至少有一个工具的每个软件包（npm、PyPI）和每个远程服务器，各取其当前列表。列表按客户端发给模型的样子计数：每个工具为紧凑 JSON 的 `{name, description, input_schema}`。分词器为 `o200k_base`（tiktoken 0.12，GPT-4o 系列）。
 

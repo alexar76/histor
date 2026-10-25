@@ -1,5 +1,10 @@
 # Independent remote polling
 
+Interpretation essentials in five languages: [English](measurement-limits.md),
+[Русский](measurement-limits.ru.md), [Español](measurement-limits.es.md),
+[Français](measurement-limits.fr.md), [中文](measurement-limits.zh.md). This queue separates remote
+checks from package work; it cannot guarantee capture of every intermediate tool state.
+
 Registry discovery and npm/PyPI planning keep the daily `HISTOR_CRAWL_INTERVAL_S` schedule.
 Remote HTTP targets use a separate persistent queue and worker; a long package plan or sandbox
 run does not delay the next remote check. Manual `histor crawl` still observes both kinds.

@@ -109,8 +109,7 @@ la compilación si las publicadas se desvían de ellas.
 **Por qué terminó un paquete.** Una ejecución que acaba en `exited` se clasifica por lo que imprimió el
 paquete (`histor/exit_reasons.py`) y se guarda como `packageSignals.exit`: `needs-config` (con los
 nombres de variables que dio), `needs-arguments` (con un argumento de arranque como `serve` o
-`--transport=stdio` cuando su texto de uso lo ofrece), `sdk-incompatible` (escrito para MCP SDK 1.x y
-ejecutado con 2.x), `needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
+`--transport=stdio` cuando su texto de uso lo ofrece), `sdk-incompatible` (categoría heurística de fallo de importación/API, no prueba de la versión SDK instalada), `needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
 `broken-package`, `not-a-server` (código de salida 0), `silent`, `crashed`. Una ejecución que agota el
 tiempo sirviendo HTTP en lugar de stdio es `starts-http`, y la siguiente pasa `--transport=stdio`. Desde
 el observador 4 el informe guarda el código de salida y la salida estándar que no era protocolo: una CLI
@@ -124,14 +123,7 @@ entorno de ejecución (`PATH`, `NODE_OPTIONS`, `LD_*`, `PYTHON*`, …) y crea lo
 de trabajo para una ruta. Un paquete que termina pidiendo un Node más reciente (`needs-newer-node`) se ejecuta de nuevo en `histor-node:24`, la LTS actual, y su página lo indica. Se registra adónde se envió una clave de relleno (`envKeyDestinations`): a su
 propia API o a otro sitio.
 
-**Servidores rotos por MCP SDK 2.0.** Un servidor PyPI escrito para `mcp` 1.x (`from mcp.server.fastmcp import
-FastMCP`) cuya dependencia no está fijada por debajo de 2 falla al importar desde que `mcp` 2.0.0
-(2026-07-28) renombró FastMCP. Su estado sigue siendo el de una instalación nueva (`exited`,
-`sdk-incompatible`); el siguiente rastreo arranca la misma versión otra vez con pip limitado a `mcp<2`
-(la lista fija del observador — HISTOR nunca envía una cadena de requisitos) y guarda el resultado junto
-al registro como `packageSignals.legacy`: estado, herramientas, coincidencias de patrones de WARDEN y
-comportamiento en el sandbox. No emite ninguna etiqueta y nunca pasa a ser el conjunto de herramientas
-del objetivo. Una versión nueva se ejecuta primero como instalación nueva.
+**Fallos relacionados con SDK y repetición diagnóstica.** `sdk-incompatible` clasifica el texto impreso, no demuestra su causa. El clasificador antiguo también incluía extras ausentes y errores MCP 1/Pydantic cuando el traceback mencionaba FastMCP; la categoría no prueba que una dependencia sin límite instalara MCP 2. El registro principal conserva la instalación nueva. Repetir la misma versión con la restricción fija `mcp<2` del observador es diagnóstico, no prueba de cómo funcionaba cualquier instalación histórica. `packageSignals.legacy` mantiene aparte estado, tools, patrones WARDEN y comportamiento: no emite etiqueta ni sustituye el conjunto del objetivo. Las versiones nuevas se ejecutan primero sin esa restricción diagnóstica. [Revisión de 292 paquetes y límites](measurement-limits.es.md): recuperaciones, extras declarados, controles que fallan y versiones/autenticación no disponibles.
 
 **Qué no se vuelve a ejecutar.** Una versión que terminó en `exited`, `no-entry-point`, `no-wheel`,
 `not-found` o `protocol` con el observador actual, sin nada nuevo que aportar, espera a una nueva versión

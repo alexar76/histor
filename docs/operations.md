@@ -82,6 +82,8 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | paid-call ceiling per crawl; with independent remote polling, also a shared durable ceiling per UTC day. `0` disables the classifier; cached verdicts are free |
 | `HISTOR_CLASSIFIER_MODEL` / `_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | — / `https://openrouter.ai/api/v1` / `30` / `60` | the meaning-based, language-independent classifier; its verdict is advisory and never enters the signed log |
 
+Remote polling observes samples, not every transition: A→B→A between checks is invisible. The independent remote queue does not turn package planning into 30-minute reinstallations. Backlog, host limits and failure backoff affect achieved gaps; use `remotePolling` in `/api/v1/stats`. [Interpretation limits](measurement-limits.md) distinguish configured cadence from measured coverage.
+
 ## Migrations
 
 ```mermaid

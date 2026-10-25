@@ -9,6 +9,8 @@ perfil sobre servidores reales.
 
 ## El sujeto
 
+Las vistas de números enmascarados o espacios ayudan a revisar, sin sustituir el digest MTL canónico literal. Una edición numérica no es necesariamente cosmética: puede cambiar el precio sin cambiar el esquema. Separe descripciones, esquemas, composición, indicadores solapados y evidencia ausente: [límites de medición](measurement-limits.es.md).
+
 Una etiqueta trata sobre el par **(identidad del servidor, conjunto de herramientas anunciado)**: no
 sobre el código, ni sobre el paquete, ni sobre quien lo publica. El sujeto es un MCP Server Descriptor:
 

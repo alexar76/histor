@@ -109,7 +109,7 @@ when the published ones drift from them.
 **Why a package exited.** A run that ends with `exited` is classified from what the package printed
 (`histor/exit_reasons.py`) and kept as `packageSignals.exit`: `needs-config` (with the variable names
 it gave), `needs-arguments` (with a start argument such as `serve` or `--transport=stdio` when its
-usage text offers one), `sdk-incompatible` (written for MCP SDK 1.x and run with 2.x),
+usage text offers one), `sdk-incompatible` (heuristic import/API failure category, not proof of an installed SDK version),
 `needs-other-os`, `needs-glibc`, `needs-terminal`, `needs-program`, `needs-service`, `needs-network`,
 `broken-package`, `not-a-server` (exit code 0), `silent`, `crashed`. A run that times out serving HTTP
 instead of stdio is `starts-http`, and the next one passes `--transport=stdio`. Since observer 4 the
@@ -122,13 +122,7 @@ placeholders for those names — and, from the first run, for the variables its 
 address on `histor-trap.invalid` for a URL, the working directory for a path. A package that exits asking for a newer Node (`needs-newer-node`) runs again on `histor-node:24`, the current LTS, and its page says so. Where a placeholder key
 was sent is recorded (`envKeyDestinations`): to its own API, or somewhere else.
 
-**Servers broken by MCP SDK 2.0.** A PyPI server written for `mcp` 1.x (`from mcp.server.fastmcp import
-FastMCP`) whose dependency is not pinned below 2 crashes on import since `mcp` 2.0.0 (2026-07-28)
-renamed FastMCP. Its status stays what a fresh install gets (`exited`, `sdk-incompatible`); the next
-crawl starts the same version once more with pip held to `mcp<2` (the observer's fixed pin list —
-HISTOR never sends a requirement string) and keeps the result beside the record as
-`packageSignals.legacy`: status, tools, WARDEN pattern matches and sandbox behaviour. It issues no
-label and never becomes the target's tool set. A new version runs as a fresh install first.
+**SDK-related failures and a diagnostic retry.** `sdk-incompatible` classifies printed failure text, not a proven dependency cause. The old classifier also grouped missing extras and MCP 1/Pydantic failures when a traceback mentioned FastMCP; the category alone does not prove that an unbounded dependency installed MCP 2. The primary record stays the result of its fresh installation. A separate retry of the same version with the observer's fixed `mcp<2` constraint is diagnostic, not evidence of how every historical install ran. Its `packageSignals.legacy` status, tools, WARDEN pattern matches and sandbox behaviour remain separate: no label is issued and that list never replaces the target's tool set. New versions run fresh first. The [292-package follow-up and limits](measurement-limits.md) separate newer-release recovery, declared extras, failing controls and unavailable/authenticated cases.
 
 **What is not run again.** A version that ended `exited`, `no-entry-point`, `no-wheel`, `not-found`
 or `protocol` under the current observer, with nothing new to supply, waits for a new version or a

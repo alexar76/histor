@@ -53,7 +53,9 @@ flowchart LR
 | `HISTOR_DATABASE_URL` | 空（SQLite） | prod：`postgresql://…`——必填 |
 | `HISTOR_OPERATOR_TOKEN` | 空 | prod：≥ 24 个字符；保护 `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod：`https://…`；用于徽章、订阅源、联邦 |
-| `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = 仅在运营方请求时抓取 |
+| `HISTOR_CRAWL_INTERVAL_S` | `86400` | 注册表发现与软件包；`0` = 仅在运营方请求时抓取 |
+| `HISTOR_REMOTE_INTERVAL_S` | `21600` | 独立远程 HTTP 队列，目标六小时；`0` 恢复每日 remote 抓取 |
+| `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | 七天内两次已观察变化后，目标 30 分钟；[测量边界](measurement-limits.zh.md) |
 | `HISTOR_CRAWL_MIN_GAP_S` | `1800` | 一轮完成后到下一轮开始前的最短间隔；每月快照（`deploy/export_dataset.sh`）在这段间隔里生成 |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | 两次爬取之间读取发布者声明文件的间隔（[api](api.zh.md)）；`0` = 仅在爬取时读取 |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`：新实例会先等待一个间隔，再进行首次抓取 |
@@ -70,6 +72,8 @@ flowchart LR
 | `HISTOR_OPENROUTER_API_KEY` | 空 | OpenRouter 密钥（或 `OPENROUTER_API_KEY`）；留在主机 `.env`，不进镜像 |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | 每次抓取的付费调用上限。`0` 表示关闭；只计不同的工具集（共享或已判定过的免费复用） |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | 基于语义、与语言无关的分类器；其判定为参考，绝不进入已签名日志 |
+
+轮询观察采样，不是每次变化：两次检查之间的 A→B→A 不可见。独立 remote 队列不表示每 30 分钟重装软件包。积压、每主机限制和 backoff 会拉长实际间隔；查看 `/api/v1/stats` 的 `remotePolling`。[边界说明](measurement-limits.zh.md) 区分配置频率与已测覆盖。
 
 ## 迁移
 

@@ -3,11 +3,12 @@
 > 🌐 [English](tool-list-cost.md) · [Русский](tool-list-cost.ru.md) · [Español](tool-list-cost.es.md) · **Français** · [中文](tool-list-cost.zh.md)
 
 Chaque serveur MCP auquel un client se connecte énumère ses outils : pour chacun, un nom, une description et un
-schéma d’entrée. Le client met cette liste dans le prompt de chaque requête au modèle, quoi que demande
-l’utilisateur. Un lecteur de notre étude de 12 915 paquets (Paul Irolla) a proposé de le compter en tokens. HISTOR
+schéma d’entrée. Le client peut envoyer la liste complète, un sous-ensemble ou charger les tools à la demande ; cette étude compte la représentation complète indiquée. Un lecteur de notre étude de 12 915 paquets (Paul Irolla) a proposé de le compter en tokens. HISTOR
 conserve la liste d’outils actuelle de chaque serveur qu’il observe : nous avons compté.
 
 ## Les chiffres
+
+Pour le CI de Raju, l’[exemple public autonome](https://dev.to/alexar76/a-copyable-mcp-tool-cost-check-for-ci-with-passing-and-failing-examples-3hl5) vérifie séparément total, descriptions et schémas avec CLI/tokenizer épinglés. Le sens normal retourne 0 ; l’inversion volontaire retourne 1, sans établir une régression ultérieure. Ces estimations ne sont pas des factures : les [limites](measurement-limits.fr.md) couvrent sélection des tools, cache et relevés d’usage réels.
 
 Instantané du 2026-10-19 : chaque paquet (npm, PyPI) et chaque serveur distant du journal ayant au moins un outil,
 avec sa liste actuelle. Une liste est comptée telle qu’un client l’envoie à un modèle : pour chaque outil,

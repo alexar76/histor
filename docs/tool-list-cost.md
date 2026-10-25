@@ -2,12 +2,14 @@
 
 > 🌐 **English** · [Русский](tool-list-cost.ru.md) · [Español](tool-list-cost.es.md) · [Français](tool-list-cost.fr.md) · [中文](tool-list-cost.zh.md)
 
-Every MCP server a client connects lists its tools: a name, a description and an input schema for each. The client
-puts that list into the prompt of every model request, whatever the user asks. A reader of our survey of 12,915
+Every MCP server a client connects lists its tools: a name, a description and an input schema for each. A client
+may send the full list, a selected subset or load tools on demand; this study counts the stated full-list representation. A reader of our survey of 12,915
 packages (Paul Irolla) asked for this in tokens. HISTOR keeps the current tool list of every server it observes, so
 we counted.
 
 ## The numbers
+
+For Raju's CI workflow, the [self-contained public example](https://dev.to/alexar76/a-copyable-mcp-tool-cost-check-for-ci-with-passing-and-failing-examples-3hl5) checks total, descriptions and schemas independently with pinned CLI/tokenizer versions. Its forward comparison exits 0; the intentionally reversed comparison exits 1, not evidence of a later regression. These estimates are not invoices: [measurement limits](measurement-limits.md) cover client selection, cache behavior and actual usage records.
 
 Snapshot of 2026-10-19: every package (npm, PyPI) and every remote server in the log with at least one tool, each
 with its current list. A list is counted as a client sends it to a model: for each tool `{name, description,

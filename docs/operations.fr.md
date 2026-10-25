@@ -64,7 +64,9 @@ rapporté en entier ; sous SQLite et PostgreSQL. Sur le code d'avant ce changeme
 | `HISTOR_DATABASE_URL` | vide (SQLite) | prod : `postgresql://…` — obligatoire |
 | `HISTOR_OPERATOR_TOKEN` | vide | prod : ≥ 24 caractères ; protège `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod : `https://…` ; utilisé dans les badges, le flux, la fédération |
-| `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = uniquement à la demande de l’opérateur |
+| `HISTOR_CRAWL_INTERVAL_S` | `86400` | découverte du registre et paquets ; `0` = uniquement à la demande de l’opérateur |
+| `HISTOR_REMOTE_INTERVAL_S` | `21600` | file HTTP distante indépendante, cible de six heures ; `0` remet les remotes au cycle quotidien |
+| `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | cible de 30 minutes après deux changements observés sur sept jours ; [limites](measurement-limits.fr.md) |
 | `HISTOR_CRAWL_MIN_GAP_S` | `1800` | le délai minimal après un cycle terminé avant le suivant ; l’instantané mensuel (`deploy/export_dataset.sh`) est pris dans cet intervalle |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | fréquence de lecture, entre deux passages, des fichiers de déclaration des éditeurs ([api](api.fr.md)) ; `0` = seulement au passage |
 | `HISTOR_CRAWL_ON_START` | `1` | `0` : une instance neuve attend un intervalle avant sa première exploration (crawl) |
@@ -81,6 +83,8 @@ rapporté en entier ; sous SQLite et PostgreSQL. Sur le code d'avant ce changeme
 | `HISTOR_OPENROUTER_API_KEY` | vide | clé OpenRouter (ou `OPENROUTER_API_KEY`) ; reste dans le `.env` de l'hôte, jamais dans l'image |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | plafond d'appels payants par passage. `0` le désactive ; seuls les ensembles distincts comptent (un ensemble partagé ou déjà jugé est réutilisé sans frais) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | le classifieur sémantique, indépendant de la langue ; son verdict est indicatif et n'entre jamais dans le journal signé |
+
+Le sondage observe des échantillons, pas chaque transition : A→B→A entre deux lectures est invisible. La file distante indépendante ne réinstalle pas les paquets toutes les 30 minutes. Retards, limites par hôte et backoff allongent les écarts ; consulter `remotePolling` dans `/api/v1/stats`. Les [limites](measurement-limits.fr.md) distinguent cadence configurée et couverture mesurée.
 
 ## Migrations
 

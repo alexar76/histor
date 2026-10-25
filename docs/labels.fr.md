@@ -9,6 +9,8 @@ premier émetteur de ce profil face à de vrais serveurs.
 
 ## Le sujet
 
+Les vues masquant nombres ou espaces aident la revue sans remplacer le digest MTL canonique littéral. Une modification numérique n’est pas nécessairement cosmétique : le prix peut changer sans le schéma. Distinguer descriptions, schémas, composition, indicateurs superposés et preuves manquantes : [limites des mesures](measurement-limits.fr.md).
+
 Une étiquette porte sur la paire **(identité du serveur, ensemble d’outils annoncé)** — pas sur le
 code, ni sur le paquet, ni sur l’éditeur. Le sujet est un descripteur de serveur MCP (MCP Server
 Descriptor) :

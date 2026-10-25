@@ -9,6 +9,8 @@ real servers.
 
 ## The subject
 
+Number-masked and whitespace-only review views do not replace the literal canonical MTL digest. Numeric edits are not automatically cosmetic: a per-call price can change without a schema change. Separate description, schema and membership counts, their overlapping flags and missing evidence: [measurement limits](measurement-limits.md).
+
 A label is about the pair **(server identity, advertised tool set)** — not the code, not the
 package, not the publisher. The subject is an MCP Server Descriptor:
 

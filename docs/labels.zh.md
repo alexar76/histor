@@ -8,6 +8,8 @@ HISTOR 签发的每个标签都是 [MTL/1](https://github.com/alexar76/aicom/blo
 
 ## 主体
 
+数字遮蔽／空白审核视图不替代按原文字面规范化的 MTL digest。数字编辑不一定只是格式变化：调用价格可变化而 schema 不变。应区分描述、schema、工具组成、可重叠标志及缺失证据：[测量边界](measurement-limits.zh.md)。
+
 标签所针对的是这一对：**（服务器身份，公布的工具集）**——不是代码，不是软件包，也不是发布者。主体是
 一个 MCP 服务器描述符（MCP Server Descriptor）：
 

@@ -63,7 +63,9 @@ ciclo informado entero; en SQLite y PostgreSQL. Con el código anterior a este c
 | `HISTOR_DATABASE_URL` | vacío (SQLite) | prod: `postgresql://…` — obligatorio |
 | `HISTOR_OPERATOR_TOKEN` | vacío | prod: ≥ 24 caracteres; protege `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; se usa en insignias, feed y federación |
-| `HISTOR_CRAWL_INTERVAL_S` | `86400` | `0` = solo a petición del operador |
+| `HISTOR_CRAWL_INTERVAL_S` | `86400` | descubrimiento del registro y paquetes; `0` = solo a petición del operador |
+| `HISTOR_REMOTE_INTERVAL_S` | `21600` | cola HTTP remota independiente, objetivo de seis horas; `0` devuelve remotes al ciclo diario |
+| `HISTOR_REMOTE_CHANGED_INTERVAL_S` / `HISTOR_REMOTE_CHANGE_WINDOW_S` | `1800` / `604800` | objetivo de 30 minutos tras dos cambios observados en siete días; [límites](measurement-limits.es.md) |
 | `HISTOR_CRAWL_MIN_GAP_S` | `1800` | el tiempo mínimo tras un ciclo terminado antes de empezar el siguiente; en ese hueco se toma la instantánea mensual (`deploy/export_dataset.sh`) |
 | `HISTOR_DECLARATION_REFRESH_S` | `3600` | cada cuánto se leen entre rastreos los archivos de declaración de los editores ([api](api.es.md)); `0` = solo en el rastreo |
 | `HISTOR_CRAWL_ON_START` | `1` | `0`: una instancia nueva espera un intervalo antes de su primer rastreo |
@@ -80,6 +82,8 @@ ciclo informado entero; en SQLite y PostgreSQL. Con el código anterior a este c
 | `HISTOR_OPENROUTER_API_KEY` | vacío | clave de OpenRouter (o `OPENROUTER_API_KEY`); permanece en el `.env` del host, no en la imagen |
 | `HISTOR_CLASSIFIER_MAX_PER_CRAWL` | `0` | tope de llamadas de pago por rastreo. `0` lo desactiva; solo cuentan conjuntos distintos (uno compartido o ya evaluado se reutiliza gratis) |
 | `HISTOR_CLASSIFIER_BASE_URL` / `_TIMEOUT_S` / `_MAX_TOOLS` | `https://openrouter.ai/api/v1` / `30` / `60` | el clasificador semántico e independiente del idioma; su veredicto es informativo y nunca entra en el registro firmado |
+
+El sondeo observa muestras, no todas las transiciones: A→B→A entre lecturas es invisible. La cola remota independiente no reinstala paquetes cada 30 minutos. Retrasos, límites por host y backoff alargan los huecos; revise `remotePolling` en `/api/v1/stats`. Los [límites](measurement-limits.es.md) separan frecuencia configurada de cobertura medida.
 
 ## Migraciones
 

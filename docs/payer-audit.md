@@ -2,7 +2,13 @@
 
 `histor payer-audit` is a local, deterministic report generator. It keeps payment totals and
 behavioural indications separate. It does not identify people, establish buyer intent or block
-payments. This command is **unreleased source code**; it is not part of the existing PyPI 0.4.0 build.
+payments. This command is **unreleased source code**. The PyPI check on 2026-10-25 returned 0.3.1,
+which does not include it; a local version string does not establish publication.
+
+Essential interpretation is available in five languages: [English](measurement-limits.md),
+[Русский](measurement-limits.ru.md), [Español](measurement-limits.es.md),
+[Français](measurement-limits.fr.md), [中文](measurement-limits.zh.md). Settlement does not establish
+delivery or buyer intent; attributed source claims, unknowns and the full payment totals remain separate.
 
 We maintain HISTOR and AIMarket. This implementation and the textokit example were prepared with
 AI assistance. The example uses public data; the source-reported labels are not independent audits.
@@ -111,5 +117,5 @@ invalid input. Collector: **0** for a complete transfer window; **1** for an exp
 incomplete window saved to disk; **2** for a fatal input/RPC error. Settlement availability is
 reported independently from transfer-window completeness. Inputs are never overwritten.
 
-[The textokit five-payer report](../../docs/growth/textokit-five-payers-2026-10-25.md) includes
+[The public textokit five-payer report](https://dev.to/alexar76/five-wallets-paid-an-x402-seller-what-can-we-say-about-demand-5gek) includes
 the actual run and its limitations. No public API route or automatic crawler label is added.
