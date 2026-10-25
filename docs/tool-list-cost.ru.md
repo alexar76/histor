@@ -118,6 +118,8 @@ histor tool-cost check --baseline tool-cost.json --stdio "node dist/index.js" --
 сокращение с 5 565 до 3 776 токенов и проверяет оба исхода CI: успешный и намеренно обращённый,
 завершающийся ошибкой. Он использует неизменяемые публичные снимки и не вызывает tools textokit.
 
+[Самодостаточная публичная инструкция](https://dev.to/alexar76/a-copyable-mcp-tool-cost-check-for-ci-with-passing-and-failing-examples-3hl5) содержит полный скрипт, фиксированные версии и команды успешной/провальной проверки; клонировать репозиторий не нужно.
+
 ## Повторить
 
 [`scripts/tool_list_tokens.py`](../scripts/tool_list_tokens.py) читает выгрузку текущих списков инструментов
