@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Every observation of a package records the version it ran.** Only the target kept a version (the
+  last one), so a history could not be matched to releases: cross-checking 26 packages against the
+  RugSnare pins on 2026-10-26 took npm publish times to guess which version served which list.
+  Migration 014 adds `observations.package_version` and, on a change, `from_package_version` (the
+  last version that served the old list) and `to_package_version`. The server page's timeline gives
+  `packageVersion` per row and no longer folds two versions that served the same list into one row;
+  `/api/v1/changes` and `/cost` give both versions; the desk shows them. Snapshots gain
+  `package_observations.jsonl.gz`, every run of a package with its version, and the two version
+  fields in `changes`. Rows from before the migration stay `null`: the version they ran was not
+  recorded, and a guess is not data.
 - **Pages traced before `gvisor-trace/9` are traced once more.** Readers 2–8 did not record renames,
   links or creat, nor report `.pth` files or code written into the installed package after install
   as persistence (Vulnetix GCVE-110-PYPI-2026-022091), and nothing in their traces says which pages

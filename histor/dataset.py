@@ -11,6 +11,8 @@ routes, ``/api/v1/changes``); a snapshot puts it in files a researcher can load 
     tool_extras.jsonl.gz      per tool, the members MTL/1 does not digest: annotations, _meta,
                               title, icons and the rest (histor.extras)
     extras_changes.jsonl.gz   every change between two of those, oldest first
+    package_observations.jsonl.gz  every run of an npm/PyPI package, oldest first, with the version
+                              it ran (recorded since migration 014, 2026-10-26)
     pattern-set.json          the rules the scans ran (and record-set.json, the name records)
     manifest.json             counts, SHA-256 of every file, the signed tree head the export
                               started under — signed by the log's own key (type histor.dataset/v1)
@@ -114,6 +116,13 @@ def _server_row(t: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _has_package_versions(store: Store) -> bool:
+    """Whether the database has migration 014: observations and changes carry the package version."""
+    with store.db.read() as tx:
+        row = tx.one("SELECT 1 AS x FROM schema_migrations WHERE version >= 14 LIMIT 1")
+    return row is not None
+
+
 def _has_extras(store: Store) -> bool:
     """Whether the database has migration 011 (histor.extras). The export can run against a log the
     service has not migrated yet: then the two extras files are written empty."""
@@ -202,9 +211,31 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
             "id": c["id"], "serverId": c["target_id"], "observedAt": c["observed_at"],
             "fromToolSetDigest": c["from_toolset"], "toToolSetDigest": c["to_toolset"],
             "fromSubjectDigest": c["from_subject"], "toSubjectDigest": c["to_subject"],
+            "fromPackageVersion": c.get("from_package_version"), "toPackageVersion": c.get("to_package_version"),
             "labelId": c["label_id"], "summaryJson": c["summary"],
         })
     changes.close()
+
+    # Every run of a package, failed ones included, with the version it ran: which version served
+    # which list. Remote servers are left out (a daily read each is millions of rows and says no more
+    # than their changes do). packageVersion is null on rows from before migration 014.
+    package_observations = _Writer(d / "package_observations.jsonl.gz")
+    if _has_package_versions(store):
+        for o in _pages(store, "SELECT o.id, o.target_id, o.observed_at, o.status, o.package_version, o.toolset, "
+                        "o.subject, o.extras, o.tool_count, o.server_name, o.server_version FROM observations o "
+                        "JOIN targets t ON t.id = o.target_id WHERE t.transport = 'stdio' AND o.id > ? "
+                        "ORDER BY o.id LIMIT ?", "id", 0, PAGE):
+            if o["target_id"] in excluded:
+                continue
+            if o["toolset"]:
+                wanted.add(o["toolset"])
+            package_observations.write({
+                "id": o["id"], "serverId": o["target_id"], "observedAt": o["observed_at"], "status": o["status"],
+                "packageVersion": o["package_version"], "toolSetDigest": o["toolset"], "subjectDigest": o["subject"],
+                "toolExtrasDigest": o["extras"], "toolCount": o["tool_count"], "serverName": o["server_name"],
+                "serverVersion": o["server_version"],
+            })
+    package_observations.close()
 
     # Annotations, _meta and the other members MTL/1 does not digest, and every change between two of them.
     extras_changes = _Writer(d / "extras_changes.jsonl.gz")
@@ -261,7 +292,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
             (d / name).write_text(body, encoding="utf-8")
             extra.append(name)
 
-    writers = (servers, toolsets, changes, scans, classifications, tool_extras, extras_changes)
+    writers = (servers, toolsets, changes, scans, classifications, tool_extras, extras_changes, package_observations)
     files = {w.path.name: {"sha256": _sha256(w.path), "bytes": w.path.stat().st_size, "rows": w.rows} for w in writers}
     for name in extra:
         files[name] = {"sha256": _sha256(d / name), "bytes": (d / name).stat().st_size}
@@ -309,6 +340,28 @@ def _extras_fields(f: dict[str, Any]) -> str:
   `destructiveHint: true`."""
 
 
+def _package_change_fields(f: dict[str, Any]) -> str:
+    """The changes line about package versions, when the snapshot records them."""
+    if "package_observations.jsonl.gz" not in f:
+        return ""
+    return """
+  For a package, `fromPackageVersion` → `toPackageVersion`: the last version that served the old list
+  and the one that served the new list (null for remote servers and before 2026-10-26)."""
+
+
+def _package_observation_fields(f: dict[str, Any]) -> str:
+    """The card's line for package_observations, when the snapshot has it."""
+    if "package_observations.jsonl.gz" not in f:
+        return ""
+    return """
+- **package_observations** — every run of an npm/PyPI package, failed ones included, oldest first:
+  `serverId`, `observedAt`, `status`, `packageVersion` (the version the sandbox ran), `toolSetDigest`
+  (join to toolsets; null when the run failed), `subjectDigest`, `toolExtrasDigest`, `toolCount`, and
+  `serverName`/`serverVersion` as the server reported them in `initialize` (often not the package
+  version). `packageVersion` is recorded since 2026-10-26; older rows have it null. Remote servers
+  are not in this file: their record is their changes."""
+
+
 def _mb(n: int) -> str:
     return f"{n / 1_000_000:,.0f} MB" if n >= 1_000_000 else f"{n / 1000:,.0f} kB"
 
@@ -330,7 +383,8 @@ def dataset_card(m: dict[str, Any], doi: str | None = None) -> str:
     configs = "\n".join(
         f"- config_name: {name.split('.')[0]}\n  data_files: {name}"
         for name in ("servers.jsonl.gz", "toolsets.jsonl.gz", "changes.jsonl.gz", "scans.jsonl.gz",
-                     "classifications.jsonl.gz", "tool_extras.jsonl.gz", "extras_changes.jsonl.gz")
+                     "classifications.jsonl.gz", "tool_extras.jsonl.gz", "extras_changes.jsonl.gz",
+                     "package_observations.jsonl.gz")
         if name in f  # a card regenerated for an older snapshot names only the files it has
     )
     return f"""---
@@ -392,11 +446,11 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
 - **toolsets** — `digest`, `toolsJson`: per tool the four members the digest covers, as served
   (`name`, `description`, `inputSchema`, and `outputSchema` when sent).{_extras_fields(f)}
 - **changes** — `serverId`, `observedAt`, `fromToolSetDigest` → `toToolSetDigest`, `summaryJson`
-  (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).
+  (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).{_package_change_fields(f)}
 - **scans** — `toolSetDigest`, `patternSet`, `matchesJson` (rule code, tier, severity, tool, where).
   The rules are in `pattern-set.json`. A match is a pattern hit to look at, not a verdict.
 - **classifications** — `toolSetDigest`, `model`, `verdictJson`: an LLM's advisory reading of the
-  tool set. Not reproducible, so it never enters the signed log.
+  tool set. Not reproducible, so it never enters the signed log.{_package_observation_fields(f)}
 
 ## How a change is counted
 

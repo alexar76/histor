@@ -64,6 +64,25 @@ def test_remote_queue_upgrade_preserves_existing_run_membership(backend, monkeyp
         assert len(rows) == 1 and rows[0]["attempted_at"] == "2026-10-20T02:00:00Z"
 
 
+def test_014_adds_package_versions_and_leaves_older_rows_unknown(backend, monkeypatch):
+    """An upgraded log keeps its rows; what they ran was not recorded, so it stays NULL, not guessed."""
+    import histor.migrations as m
+
+    monkeypatch.setattr(m, "MIGRATIONS", m.MIGRATIONS[:13])
+    apply_migrations(backend)
+    with backend.transaction() as tx:
+        tx.execute("INSERT INTO observations(target_id, observed_at, status, toolset) VALUES(?, ?, 'ok', ?)",
+                   ("pkg", "2026-10-25T01:00:00Z", "sha256-a"))
+        tx.execute("INSERT INTO changes(target_id, observed_at, from_toolset, to_toolset, summary) VALUES(?, ?, ?, ?, ?)",
+                   ("pkg", "2026-10-25T01:00:00Z", "sha256-a", "sha256-b", "{}"))
+    monkeypatch.undo()
+    assert apply_migrations(backend) == 14
+    with backend.read() as tx:
+        assert tx.one("SELECT package_version FROM observations WHERE target_id='pkg'")["package_version"] is None
+        row = tx.one("SELECT from_package_version, to_package_version FROM changes WHERE target_id='pkg'")
+    assert row["from_package_version"] is None and row["to_package_version"] is None
+
+
 def test_a_failed_transaction_leaves_nothing_behind(backend):
     apply_migrations(backend)
     with pytest.raises(RuntimeError), backend.transaction() as tx:

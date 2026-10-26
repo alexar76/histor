@@ -16,7 +16,7 @@ import pytest
 from histor.packages import SANDBOX_ERROR, PackageReader, package_key, parse_package
 from histor.registry import OPT_OUT, Target, target_id, targets_from_servers
 from histor.subject import REGISTRY_OFFICIAL
-from tests.conftest import tool
+from tests.conftest import make_target, tool
 
 PIN = "ab" * 32
 
@@ -336,6 +336,82 @@ def test_a_crawl_runs_a_version_once_and_a_new_version_that_changes_the_tools_is
     assert answer["match"] == "different"
     assert "what your machine has and HISTOR's sandbox has not" in answer["note"]
     assert "at this endpoint" not in answer["note"]
+
+
+def test_every_observation_names_its_version_and_a_change_the_two_it_lies_between(world, tmp_path):
+    """Migration 014: which version served which list, in the store, the API and the snapshot.
+
+    1.0.1 is an unchanged release (same list as 1.0.0), so the change at 1.0.2 lies between 1.0.1 and
+    1.0.2, and the timeline keeps 1.0.0 and 1.0.1 as two rows though their list and subject are one."""
+    from fastapi.testclient import TestClient
+
+    from histor import dataset
+    from histor.app import create_app
+
+    s = world["services"]
+    fake = FakePackages()
+    s.crawler.packages = fake
+    t = package_target()
+    world["targets"].append(t)
+    v1 = [tool("read_graph", "Read the knowledge graph.")]
+    v2 = [tool("read_graph", "Read the knowledge graph."), tool("write_graph", "Write to the knowledge graph.")]
+    for version, tools in (("1.0.0", v1), ("1.0.1", v1), ("1.0.2", v2)):
+        fake.latest["npm:@a/mem"] = version
+        fake.tools[("npm:@a/mem", version)] = tools
+        s.crawler.run()
+        world["clock"].advance(days=1)
+    assert [r[2] for r in fake.runs] == ["1.0.0", "1.0.1", "1.0.2"]
+
+    history = s.store.history(t.id)
+    assert [h["package_version"] for h in history] == ["1.0.2", "1.0.1", "1.0.0"]
+    (change,) = s.store.changes(target_id=t.id)
+    assert (change["from_package_version"], change["to_package_version"]) == ("1.0.1", "1.0.2")
+
+    with TestClient(create_app(s)) as client:
+        page = client.get(f"/api/v1/servers/{t.id}").json()
+        assert [(r["packageVersion"], r["count"]) for r in page["timeline"]] == [("1.0.2", 1), ("1.0.1", 1), ("1.0.0", 1)]
+        assert page["timeline"][1]["toolSetDigest"] == page["timeline"][2]["toolSetDigest"]
+        assert page["changes"][0]["to_package_version"] == "1.0.2"
+        one = client.get(f"/api/v1/changes/{change['id']}").json()
+        assert (one["from_package_version"], one["to_package_version"]) == ("1.0.1", "1.0.2")
+
+    out = tmp_path / "snap"
+    manifest = dataset.export(s.store, s.key, out, now="2026-10-26T12:00:00Z")
+    runs = [r for r in rows(out / "package_observations.jsonl.gz") if r["serverId"] == t.id]
+    assert [(r["packageVersion"], r["status"]) for r in runs] == [("1.0.0", "ok"), ("1.0.1", "ok"), ("1.0.2", "ok")]
+    assert runs[0]["toolSetDigest"] == runs[1]["toolSetDigest"] != runs[2]["toolSetDigest"]
+    sets = {r["digest"] for r in rows(out / "toolsets.jsonl.gz")}
+    assert {r["toolSetDigest"] for r in runs} <= sets, "every list a run served is in the snapshot"
+    (exported,) = [c for c in rows(out / "changes.jsonl.gz") if c["serverId"] == t.id]
+    assert (exported["fromPackageVersion"], exported["toPackageVersion"]) == ("1.0.1", "1.0.2")
+    assert manifest["files"]["package_observations.jsonl.gz"]["rows"] == len(runs)
+    card = (out / "README.md").read_text()
+    assert "package_observations" in card and "fromPackageVersion" in card
+
+
+def test_a_remote_server_has_no_package_observations_and_its_changes_no_versions(world, tmp_path):
+    from histor import dataset
+
+    s = world["services"]
+    world["mcp"].tools["/a"] = [tool("get_weather")]
+    world["targets"].append(make_target("io.example/weather", "/a"))
+    s.crawler.run()
+    world["clock"].advance(days=1)
+    world["mcp"].tools["/a"] = [tool("get_weather"), tool("add_city")]
+    s.crawler.run()
+    (change,) = s.store.changes()
+    assert change["from_package_version"] is None and change["to_package_version"] is None
+    assert all(h["package_version"] is None for h in s.store.history(change["target_id"]))
+    out = tmp_path / "snap"
+    dataset.export(s.store, s.key, out)
+    assert rows(out / "package_observations.jsonl.gz") == []
+
+
+def rows(path):
+    import gzip
+
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh]
 
 
 def test_a_sandbox_failure_is_ours_and_issues_no_label_about_the_package(world):

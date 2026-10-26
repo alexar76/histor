@@ -33,6 +33,8 @@ flowchart LR
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
 
+For a package, each `timeline` row carries `packageVersion`, the version that run was about (`serverVersion` is what the server said in `initialize`, often not the package version), and two versions are two rows even when they served the same list. Recorded since 2026-10-26; older rows have `null`.
+
 ## Changes
 
 | Method | Path | Returns |
@@ -45,6 +47,8 @@ flowchart LR
 | GET | `/feed.xml` | Atom feed of the latest 50 changes; `?watch=<id>,<id>,…` (up to 100 target ids, as `/check` and the server pages give them) keeps only those servers and packages — a subscription in any feed reader |
 
 Counted as [tool-list-cost.md](tool-list-cost.md) counts (`o200k_base`). A deployment without the `cost` extra answers these three with 503.
+
+For a package, a change also carries `from_package_version` and `to_package_version` (in `/cost`, `fromPackageVersion` and `toPackageVersion`): the last version that served the old list and the version that served the new one. Both are `null` for a remote server; `from_package_version` is `null` when the old list was last served before 2026-10-26.
 
 ## Labels and evidence
 

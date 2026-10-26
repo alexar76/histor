@@ -203,8 +203,8 @@ class Store:
     def history(self, target_id: str, limit: int = 400) -> list[dict[str, Any]]:
         with self.db.read() as tx:
             return tx.execute(
-                "SELECT observed_at, status, detail, subject, toolset, tool_count, server_name, server_version "
-                "FROM observations WHERE target_id=? ORDER BY observed_at DESC, id DESC LIMIT ?",
+                "SELECT observed_at, status, detail, subject, toolset, tool_count, server_name, server_version, "
+                "package_version FROM observations WHERE target_id=? ORDER BY observed_at DESC, id DESC LIMIT ?",
                 (target_id, limit),
             )
 

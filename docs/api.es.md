@@ -33,6 +33,8 @@ flowchart LR
 
 `<id>` son los primeros 16 caracteres hexadecimales de `sha256(name + "\n" + endpoint)`: estable, uno por remoto.
 
+Para un paquete, cada fila de `timeline` lleva `packageVersion`, la versión que se ejecutó en esa observación (`serverVersion` es lo que el servidor dijo en `initialize`, a menudo distinto de la versión del paquete), y dos versiones son dos filas aunque sirvieran la misma lista. Se registra desde el 2026-10-26; las filas anteriores tienen `null`.
+
 ## Cambios
 
 | Método | Ruta | Devuelve |
@@ -45,6 +47,8 @@ flowchart LR
 | GET | `/feed.xml` | feed Atom de los últimos 50 cambios; `?watch=<id>,<id>,…` (hasta 100 ids de destino, como los dan `/check` y las páginas de servidor) deja solo esos servidores y paquetes: una suscripción en cualquier lector de feeds |
 
 Contado como en [tool-list-cost.es.md](tool-list-cost.es.md) (`o200k_base`). Un despliegue sin el extra `cost` responde 503 a estas tres rutas.
+
+Para un paquete, un cambio lleva además `from_package_version` y `to_package_version` (en `/cost`, `fromPackageVersion` y `toPackageVersion`): la última versión que sirvió la lista anterior y la versión que sirvió la nueva. Ambas son `null` en un servidor remoto; `from_package_version` es `null` cuando la lista anterior se sirvió por última vez antes del 2026-10-26.
 
 ## Etiquetas y evidencia
 

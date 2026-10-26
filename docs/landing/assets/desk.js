@@ -522,7 +522,7 @@ async function serverView(id, done) {
   }
   if (data.changes?.length) {
     root.append(el("h3", { class: "block-h", text: t("js_h_changes") }));
-    for (const c of data.changes) root.append(el("div", { class: "result" }, el("p", { class: "warn-t mono", text: `${fmt(c.observed_at)} · ${t("js_changed")}` }), renderDiff(c.summary)));
+    for (const c of data.changes) root.append(el("div", { class: "result" }, el("p", { class: "warn-t mono", text: `${fmt(c.observed_at)} · ${t("js_changed")}${versions(c)}` }), renderDiff(c.summary)));
   }
   const clsByIndex = new Map();
   if (data.classifier?.findings) for (const f of data.classifier.findings) {
@@ -597,7 +597,8 @@ async function serverView(id, done) {
   for (const r of data.timeline) {
     const cls = r.status === "ok" ? "ok" : r.status === "undigestible" ? "chg" : "";
     tl.append(el("div", { class: `tl ${cls}` }, el("span", { class: "mono", text: `${fmt(r.from)}${r.count > 1 ? ` → ${fmt(r.until)} (×${r.count})` : ""}` }), " · ",
-      r.status, r.toolSetDigest ? ` · ${short(r.toolSetDigest, 18)}` : "", r.detail ? ` · ${r.detail}` : ""));
+      r.packageVersion ? `v${r.packageVersion} · ` : "", r.status, r.toolSetDigest ? ` · ${short(r.toolSetDigest, 18)}` : "",
+      r.detail ? ` · ${r.detail}` : ""));
   }
   root.append(tl);
   root.append(el("h3", { class: "block-h", text: t("js_h_labels") }));
@@ -623,11 +624,17 @@ async function changesView(done) {
       el("div", {}, el("a", { class: "nm", href: href(`/s/${c.target_id}`), "data-route": `/s/${c.target_id}`, text: c.title || c.name }),
         el("div", { class: "ep", text: c.endpoint })),
       el("span", { class: "state changed", text: `${fmt(c.observed_at)}` }));
-    const counts = el("p", { class: "mono faint", text: `+${s.added.length} −${s.removed.length} ~${s.modified.length}` });
+    const counts = el("p", { class: "mono faint", text: `+${s.added.length} −${s.removed.length} ~${s.modified.length}${versions(c)}` });
     if (s.newAddresses?.length) counts.append(" ", el("b", { class: "bad-t", text: `⚠ ${t("js_new_addresses")}: ${s.newAddressesTotal || s.newAddresses.length}` }));
     root.append(el("details", { class: "result" }, el("summary", {}, head, counts), renderDiff(s)));
   }
   done(root);
+}
+
+// A package change lies between two versions; the old one is unknown before 2026-10-26.
+function versions(c) {
+  if (!c.to_package_version) return "";
+  return ` · ${c.from_package_version ? `v${c.from_package_version}` : "?"} → v${c.to_package_version}`;
 }
 
 function savedHead() { try { return JSON.parse(localStorage.getItem("histor-sth") || "null"); } catch { return null; } }

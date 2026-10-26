@@ -34,6 +34,8 @@ flowchart LR
 `<id>` est formé des 16 premiers caractères hexadécimaux de `sha256(name + "\n" + endpoint)` —
 stable, un par entrée distante.
 
+Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version exécutée lors de cette observation (`serverVersion` est ce que le serveur a annoncé dans `initialize`, souvent différent de la version du paquet), et deux versions font deux lignes même si elles servaient la même liste. Enregistré depuis le 2026-10-26 ; les lignes plus anciennes ont `null`.
+
 ## Changements
 
 | Méthode | Chemin | Renvoie |
@@ -46,6 +48,8 @@ stable, un par entrée distante.
 | GET | `/feed.xml` | flux Atom des 50 derniers changements ; `?watch=<id>,<id>,…` (jusqu’à 100 identifiants de cible, tels que `/check` et les pages de serveur les donnent) ne garde que ces serveurs et paquets — un abonnement dans n’importe quel lecteur de flux |
 
 Compté comme dans [tool-list-cost.fr.md](tool-list-cost.fr.md) (`o200k_base`). Un déploiement sans l’extra `cost` répond 503 à ces trois chemins.
+
+Pour un paquet, un changement porte aussi `from_package_version` et `to_package_version` (dans `/cost`, `fromPackageVersion` et `toPackageVersion`) : la dernière version qui servait l’ancienne liste et la version qui sert la nouvelle. Les deux valent `null` pour un serveur distant ; `from_package_version` vaut `null` quand l’ancienne liste a été servie pour la dernière fois avant le 2026-10-26.
 
 ## Étiquettes et éléments de preuve
 

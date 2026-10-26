@@ -39,6 +39,7 @@ FILES = (
     ("classifications.jsonl.gz", "Advisory LLM readings of tool lists. Not reproducible, so never in the signed log."),
     ("tool_extras.jsonl.gz", "What each tool carried beyond those: annotations (readOnlyHint, destructiveHint…), _meta, title, icons. Since 2026-10-22."),
     ("extras_changes.jsonl.gz", "Every change to those members, annotation by annotation, with the tools that dropped readOnlyHint."),
+    ("package_observations.jsonl.gz", "Every run of an npm/PyPI package with the version it ran and the list it served. Versions since 2026-10-26."),
     ("manifest.json", "Counts and SHA-256 of every file, signed by the log's key, with the tree head of the snapshot."),
     ("README.md", "The dataset card: fields, loading, citation, what the data does not say."),
 )

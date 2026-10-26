@@ -33,6 +33,8 @@ flowchart LR
 
 `<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符——稳定不变，每个远程端点一个。
 
+对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。
+
 ## 变更
 
 | 方法 | 路径 | 返回 |
@@ -45,6 +47,8 @@ flowchart LR
 | GET | `/feed.xml` | 最近 50 条变更的 Atom 订阅源；`?watch=<id>,<id>,…`（最多 100 个目标 id，即 `/check` 和服务器页面给出的 id）只保留这些服务器和软件包——可在任意订阅阅读器中订阅 |
 
 计数方法同 [tool-list-cost.zh.md](tool-list-cost.zh.md)（`o200k_base`）。未安装 `cost` extra 的部署对这三个路径返回 503。
+
+对于软件包，变更还带有 `from_package_version` 和 `to_package_version`（在 `/cost` 中为 `fromPackageVersion` 和 `toPackageVersion`）：最后一个提供旧列表的版本，以及提供新列表的版本。远程服务器两者均为 `null`；旧列表最后一次提供早于 2026-10-26 时，`from_package_version` 为 `null`。
 
 ## 标签与证据
 

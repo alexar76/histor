@@ -365,6 +365,16 @@ MIGRATION_013: tuple[str, ...] = (
     "CREATE TABLE classifier_daily_budget (day TEXT PRIMARY KEY, used INTEGER NOT NULL DEFAULT 0)",
 )
 
+# The package version each observation ran, and the two versions a change lies between. Until now
+# only targets.package_version said which version was last observed, so a researcher matching our
+# history to a version (RugSnare, 2026-10-26) had to infer it from npm publish times. Rows from
+# before this migration stay NULL: the version they ran was not recorded, and a guess is not data.
+MIGRATION_014: tuple[str, ...] = (
+    "ALTER TABLE observations ADD COLUMN package_version TEXT",
+    "ALTER TABLE changes ADD COLUMN from_package_version TEXT",
+    "ALTER TABLE changes ADD COLUMN to_package_version TEXT",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -380,6 +390,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (11, "011_tool_extras", MIGRATION_011),
     (12, "012_crawl_plans", MIGRATION_012),
     (13, "013_remote_schedule", MIGRATION_013),
+    (14, "014_observation_package_version", MIGRATION_014),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

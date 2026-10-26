@@ -505,10 +505,11 @@ def create_app(services: Services) -> FastAPI:
         if t is None:
             raise HTTPException(status_code=404, detail="unknown server")
         history = store.history(target_id)
-        # Runs of the same outcome collapse into one row: 300 identical "ok" days are one fact.
+        # Runs of the same outcome collapse into one row: 300 identical "ok" days are one fact. Two
+        # package versions are two facts even when they served the same list, so the version is in the key.
         runs: list[dict[str, Any]] = []
         for h in reversed(history):
-            key = (h["status"], h["toolset"], h["subject"])
+            key = (h["status"], h["toolset"], h["subject"], h.get("package_version"))
             if runs and runs[-1]["key"] == key:
                 runs[-1]["until"] = h["observed_at"]
                 runs[-1]["count"] += 1
@@ -516,7 +517,8 @@ def create_app(services: Services) -> FastAPI:
                 runs.append({"key": key, "from": h["observed_at"], "until": h["observed_at"], "count": 1,
                              "status": h["status"], "detail": h["detail"], "toolSetDigest": h["toolset"],
                              "subjectDigest": h["subject"], "toolCount": h["tool_count"],
-                             "serverName": h["server_name"], "serverVersion": h["server_version"]})
+                             "serverName": h["server_name"], "serverVersion": h["server_version"],
+                             "packageVersion": h.get("package_version")})
         for r in runs:
             r.pop("key")
         matches = None
@@ -667,7 +669,8 @@ def create_app(services: Services) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown change")
         return {"change": {"id": row["id"], "targetId": row["target_id"], "name": row["name"], "endpoint": row["endpoint"],
                            "observedAt": row["observed_at"], "fromToolSetDigest": row["from_toolset"],
-                           "toToolSetDigest": row["to_toolset"]},
+                           "toToolSetDigest": row["to_toolset"], "fromPackageVersion": row.get("from_package_version"),
+                           "toPackageVersion": row.get("to_package_version")},
                 **cost_diff(row)}
 
     @app.get("/api/v1/servers/{target_id}/cost")

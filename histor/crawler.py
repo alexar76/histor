@@ -1122,8 +1122,10 @@ class Crawler:
             with self.store.db.transaction() as tx:
                 Store.record_attempt(tx, p.target.id, run_id, p.observed_at)
                 tx.execute(
-                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages) VALUES(?, ?, ?, ?, ?, ?)",
-                    (p.target.id, run_id, p.observed_at, "internal-error", clean_text(why, 300), p.obs.pages),
+                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages, package_version) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                    (p.target.id, run_id, p.observed_at, "internal-error", clean_text(why, 300), p.obs.pages,
+                     clean_text(p.obs.package_version or "", 64) or None),
                 )
                 tx.execute("UPDATE targets SET last_attempt=? WHERE id=?", (p.observed_at, p.target.id))
         except Exception:  # noqa: BLE001 - even the record of a failure must not end the crawl
@@ -1213,15 +1215,16 @@ class Crawler:
                     Store.put_blob(tx, found, "toolextras", extras_body)
             tx.execute(
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
-                "tool_count, pages, protocol, server_name, server_version, extras) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_count, pages, protocol, server_name, server_version, extras, package_version) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
                  clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
                  len(p.obs.tools) if p.obs.tools is not None else None, p.obs.pages,
                  clean_text(p.obs.protocol_version, 40),
                  clean_text(p.obs.server_info.get("name") or "", 200) or None,
-                 clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest),
+                 clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest,
+                 clean_text(p.obs.package_version or "", 64) or None),
             )
             update: dict[str, Any] = {
                 "last_attempt": p.observed_at,
@@ -1297,7 +1300,8 @@ class Crawler:
                         ))
                     if state.get("current_subject"):
                         changed = 1
-                        self._record_change(tx, t.id, state, fallback, p.observed_at, link["id"], run_id)
+                        self._record_change(tx, t.id, state, fallback, p.observed_at, link["id"], run_id,
+                                            p.obs.package_version)
                         update["changes"] = int(state.get("changes") or 0) + 1
                     update.update(
                         chain_label=link["id"], last_continuity_at=p.observed_at, current_subject=fallback.digest,
@@ -1378,7 +1382,8 @@ class Crawler:
                 # undigestible set this one replaces) — the diff then compares names only.
                 if new_subject and state.get("current_subject"):
                     changed = 1
-                    self._record_change(tx, t.id, state, subject, p.observed_at, row["id"], run_id)
+                    self._record_change(tx, t.id, state, subject, p.observed_at, row["id"], run_id,
+                                        p.obs.package_version)
                     update["changes"] = int(state.get("changes") or 0) + 1
             elif not prior_id and obs_row is not None:
                 # The observation starts the chain and counts as its first link: the next
@@ -1412,8 +1417,16 @@ class Crawler:
         return json.loads(row["body"])
 
     def _record_change(self, tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
-                       label_id: str, run_id: int) -> None:
+                       label_id: str, run_id: int, package_version: str | None = None) -> None:
         old_toolset = state.get("current_toolset")
+        # For a package, the change lies between two versions: the last one that served the old list
+        # (an unchanged release keeps the list, so the newest such observation) and the one just run.
+        # NULL for a remote server, and for an old list last served before migration 014.
+        from_version = None
+        if package_version and old_toolset:
+            row = tx.one("SELECT package_version FROM observations WHERE target_id=? AND toolset=? AND status='ok' "
+                         "ORDER BY id DESC LIMIT 1", (target_id, old_toolset))
+            from_version = row["package_version"] if row else None
         old_entries = None
         if old_toolset:
             row = tx.one("SELECT body FROM blobs WHERE digest=?", (old_toolset,))
@@ -1428,10 +1441,11 @@ class Crawler:
                      {"toolSetDigest": subject.tool_set_digest, "subjectDigest": subject.digest}, kind="definitions")
         summary = diffing.tool_set_diff(old_entries, subject.entries, old_names, subject.names)
         tx.execute(
-            "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id, run_id) "
-            "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id, "
+            "run_id, from_package_version, to_package_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (target_id, observed_at, state.get("current_subject"), subject.digest, old_toolset,
-             subject.tool_set_digest, dumps(summary), label_id, run_id),
+             subject.tool_set_digest, dumps(summary), label_id, run_id, from_version,
+             clean_text(package_version or "", 64) or None),
         )
 
     @staticmethod

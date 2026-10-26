@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from histor.subject import tool_set_digest
 
