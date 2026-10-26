@@ -156,8 +156,9 @@ def _unplaced_sends(behaviour: Any) -> bool:
         return False
     if behaviour.get("observer") == "gvisor-trace/8":
         # 9 adds what 8 did not record at all (renames, links, creat; .pth and post-install code
-        # writes as persistence): nothing in an 8 trace says which runs missed it, so its verdict
-        # stands. Taking 9 for an older reader instead re-traced every 9 run with a relative
+        # writes as persistence): nothing in an 8 trace says which runs missed it. Its ok, complete
+        # pages are traced once more by the planner (_missed_renames_and_links), behind the wrong
+        # records here. Taking 9 for an older reader instead re-traced every 9 run with a relative
         # write on every crawl.
         return False
     phases = [behaviour[p] for p in ("installScripts", "startup", "calls") if isinstance(behaviour.get(p), dict)]
@@ -172,6 +173,22 @@ def _unplaced_sends(behaviour: Any) -> bool:
             or any("start-time-unknown" in (ph.get("incompleteReasons") or []) for ph in phases)
             or any(isinstance(e, str) and "momus-trap.invalid" in e for ph in phases
                    for e in [*(ph.get("lookups") or []), *(str(r.get("destination")) for r in ph.get("requests") or [] if isinstance(r, dict))]))
+# The first trace reader that records renames, links and creat, and reports .pth files and code
+# written into the installed package after install as persistence (Vulnetix GCVE-110-PYPI-2026-022091).
+RENAMES_AND_LINKS_FROM = 9
+
+
+def _missed_renames_and_links(behaviour: Any) -> bool:
+    """A trace by a reader before gvisor-trace/9. Such a reader did not record renames, links or
+    creat at all, so an ok, complete page it made can lack persistence done that way, and nothing
+    in the trace says which pages do. Each such page is traced once more (owner, 2026-10-26); the
+    new trace is by the current reader, so it is never picked again."""
+    if not isinstance(behaviour, dict):
+        return False
+    prefix, _, number = str(behaviour.get("observer") or "").rpartition("/")
+    return prefix == "gvisor-trace" and number.isdigit() and int(number) < RENAMES_AND_LINKS_FROM
+
+
 # A PyPI server written for MCP SDK 1.x crashes on import once pip resolves mcp 2.x. Its status
 # stays what a fresh install gets; a second run with this pin shows what it was before 2.0, kept
 # beside the record (``legacy``) and never in the label chain.
@@ -714,7 +731,7 @@ class Crawler:
         configured: list[tuple[Target, str]] = []
         seen_by_id: dict[str, str] = {}
         config: dict[str, dict[str, list[str]]] = {}
-        unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = retraced = 0
+        unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = retraced = rereadable = 0
         current = self.settings.sandbox_observer
         # An ok, complete observation by an observer listed here stands: what changed since is how a
         # failing package is started, not what a running one reports.
@@ -723,6 +740,8 @@ class Crawler:
         # A record an older trace reader got wrong is a public mistake about someone else's
         # package: it goes ahead of everything but new versions.
         retrace: list[tuple[Target, str]] = []
+        # An ok, complete page by a reader that could not see renames and links: run once more.
+        reread: list[tuple[Target, str]] = []
         legacy_ids: set[str] = set()
         # A package observed before is looked up every crawl: a new version of it goes first.
         clock = time.monotonic()
@@ -764,6 +783,13 @@ class Crawler:
                 retrace.append((t, version))
                 continue
             if seen == version and state.get("last_status") == "ok" and complete and observer in still_valid:
+                if _missed_renames_and_links(signals.get("behaviour")):
+                    plan = _config_for(t, signals)
+                    if plan:
+                        config[t.id] = plan
+                    rereadable += 1
+                    reread.append((t, version))
+                    continue
                 unchanged += 1
                 continue
             exit_kind = (signals.get("exit") or {}).get("kind") if isinstance(signals.get("exit"), dict) else None
@@ -821,15 +847,21 @@ class Crawler:
         left = max(0, cap - len(updates) - len(retrace) - len(configured))
         renewable = len(renewed)
         renewed.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
-        renewed = renewed[: min(renewable, max(left // 2, left - len(order)))]
-        room = left - len(renewed)
+        # Work an older observer or reader left (failures to run again, pages to trace again) gets at
+        # least half of what is left, never-observed packages the rest: ~3,900 pages to re-read must
+        # not stop new packages for days, nor wait behind 40,000 of them.
+        older_share = max(left // 2, left - len(order))
+        renewed = renewed[: min(renewable, older_share)]
+        reread.sort(key=lambda tv: rank.get(tv[0].endpoint, len(rank)))
+        reread = reread[: max(0, older_share - len(renewed))]
+        room = left - len(renewed) - len(reread)
         chosen: list[tuple[Target, str | None]] = [(t, v) for t, v in order[:room]]
         looked_up = 0
         never_seconds = round(time.monotonic() - clock)
         for t in never:
             if t.needs:
                 config[t.id] = _config_for(t, {})
-        due = (updates + retrace + configured + renewed + chosen)[:cap]
+        due = (updates + retrace + configured + renewed + reread + chosen)[:cap]
         unknown = sum(unknown_by.values())
         if unknown:
             log.warning("package versions unknown this crawl: %s", dict(unknown_by))
@@ -841,6 +873,7 @@ class Crawler:
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
                              "renewed": len(renewed), "renewable": renewable, "retraced": len(retrace), "retraceable": retraced,
+                             "reread": len(reread), "rereadable": rereadable,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
                              "versionsAsked": len(known) + looked_up,
                              "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}

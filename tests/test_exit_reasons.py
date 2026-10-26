@@ -566,3 +566,58 @@ def test_a_failing_package_an_older_reader_left_with_unplaced_sends_is_traced_ag
     assert len(fake.runs) == 2 and stats["packages"]["retraced"] == 1, "a timeout keeps no wrong evidence either"
     assert s.store.target(slow.id)["last_status"] == "timeout"
 
+
+
+def test_an_ok_page_from_a_reader_before_renames_and_links_is_traced_once_more(world, monkeypatch):
+    # Owner, 2026-10-26: ~3,900 ok, complete pages came from gvisor-trace/2-8, which did not record
+    # renames, links or creat (Vulnetix GCVE-110-PYPI-2026-022091). Each is traced once more,
+    # sharing half of a crawl, so never-observed packages keep the rest.
+    import histor.crawler as crawler_mod
+
+    s = world["services"]
+    fake = FakePackages()
+    s.crawler.packages = fake
+    old = [package_target(f"io.o/o{n}", f"npm:o{n}") for n in range(4)]
+    for t in old:
+        world["targets"].append(t)
+        fake.latest[t.endpoint] = "1.0.0"
+        fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
+    s.crawler.run()
+    readers = {old[0]: "gvisor-trace/9", old[1]: "gvisor-trace/7", old[2]: "gvisor-trace/2", old[3]: "gvisor-trace/8"}
+    with s.store.db.transaction() as tx:
+        for t, reader_ in readers.items():
+            signals = json.loads(s.store.target(t.id)["package_signals"])
+            signals["behaviour"] = {**signals["behaviour"], "observer": reader_}
+            tx.execute("UPDATE targets SET package_signals=? WHERE id=?", (json.dumps(signals), t.id))
+    fresh = [package_target(f"io.f/p{n}", f"npm:p{n}") for n in range(3)]
+    for t in fresh:
+        world["targets"].append(t)
+        fake.latest[t.endpoint] = "1.0.0"
+        fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
+    monkeypatch.setattr(crawler_mod, "curated_rank",
+                        lambda: {t.endpoint: n for n, t in enumerate([*fresh, *old])})
+    s.crawler.settings = replace(s.crawler.settings, sandbox_max_per_crawl=4)
+    fake.runs.clear()
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    ran = {r[1] for r in fake.runs}
+    assert ran == {"o1", "o2", "p0", "p1"}, "half for the older pages, by rank; half for new packages"
+    assert stats["packages"]["reread"] == 2 and stats["packages"]["rereadable"] == 3
+    assert stats["packages"]["unchanged"] == 1, "the current reader's page stands"
+    fake.runs.clear()
+    world["clock"].advance(days=1)
+    stats = s.crawler.run()
+    ran = {r[1] for r in fake.runs}
+    assert "o3" in ran and not ran & {"o0", "o1", "o2"}, "each page is traced once"
+    assert stats["packages"]["rereadable"] == 1
+
+
+def test_only_readers_before_renames_and_links_are_traced_again():
+    from histor.crawler import _missed_renames_and_links
+
+    assert _missed_renames_and_links({"observer": "gvisor-trace/8", "complete": True})
+    assert _missed_renames_and_links({"observer": "gvisor-trace/2"})
+    assert not _missed_renames_and_links({"observer": "gvisor-trace/9"})
+    assert not _missed_renames_and_links({"observer": "gvisor-trace/10"}), "a later reader needs its own decision"
+    assert not _missed_renames_and_links({"complete": True}), "no reader named: nothing to compare"
+    assert not _missed_renames_and_links(None)

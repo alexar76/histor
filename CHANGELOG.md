@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Pages traced before `gvisor-trace/9` are traced once more.** Readers 2–8 did not record renames,
+  links or creat, nor report `.pth` files or code written into the installed package after install
+  as persistence (Vulnetix GCVE-110-PYPI-2026-022091), and nothing in their traces says which pages
+  missed something. An ok, complete page by such a reader is now run again once; the new trace is by
+  the current reader, so it is never picked again. These runs share, with an older observer's
+  failures, at least half of what is left of a crawl, so never-observed packages keep the rest
+  (`stats.packages.reread` / `rereadable`). On 2026-10-26 that was 3,916 pages. The owner chose the
+  sandbox load over leaving the pages as they were.
+
 ## 0.4.1 — 2026-10-25
 
 - Add the offline `histor payer-audit` command and a bounded, read-only Base USDC evidence
