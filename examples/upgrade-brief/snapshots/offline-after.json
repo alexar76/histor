@@ -1,0 +1,15 @@
+{
+  "format": "histor.upgrade-observation/v1",
+  "targetId": "demo:offline",
+  "status": "failed",
+  "observedAt": "2026-10-27T09:00:00Z",
+  "packageVersion": null,
+  "serverName": "synthetic-fixture",
+  "serverVersion": null,
+  "protocol": null,
+  "launch": {
+    "transport": "streamable-http",
+    "runtime": "synthetic-example",
+    "network": "fixture-only"
+  }
+}

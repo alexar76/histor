@@ -10,7 +10,7 @@ flowchart LR
     NGINX --> APP["contenedor histor<br/>127.0.0.1:9490<br/>rootfs de solo lectura · cap-drop ALL"]
     APP --> PG[("histor-postgres<br/>solo en la red de compose")]
     APP --> VOL[["volumen histor-data<br/>issuer.key · provider.key"]]
-    APP -- "initialize + tools/list<br/>≤ 12 hilos, ≤ 2 por host" --> MCP["endpoints MCP públicos"]
+    APP -- "server/discover + tools/list<br/>≤ 12 hilos, ≤ 2 por host" --> MCP["endpoints MCP públicos"]
     MON["Alien Monitor · SKOPOS"] -- "GET /health, /api/v1/stats" --> NGINX
 ```
 
@@ -168,8 +168,8 @@ propósito: aparte la base Y la clave con el marcador, juntas.
 
 ## Ser un buen rastreador
 
-HISTOR se identifica (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)`),
-envía tres mensajes JSON-RPC por endpoint y día, nunca llama a una herramienta, no sigue redirecciones y mantiene como
+HISTOR se identifica (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)`),
+envía discovery, inicialización legacy cuando sea necesaria y `tools/list` con todas sus páginas, nunca llama a una herramienta, no sigue redirecciones y mantiene como
 máximo dos conexiones por host. Una observación tiene un único plazo para todas las peticiones y páginas, y el conjunto
 de herramientas se limita a 3 MiB y 5 000 herramientas.
 
@@ -287,4 +287,4 @@ HISTOR tampoco arranca con un host a medio configurar (una URL sin su token o su
 
 **Observar un objetivo de nuevo, ahora:** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server` (uno o varios endpoints o ids). Sigue el camino de un rastreo —sandbox o cliente MCP, WARDEN, el registro, la cadena de etiquetas, un evento de seguridad— y une la observación al rastreo en curso, o si no al último, para que un rastreo de un solo objetivo no pase a ser el último público. Un paquete recibe lo que su registro dice que pidió (marcadores, argumento de arranque, entorno). Sirve para sustituir un registro que hoy es erróneo sin esperar a que un rastreo llegue a él; la observación anterior queda en el historial.
 
-**Una versión nueva del observador:** actualiza primero todos los hosts (`install.sh` otra vez desde el nuevo commit; es idempotente), compruébalo con `histor sandboxes` y solo entonces sube `HISTOR_SANDBOX_OBSERVER` en HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` lista observadores anteriores cuyas observaciones ok y completas siguen valiendo (por defecto `3`: el observador 4 cambió cómo se arranca un paquete que falla, no lo que informa uno que funciona); sus fallos se ejecutan de nuevo antes que los paquetes nunca observados, con al menos la mitad de un rastreo. Una página ok y completa trazada por un lector anterior a `gvisor-trace/9` (que no veía renombrados ni enlaces) se traza una vez más y comparte esa mitad con los fallos. **Quitar un host:** borra sus cuatro líneas y reinicia HISTOR; los números no tienen que ser consecutivos.
+**Una versión nueva del observador:** actualiza primero todos los hosts (`install.sh` otra vez desde el nuevo commit; es idempotente), compruébalo con `histor sandboxes` y solo entonces sube `HISTOR_SANDBOX_OBSERVER` en HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` lista observadores anteriores cuyas observaciones ok y completas siguen valiendo (por defecto `3,4`: el observador 4 cambió cómo se arranca un paquete que falla, no lo que informa uno que funciona); sus fallos se ejecutan de nuevo antes que los paquetes nunca observados, con al menos la mitad de un rastreo. Una página ok y completa trazada por un lector anterior a `gvisor-trace/9` (que no veía renombrados ni enlaces) se traza una vez más y comparte esa mitad con los fallos. **Quitar un host:** borra sus cuatro líneas y reinicia HISTOR; los números no tienen que ser consecutivos.

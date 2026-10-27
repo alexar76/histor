@@ -145,6 +145,9 @@ SERVER = textwrap.dedent('''
         msg = json.loads(line)
         if "id" not in msg or "method" not in msg:
             continue
+        if msg["method"] == "server/discover":
+            print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32602, "message": "not initialized"}}), flush=True)
+            continue
         if msg["method"] == "initialize":
             # ask the client something first: it must refuse and carry on
             print(json.dumps({"jsonrpc": "2.0", "id": "s1", "method": "roots/list"}), flush=True)
@@ -218,7 +221,7 @@ def test_cli_failures_exit_2(server, chars, tmp_path, capsys):
     assert "no tool list here" in capsys.readouterr().err
     assert cli.main(["tool-cost", "snapshot", "--stdio", f"{sys.executable} -c pass", "--timeout", "5"]) == 2
     err = capsys.readouterr().err
-    assert "exited before answering initialize" in err or "closed its input" in err
+    assert "exited before answering server/discover" in err or "closed its input" in err
     assert cli.main(["tool-cost", "snapshot"]) == 2
     assert cli.main(["tool-cost", "check", "--baseline", str(bad), "--tools", str(bad), "--max-increase", "lots"]) == 2
 

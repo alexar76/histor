@@ -227,7 +227,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
     if _has_package_versions(store):
         launch = "o.launch" if _has_migration(store, 15) else "NULL AS launch"  # how the run was launched (015)
         for o in _pages(store, "SELECT o.id, o.target_id, o.observed_at, o.status, o.package_version, o.toolset, "
-                        f"o.subject, o.extras, o.tool_count, o.server_name, o.server_version, {launch} FROM observations o "
+                        f"o.subject, o.extras, o.tool_count, o.server_name, o.server_version, o.protocol, {launch} FROM observations o "
                         "JOIN targets t ON t.id = o.target_id WHERE t.transport = 'stdio' AND o.id > ? "
                         "ORDER BY o.id LIMIT ?", "id", 0, PAGE):
             if o["target_id"] in excluded:
@@ -239,6 +239,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
                 "packageVersion": o["package_version"], "toolSetDigest": o["toolset"], "subjectDigest": o["subject"],
                 "toolExtrasDigest": o["extras"], "toolCount": o["tool_count"], "serverName": o["server_name"],
                 "serverVersion": o["server_version"], "launchJson": o["launch"],
+                "protocolVersion": o["protocol"] or None,
             })
     package_observations.close()
 
@@ -362,8 +363,9 @@ def _package_observation_fields(f: dict[str, Any]) -> str:
 - **package_observations** — every run of an npm/PyPI package, failed ones included, oldest first:
   `serverId`, `observedAt`, `status`, `packageVersion` (the version the sandbox ran), `toolSetDigest`
   (join to toolsets; null when the run failed), `subjectDigest`, `toolExtrasDigest`, `toolCount`, and
-  `serverName`/`serverVersion` as the server reported them in `initialize` (often not the package
-  version). `packageVersion` is recorded since 2026-10-26; older rows have it null. `launchJson`
+  `serverName`/`serverVersion` as the server reported them in legacy initialization or modern result
+  metadata (often not the package version), and `protocolVersion` when recorded (otherwise null).
+  `packageVersion` is recorded since 2026-10-26; older rows have it null. `launchJson`
   says how the run was launched: `observer` (the sandbox's version), `image`/`imageTag`/`runtime`/
   `entry`, `network` (`no route out`: a server that fetches something at startup gets nothing), and
   `supplied` when HISTOR started it again with configuration: the env variable NAMES it set to

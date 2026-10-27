@@ -185,7 +185,11 @@ def tool_set_diff(old: list[dict[str, Any]] | None, new: list[dict[str, Any]] | 
             else:
                 fields["description"] = [["-", da[:2000] + "…"], ["+", db[:2000] + "…"]]
         for member in ("inputSchema", "outputSchema"):
-            if a.get(member) != b.get(member):
+            # Python equates True with 1, including inside dicts and arrays. JSON
+            # Schema does not: {"const": true} and {"const": 1} accept different inputs.
+            if ((member in a) != (member in b) or
+                    json.dumps(a.get(member), sort_keys=True, ensure_ascii=False) !=
+                    json.dumps(b.get(member), sort_keys=True, ensure_ascii=False)):
                 fields[member] = schema_diff(a.get(member, None), b.get(member, None))
         if fields:
             summary["modified"].append({"tool": name, "fields": fields})

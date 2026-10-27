@@ -1,4 +1,4 @@
-"""A read-only MCP client: ``initialize``, ``notifications/initialized``, ``tools/list``. Nothing else.
+"""A read-only MCP client: ``server/discover``, legacy initialization, and ``tools/list``.
 
 It never calls a tool, reads a resource or fetches a prompt, and it has no code path that could:
 the method names are literals below. That is the whole contract with the servers HISTOR
@@ -41,7 +41,11 @@ from histor.netguard import BlockedAddress, PinnedTarget, resolve_public
 from histor.untrusted import TooDeep, loads_limited
 
 PROTOCOL_VERSION = "2025-06-18"
-USER_AGENT = f"histor/{__version__} (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)"
+MODERN_PROTOCOL_VERSIONS = ("2026-07-28",)
+_MODERN_ERRORS = frozenset((-32020, -32021, -32022))
+_LEGACY_PROBE_ERRORS = frozenset((-32600, -32601, -32602))
+_LEGACY_HTTP_STATUSES = frozenset((400, 404, 405))
+USER_AGENT = f"histor/{__version__} (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)"
 MAX_BODY_BYTES = 4 * 1024 * 1024   # one response, decompressed
 MAX_SET_BYTES = 3 * 1024 * 1024    # every tools/list page of one observation together
 MAX_TOOLS = 5000
@@ -78,6 +82,33 @@ class _Stop(Exception):
         super().__init__(status)
         self.status = status
         self.detail = detail
+
+
+class _HttpRejection(_Stop):
+    """A bounded, parsed HTTP error from the initial modern-era probe only."""
+
+    def __init__(self, status: int, message: Any) -> None:
+        super().__init__(f"http-{status}")
+        self.message = message
+
+
+def _error_code(message: Any) -> int | None:
+    error = message.get("error") if isinstance(message, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if type(code) is int else None
+
+
+def _complete(message: Any, method: str) -> dict[str, Any]:
+    if not isinstance(message, dict) or "error" in message or not isinstance(message.get("result"), dict):
+        raise _Stop("protocol", f"{method} returned an error or no result")
+    result = message["result"]
+    # Missing resultType is complete for older implementations (§ Basic Protocol).
+    kind = result.get("resultType", "complete")
+    if kind == "input_required":
+        raise _Stop("partial", f"{method} requires interactive input; not collected")
+    if kind != "complete":
+        raise _Stop("protocol", f"{method} returned an unsupported resultType")
+    return result
 
 
 class _DuplicateKey(ValueError):
@@ -145,7 +176,7 @@ class _Decoder:
 
 
 def _matching(message: Any, request_id: int) -> bool:
-    return isinstance(message, dict) and message.get("id") == request_id and (
+    return isinstance(message, dict) and type(message.get("id")) is int and message["id"] == request_id and (
         "result" in message or "error" in message
     )
 
@@ -170,7 +201,7 @@ class McpReader:
 
     def _post(self, client: httpx.Client, pinned: PinnedTarget, body: dict[str, Any], *, session: str | None,
               protocol: str | None, want_id: int | None, deadline: _Deadline,
-              budget: int = MAX_BODY_BYTES) -> tuple[Any, httpx.Headers, int]:
+              budget: int = MAX_BODY_BYTES, modern: bool = False, probe: bool = False) -> tuple[Any, httpx.Headers, int]:
         deadline.check()
         headers = {
             "Content-Type": "application/json",
@@ -179,17 +210,28 @@ class McpReader:
         }
         if protocol:
             headers["MCP-Protocol-Version"] = protocol
-        if session:
+        if modern:
+            headers["Mcp-Method"] = body["method"]
+        if session and not modern:
             headers["Mcp-Session-Id"] = session
         extensions = {"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {}
+        remaining = min(self.timeout, max(0.001, deadline.at - time.monotonic()))
         request = client.build_request(
-            "POST", pinned.url, content=json.dumps(body).encode(), headers=headers, extensions=extensions
+            "POST", pinned.url, content=json.dumps(body).encode(), headers=headers, extensions=extensions,
+            timeout=httpx.Timeout(remaining, connect=min(remaining, 10.0)),
         )
         response = client.send(request, stream=True)
         try:
             if 300 <= response.status_code < 400:
                 raise _Stop(f"http-{response.status_code}", "redirects are not followed")
             if response.status_code >= 400:
+                if modern and response.status_code in _LEGACY_HTTP_STATUSES:
+                    message = self._http_error_body(response, deadline, min(budget, MAX_BODY_BYTES), want_id)
+                    if probe:
+                        raise _HttpRejection(response.status_code, message)
+                    code = _error_code(message)
+                    if code in _MODERN_ERRORS:
+                        raise _Stop("protocol", f"modern {body['method']} returned MCP error {code}; no downgrade")
                 raise _Stop(f"http-{response.status_code}")
             if want_id is None:
                 return None, response.headers, 0
@@ -199,10 +241,121 @@ class McpReader:
             if "text/event-stream" in ctype:
                 message, size = self._read_sse(response, want_id, decoder, deadline, budget)
             else:
-                message, size = self._read_json(response, want_id, decoder, deadline, budget)
+                message, size = self._read_json(response, want_id, decoder, deadline, budget, allow_batch=not modern)
+            if modern and (message.get("jsonrpc") != "2.0" or ("result" in message) == ("error" in message)):
+                raise _Stop("protocol", "invalid modern JSON-RPC response envelope")
             return message, response.headers, size
         finally:
             response.close()
+
+    @classmethod
+    def _http_error_body(cls, response: httpx.Response, deadline: _Deadline, budget: int, want_id: int | None) -> Any:
+        decoder = _Decoder(response.headers.get("content-encoding", ""))
+        ctype = response.headers.get("content-type", "").lower()
+        if "text/event-stream" in ctype and want_id is not None:
+            message, _ = cls._read_sse(response, want_id, decoder, deadline, budget)
+        else:
+            body = b"".join(cls._decoded(response, decoder, deadline, budget, "error response")).strip()
+            if not body:
+                return None
+            try:
+                message = cls._parse(body, "error response")
+            except _Stop as exc:
+                # A legacy HTTP endpoint may answer the modern probe with plain HTML/text.
+                # Malformed JSON, duplicate keys, nesting/size/decompression failures are not
+                # evidence of legacy semantics and must never trigger a downgrade.
+                if (exc.detail == "error response is not JSON" and body[:1] not in (b"{", b"[")
+                        and "json" not in ctype):
+                    return None
+                raise
+        if isinstance(message, list) or (isinstance(message, dict) and "error" in message and (
+            message.get("jsonrpc") != "2.0" or _error_code(message) is None or "result" in message
+        )):
+            raise _Stop("protocol", "malformed JSON-RPC error response; no downgrade")
+        if isinstance(message, dict) and "result" in message:
+            raise _Stop("protocol", "HTTP error carried a result; no downgrade")
+        if isinstance(message, dict) and "error" in message and message.get("id") is not None and (
+            type(message["id"]) is not int or message["id"] != want_id
+        ):
+            raise _Stop("protocol", "HTTP error did not match our request id; no downgrade")
+        return message
+
+    @staticmethod
+    def _modern_body(method: str, request_id: int, protocol: str, *, cursor: str | None = None) -> dict[str, Any]:
+        params: dict[str, Any] = {"_meta": {
+            "io.modelcontextprotocol/protocolVersion": protocol,
+            "io.modelcontextprotocol/clientInfo": {"name": "histor", "version": __version__},
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+
+    def _discover(self, client: httpx.Client, pinned: PinnedTarget, deadline: _Deadline,
+                  obs: Observation) -> str | None:
+        """Modern discovery first; return None only for an identifiable legacy rejection.
+
+        A recognized modern error commits the observation to that era. Never initialize
+        after one, after a successful malformed response, or after an auth/rate-limit error.
+        Version selection is restricted to revisions this reader actually implements.
+        """
+        protocol = MODERN_PROTOCOL_VERSIONS[0]
+        attempted: set[str] = set()
+        for request_id in (0, -1):  # at most one version retry, before any list page
+            attempted.add(protocol)
+            try:
+                reply, _, _ = self._post(
+                    client, pinned, self._modern_body("server/discover", request_id, protocol),
+                    session=None, protocol=protocol, want_id=request_id, deadline=deadline,
+                    modern=True, probe=True,
+                )
+            except _HttpRejection as exc:
+                reply = exc.message
+                code = _error_code(reply)
+                if code not in _MODERN_ERRORS:
+                    return None
+            code = _error_code(reply)
+            if code in _MODERN_ERRORS:
+                if not _matching(reply, request_id):
+                    raise _Stop("protocol", "modern discovery error did not match our request id; no downgrade")
+                if code != -32022:
+                    raise _Stop("protocol", f"modern server/discover returned MCP error {code}; no downgrade")
+                data = reply["error"].get("data")
+                supported = data.get("supported") if isinstance(data, dict) else None
+                if not isinstance(supported, list) or len(supported) > 32 or not all(
+                    isinstance(v, str) and _PROTOCOL_RE.fullmatch(v) for v in supported
+                ):
+                    raise _Stop("protocol", "modern discovery returned invalid supported versions; no downgrade")
+                choice = next((v for v in MODERN_PROTOCOL_VERSIONS if v in supported and v not in attempted), None)
+                if choice is None:
+                    raise _Stop("protocol", "no mutually supported modern protocol version; no downgrade")
+                protocol = choice
+                continue
+            if code in _LEGACY_PROBE_ERRORS:
+                return None
+            result = _complete(reply, "server/discover")
+            supported = result.get("supportedVersions")
+            if not isinstance(supported, list) or len(supported) > 32 or protocol not in supported or not all(
+                isinstance(v, str) and _PROTOCOL_RE.fullmatch(v) for v in supported
+            ):
+                raise _Stop("protocol", "modern discovery did not advertise the requested version")
+            if not isinstance(result.get("capabilities"), dict):
+                raise _Stop("protocol", "modern discovery has no capabilities object")
+            self._modern_server_info(result, obs)
+            obs.protocol_version = protocol
+            return protocol
+        raise _Stop("protocol", "modern version negotiation retry limit; no downgrade")
+
+    @staticmethod
+    def _modern_server_info(result: dict[str, Any], obs: Observation) -> None:
+        meta = result.get("_meta", {})
+        if not isinstance(meta, dict):
+            raise _Stop("protocol", "modern response metadata is not an object")
+        info = meta.get("io.modelcontextprotocol/serverInfo")
+        if info is not None:
+            if not isinstance(info, dict):
+                raise _Stop("protocol", "modern serverInfo is not an object")
+            obs.server_info = info
 
     @staticmethod
     def _decoded(response: httpx.Response, decoder: _Decoder, deadline: _Deadline, budget: int, what: str):
@@ -223,7 +376,7 @@ class McpReader:
 
     @classmethod
     def _read_json(cls, response: httpx.Response, want_id: int, decoder: _Decoder, deadline: _Deadline,
-                   budget: int) -> tuple[Any, int]:
+                   budget: int, *, allow_batch: bool = True) -> tuple[Any, int]:
         chunks: list[bytes] = []
         total = 0
         for chunk in cls._decoded(response, decoder, deadline, budget, "response"):
@@ -234,6 +387,8 @@ class McpReader:
             raise _Stop("protocol", "empty response body")
         message = cls._parse(body, "response")
         if isinstance(message, list):  # a JSON-RPC batch reply
+            if not allow_batch:
+                raise _Stop("protocol", "modern JSON-RPC batch responses are not accepted")
             message = next((m for m in message if _matching(m, want_id)), None)
         if not _matching(message, want_id):
             raise _Stop("protocol", "no JSON-RPC response for our request id")
@@ -318,66 +473,79 @@ class McpReader:
             pinned = resolve_public(url, allow_private=self.allow_private)
             obs.address = pinned.address
             with self._client() as client:
-                init, headers, _ = self._post(
-                    client, pinned,
-                    {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
-                        "protocolVersion": PROTOCOL_VERSION,
-                        "capabilities": {},
-                        "clientInfo": {"name": "histor", "version": __version__},
-                    }},
-                    session=None, protocol=None, want_id=1, deadline=deadline,
-                )
-                if "error" in init or not isinstance(init.get("result"), dict):
-                    raise _Stop("protocol", "initialize returned an error")
-                result = init["result"]
-                info = result.get("serverInfo")
-                obs.server_info = info if isinstance(info, dict) else {}
-                negotiated = result.get("protocolVersion")
-                obs.protocol_version = negotiated[:40] if isinstance(negotiated, str) else ""
-                session = headers.get("mcp-session-id")
-                if session is not None and not _SESSION_RE.match(session):
-                    raise _Stop("protocol", "Mcp-Session-Id is not visible ASCII")
-                # Echoed back in a header only if it looks like a protocol version; httpx would
-                # otherwise raise on a non-ASCII value, and a CR/LF would be header injection.
-                protocol = obs.protocol_version if _PROTOCOL_RE.match(obs.protocol_version) else PROTOCOL_VERSION
-                try:
-                    self._post(client, pinned, {"jsonrpc": "2.0", "method": "notifications/initialized"},
-                               session=session, protocol=protocol, want_id=None, deadline=deadline)
-                except (_Stop, httpx.HTTPError) as exc:
-                    if isinstance(exc, _Stop) and exc.status == "timeout":
-                        raise
-                    # a notification needs no answer; some servers 202, some 4xx it
+                protocol = self._discover(client, pinned, deadline, obs)
+                modern = protocol is not None
+                session = None
+                if not modern:
+                    init, headers, _ = self._post(
+                        client, pinned,
+                        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                            "protocolVersion": PROTOCOL_VERSION,
+                            "capabilities": {},
+                            "clientInfo": {"name": "histor", "version": __version__},
+                        }},
+                        session=None, protocol=None, want_id=1, deadline=deadline,
+                    )
+                    result = _complete(init, "initialize")
+                    info = result.get("serverInfo")
+                    obs.server_info = info if isinstance(info, dict) else {}
+                    negotiated = result.get("protocolVersion")
+                    obs.protocol_version = negotiated[:40] if isinstance(negotiated, str) else ""
+                    session = headers.get("mcp-session-id")
+                    if session is not None and not _SESSION_RE.fullmatch(session):
+                        raise _Stop("protocol", "Mcp-Session-Id is not visible ASCII")
+                    # Only validated date text is ever echoed back in a header.
+                    protocol = obs.protocol_version if _PROTOCOL_RE.fullmatch(obs.protocol_version) else PROTOCOL_VERSION
+                    try:
+                        self._post(client, pinned, {"jsonrpc": "2.0", "method": "notifications/initialized"},
+                                   session=session, protocol=protocol, want_id=None, deadline=deadline)
+                    except (_Stop, httpx.HTTPError) as exc:
+                        if isinstance(exc, _Stop) and exc.status == "timeout":
+                            raise
+                        # A notification needs no answer; some legacy servers reject it.
 
                 tools: list[Any] = []
                 spent = 0
                 cursor: str | None = None
                 request_id = 2
+                cursors: set[str] = set()
+                cache_scope: str | None = None
                 while True:
                     params: dict[str, Any] = {"cursor": cursor} if cursor else {}
+                    body = (self._modern_body("tools/list", request_id, protocol, cursor=cursor) if modern else
+                            {"jsonrpc": "2.0", "id": request_id, "method": "tools/list", "params": params})
                     reply, _, size = self._post(
-                        client, pinned,
-                        {"jsonrpc": "2.0", "id": request_id, "method": "tools/list", "params": params},
+                        client, pinned, body,
                         session=session, protocol=protocol, want_id=request_id, deadline=deadline,
-                        budget=MAX_SET_BYTES - spent,
+                        budget=MAX_SET_BYTES - spent, modern=modern,
                     )
                     spent += size
                     obs.pages += 1
-                    if "error" in reply or not isinstance(reply.get("result"), dict):
-                        raise _Stop("protocol", "tools/list returned an error")
-                    page = reply["result"].get("tools")
+                    result = _complete(reply, "tools/list")
+                    if modern:
+                        self._modern_server_info(result, obs)
+                        # No cache is used: TTL never changes the observation time, polling
+                        # schedule, or guarantees consistency of the pages fetched here.
+                        scope = result.get("cacheScope")
+                        if scope is not None:
+                            if scope not in ("public", "private") or (cache_scope is not None and scope != cache_scope):
+                                raise _Stop("partial", "tools/list cache scope is invalid or changed across pages")
+                            cache_scope = scope
+                    page = result.get("tools")
                     if not isinstance(page, list):
                         raise _Stop("protocol", "tools/list result has no tools array")
                     tools.extend(page)
                     if len(tools) > MAX_TOOLS:
                         raise _Stop("too-large", f"more than {MAX_TOOLS} tools")
-                    nxt = reply["result"].get("nextCursor")
-                    if not nxt:
+                    nxt = result.get("nextCursor")
+                    if nxt is None:
                         break
-                    if not isinstance(nxt, str) or nxt == cursor:
+                    if not isinstance(nxt, str) or not nxt or nxt in cursors:
                         raise _Stop("partial", "pagination cursor did not advance")
                     if obs.pages >= MAX_PAGES:
                         raise _Stop("partial", f"more than {MAX_PAGES} pages; not drained")
                     cursor = nxt
+                    cursors.add(nxt)
                     request_id += 1
                 obs.tools = tools
                 obs.status = "ok"

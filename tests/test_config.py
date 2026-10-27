@@ -51,3 +51,9 @@ def test_sitemap_extra_takes_paths_only(monkeypatch):
     assert load_settings().sitemap_extra == ("/datasets/", "/about")
     monkeypatch.delenv("HISTOR_SITEMAP_EXTRA")
     assert load_settings().sitemap_extra == ()
+
+
+def test_operator_can_pin_sandbox_generation_during_a_staged_rollout(monkeypatch):
+    set_env(monkeypatch, HISTOR_SANDBOX_OBSERVER="4", HISTOR_SANDBOX_OBSERVERS_VALID="3")
+    settings = load_settings()
+    assert settings.sandbox_observer == "4" and settings.sandbox_observers_valid == ("3",)

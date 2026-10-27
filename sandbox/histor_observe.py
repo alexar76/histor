@@ -25,7 +25,7 @@ The package is a stranger's code and some packages are hostile, so:
   the run's own writable copy, as an install on a user's machine is), no environment
   beyond PATH/HOME/USER, an unprivileged uid named in its own /etc/passwd, no capabilities, no new privileges, memory/CPU/PID
   limits. The server speaks MCP over the container's stdin/stdout to this script, which sends
-  ``initialize`` and ``tools/list``, then calls up to CALL_LIMIT tools once each with canary
+  ``server/discover`` (or the legacy ``initialize`` handshake) and ``tools/list``, then calls up to CALL_LIMIT tools once each with canary
   arguments built from their schemas (an address on ``histor-trap.invalid``, a path to a decoy
   file) — inside the sandbox, against nothing real — and kills the container.
 * Behaviour (when the tracing runtime is registered): the run is traced by gVisor itself
@@ -76,7 +76,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-VERSION = "4"  # Python by Requires-Python, `python -m`, the mcp-named command, stdout and exit code kept
+VERSION = "5"  # modern discovery/per-request metadata, bounded legacy fallback; existing evidence shape
 STATE = Path(os.environ.get("HISTOR_SANDBOX_STATE", "/var/lib/histor-sandbox"))
 DOCKER = shutil.which("docker") or "/usr/bin/docker"
 RUNTIME = "runsc"
@@ -98,10 +98,13 @@ OBSERVE_GATEWAY = os.environ.get("HISTOR_SANDBOX_OBSERVE_GATEWAY", "10.231.0.1")
 HOME_IN = "/home/histor"
 APP_IN = "/work/app"
 INIT_TIMEOUT_S = 45
+DISCOVER_TIMEOUT_S = 10        # bounded modern probe before a silent legacy server is initialized
 MAX_OUTPUT = 16 * 1024 * 1024  # bytes read from the server's stdout, all pages together
 MAX_TOOLS = 4096
 MAX_PAGES = 64
 PROTOCOL = "2025-06-18"
+MODERN_PROTOCOL = "2026-07-28"
+MODERN_ERRORS = {-32020, -32021, -32022}  # header mismatch, missing capability, unsupported version
 
 NPM_NAME = re.compile(r"^(@[a-z0-9][a-z0-9._~-]{0,100}/)?[a-z0-9][a-z0-9._~-]{0,100}$")
 PYPI_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]{0,126}[A-Za-z0-9])?$")
@@ -905,6 +908,7 @@ class Session:
         self.buf = b""
         self.read = 0
         self.noise = b""  # what it printed on stdout that is not the protocol: often why it exits
+        self.modern = True  # the first request is the modern discovery probe
         self.sel = selectors.DefaultSelector()
         assert proc.stdout is not None
         os.set_blocking(proc.stdout.fileno(), False)
@@ -948,9 +952,23 @@ class Session:
             if not isinstance(msg, dict):
                 self.keep(raw)
                 continue
-            if msg.get("id") == rid and ("result" in msg or "error" in msg):
+            error = msg.get("error")
+            if self.modern and ("result" in msg or "error" in msg):
+                if msg.get("jsonrpc") != "2.0" or ("result" in msg) == ("error" in msg):
+                    raise ProtocolFailure("invalid modern JSON-RPC response envelope; no downgrade")
+                if "error" in msg and (not isinstance(error, dict) or type(error.get("code")) is not int):
+                    raise ProtocolFailure("invalid modern JSON-RPC error code; no downgrade")
+                if msg.get("id") is None and "error" in msg:
+                    return msg  # protocol errors may omit an id; never misclassify as silence
+                if type(msg.get("id")) is not int or msg["id"] != rid:
+                    raise ProtocolFailure("modern response did not match the request id; no downgrade")
+            if type(msg.get("id")) is int and msg["id"] == rid and ("result" in msg or "error" in msg):
                 return msg
             if "method" in msg and "id" in msg:  # the server asks us something: decline, never act
+                if self.modern:
+                    # Modern MCP carries interactions in input_required results. Do not send a
+                    # JSON-RPC response, supply roots, or execute a request from the server.
+                    raise ProtocolFailure("unexpected modern server request; no client interaction supported")
                 reply = {"roots": []} if msg["method"] == "roots/list" else None
                 self.send({"jsonrpc": "2.0", "id": msg["id"], **({"result": reply} if reply is not None else
                           {"error": {"code": -32601, "message": "not supported by the observer"}})})
@@ -1147,34 +1165,99 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
     return {**answer, "seconds": round(time.monotonic() - start, 1)}
 
 
+class ProtocolFailure(Exception):
+    """An incomplete or incompatible MCP exchange, not an empty successful observation."""
+
+
+def modern_params(params: dict[str, Any] | None = None, version: str = MODERN_PROTOCOL) -> dict[str, Any]:
+    return {**(params or {}), "_meta": {
+        "io.modelcontextprotocol/protocolVersion": version,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": {"name": "histor-sandbox", "version": VERSION},
+    }}
+
+
+def complete_result(reply: dict[str, Any], method: str) -> dict[str, Any]:
+    if "error" in reply:
+        raise ProtocolFailure(tail(json.dumps(reply["error"])))
+    body = reply.get("result")
+    if not isinstance(body, dict):
+        raise ProtocolFailure(f"{method}: malformed result")
+    kind = body.get("resultType", "complete")
+    if kind != "complete":
+        raise ProtocolFailure(f"{method}: {kind}; observation incomplete (no client interaction)")
+    return body
+
+
+def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
+    """One modern probe, at most one advertised-version retry, then legacy only if indicated.
+
+    https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio
+    A recognized modern error must never lead to initialize, even if its supported list
+    advertises legacy versions. We implement one modern version, not arbitrary future versions.
+    """
+    session.modern = True
+    try:
+        probe = session.call(0, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
+    except TimeoutError:
+        probe = None
+    if probe is not None:
+        error = probe.get("error")
+        if "error" not in probe or (isinstance(error, dict) and error.get("code") in MODERN_ERRORS):
+            if "error" in probe:
+                if error.get("code") != -32022:
+                    raise ProtocolFailure(tail(json.dumps(error)))
+                data = error.get("data")
+                supported = data.get("supported") if isinstance(data, dict) else None
+                if not isinstance(supported, list) or MODERN_PROTOCOL not in supported:
+                    raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
+                probe = session.call(-1, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
+            body = complete_result(probe, "server/discover")
+            versions = body.get("supportedVersions")
+            if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
+                raise ProtocolFailure("server/discover: malformed supportedVersions")
+            if MODERN_PROTOCOL not in versions:
+                raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
+            return body, MODERN_PROTOCOL, True
+    # Legacy implementations use different errors (or silence) before initialize. Do not
+    # couple this fallback to -32601 alone, and keep the original process and outer deadline.
+    session.modern = False
+    init = session.call(1, "initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
+                                         "clientInfo": {"name": "histor-sandbox", "version": VERSION}},
+                        INIT_TIMEOUT_S)
+    info = complete_result(init, "initialize")
+    return info, info.get("protocolVersion"), False
+
+
 def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: bool = False,
          marks: dict[str, Any] | None = None) -> dict[str, Any]:
     marks = marks if marks is not None else {}
     session = Session(proc, start + RUN_TIMEOUT_S)
     result: dict[str, Any] = {}
     try:
-        init = session.call(1, "initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
-                                              "clientInfo": {"name": "histor-sandbox", "version": VERSION}},
-                            INIT_TIMEOUT_S)
-        if "error" in init:
-            return {"status": "protocol", "detail": tail(json.dumps(init["error"]))}
-        info = init.get("result") or {}
-        result["serverInfo"] = info.get("serverInfo")
-        result["protocolVersion"] = info.get("protocolVersion")
-        session.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        info, version, modern = negotiate(session)
+        meta = info.get("_meta") if isinstance(info.get("_meta"), dict) else {}
+        result["serverInfo"] = meta.get("io.modelcontextprotocol/serverInfo") if modern else info.get("serverInfo")
+        result["protocolVersion"] = version
+        if not modern:
+            session.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         tools: list[Any] = []
         cursor = None
         for page in range(MAX_PAGES):
-            listed = session.call(2 + page, "tools/list", {"cursor": cursor} if cursor else {}, RUN_TIMEOUT_S)
-            if "error" in listed:
-                return {**result, "status": "protocol", "detail": tail(json.dumps(listed["error"]))}
-            body = listed.get("result") or {}
-            tools.extend(body.get("tools") or [])
+            params = {"cursor": cursor} if cursor else {}
+            listed = session.call(2 + page, "tools/list", modern_params(params, version) if modern else params, RUN_TIMEOUT_S)
+            body = complete_result(listed, "tools/list")
+            page_tools = body.get("tools")
+            if not isinstance(page_tools, list):
+                raise ProtocolFailure("tools/list: malformed tools; observation incomplete")
+            tools.extend(page_tools)
             if len(tools) > MAX_TOOLS:
                 return {**result, "status": "too-many-tools", "detail": f"more than {MAX_TOOLS} tools"}
             cursor = body.get("nextCursor")
-            if not cursor:
+            if cursor is None:
                 break
+            if not isinstance(cursor, str) or not cursor:
+                raise ProtocolFailure("tools/list: invalid pagination cursor; observation incomplete")
         if cursor:
             return {**result, "status": "too-many-pages", "detail": "tool listing incomplete"}
         marks["listed"] = time.time()
@@ -1190,8 +1273,11 @@ def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: boo
                 try:
                     arguments = canary_args(tool.get("inputSchema"), tag)
                     coverage["attempted"] += 1
-                    reply = session.call(10_000 + i, "tools/call", {"name": tool["name"], "arguments": arguments}, CALL_TIMEOUT_S)
-                    valid = isinstance(reply.get("result"), dict) and isinstance(reply["result"].get("content"), list)
+                    params = {"name": tool["name"], "arguments": arguments}
+                    reply = session.call(10_000 + i, "tools/call", modern_params(params, version) if modern else params, CALL_TIMEOUT_S)
+                    valid = (isinstance(reply.get("result"), dict)
+                             and reply["result"].get("resultType", "complete") == "complete"
+                             and isinstance(reply["result"].get("content"), list))
                     good = valid and "error" not in reply and not reply["result"].get("isError")
                     coverage["successful" if good else "errors"] += 1
                     outcome["status"] = "success" if good else "error"
@@ -1210,6 +1296,8 @@ def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: boo
             coverage["skipped"] = coverage["total"] - coverage["attempted"]
             marks["callsComplete"] = coverage["successful"] == coverage["total"]
         return {**result, "status": "ok", "tools": tools}
+    except ProtocolFailure as exc:
+        return {**result, "status": "protocol", "detail": str(exc)}
     except TimeoutError:
         return {**result, "status": "timeout", "detail": ended_with(proc, session, exited=False)}
     except EOFError:

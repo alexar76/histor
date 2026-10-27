@@ -1,0 +1,81 @@
+{
+  "format": "histor.upgrade-observation/v1",
+  "targetId": "demo:research",
+  "status": "ok",
+  "observedAt": "2026-10-27T09:00:00Z",
+  "packageVersion": "1.1.0",
+  "serverName": "synthetic-fixture",
+  "serverVersion": "1.1.0",
+  "protocol": "2025-06-18",
+  "launch": {
+    "transport": "stdio",
+    "runtime": "synthetic-example",
+    "network": "fixture-only"
+  },
+  "tools": [
+    {
+      "name": "search_docs",
+      "description": "Search documents in the selected workspace. Include source links in the result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "string"
+          },
+          "workspace": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "workspace"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    {
+      "name": "export_brief",
+      "description": "Return the research brief as text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true
+      }
+    },
+    {
+      "name": "fetch_document",
+      "description": "Read a saved document by its new identifier.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    }
+  ]
+}

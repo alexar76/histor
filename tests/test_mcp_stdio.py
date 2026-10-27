@@ -17,7 +17,7 @@ PACKAGE = "histor"
 
 
 @contextmanager
-def session(tmp_path, **extra_env):
+def session(tmp_path, *, legacy=True, **extra_env):
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(("AIMARKET_", "AIFACTORY_", "HISTOR_"))
            and k not in ("DATABASE_URL", "PYTHONPATH")}
@@ -47,11 +47,12 @@ def session(tmp_path, **extra_env):
             return reply
 
         try:
-            initialized = call(0, "initialize", protocolVersion="2024-11-05", capabilities={},
-                               clientInfo={"name": "stdio-test", "version": "1"})
-            assert initialized["result"]["protocolVersion"] == "2024-11-05"
-            assert "tools" in initialized["result"]["capabilities"]
-            send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+            if legacy:
+                initialized = call(0, "initialize", protocolVersion="2024-11-05", capabilities={},
+                                   clientInfo={"name": "stdio-test", "version": "1"})
+                assert initialized["result"]["protocolVersion"] == "2024-11-05"
+                assert "tools" in initialized["result"]["capabilities"]
+                send({"jsonrpc": "2.0", "method": "notifications/initialized"})
             yield call, send, read, proc
             proc.stdin.close()
             assert proc.wait(timeout=15) == 0, (tmp_path / "stderr.log").read_text()
@@ -110,4 +111,40 @@ def test_cli_protocol_and_tools(tmp_path):
         })["result"]
         assert not check["isError"], check
         assert json.loads(check["content"][0]["text"])["result"]["match"] == "not-listed"
+
+
+def test_modern_stdio_discovery_and_calls_are_self_contained(tmp_path):
+    meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {}}
+    with session(tmp_path, legacy=False) as (call, _send, _read, _proc):
+        discovered = call(1, "server/discover", _meta=meta)["result"]
+        assert discovered["resultType"] == "complete"
+        assert "2026-07-28" in discovered["supportedVersions"]
+        assert "2024-11-05" in discovered["supportedVersions"]
+        assert discovered["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "histor"
+        tools = call(2, "tools/list", _meta=meta)["result"]
+        assert tools["resultType"] == "complete" and tools["ttlMs"] == 0
+        assert tools["cacheScope"] == "private"
+        assert [t["name"] for t in tools["tools"]] == sorted(t["name"] for t in tools["tools"])
+        result = call(3, "tools/call", _meta=meta, name="histor_changes", arguments={"limit": 5})["result"]
+        assert result["resultType"] == "complete" and not result["isError"]
+        assert json.loads(result["content"][0]["text"])["result"]["changes"] == []
+        # Omitting all modern metadata cannot silently change the connection's era.
+        assert call(4, "ping")["error"]["code"] == -32602
+        assert call(5, "ping", _meta=meta)["error"]["code"] == -32601
+        assert call(6, "initialize", protocolVersion="2025-06-18")["result"]["protocolVersion"] == "2025-06-18"
+        assert call(7, "ping")["result"] == {}
+
+
+def test_modern_metadata_is_validated_on_every_request(tmp_path):
+    version = "io.modelcontextprotocol/protocolVersion"
+    caps = "io.modelcontextprotocol/clientCapabilities"
+    with session(tmp_path, legacy=False) as (call, _send, _read, _proc):
+        assert call(1, "server/discover")["error"]["code"] == -32602
+        assert call(2, "tools/list", _meta={version: "2026-07-28"})["error"]["code"] == -32602
+        assert call(3, "tools/list", _meta={version: "2026-07-28", caps: []})["error"]["code"] == -32602
+        mismatch = call(4, "tools/list", _meta={version: "2099-01-01", caps: {}})["error"]
+        assert mismatch["code"] == -32022 and "2026-07-28" in mismatch["data"]["supported"]
+        # A valid request works after malformed/unsupported ones on the same process.
+        assert call(5, "tools/list", _meta={version: "2026-07-28", caps: {}})["result"]["tools"]
 

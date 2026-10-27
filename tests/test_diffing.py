@@ -39,6 +39,22 @@ def test_tool_set_diff_full_and_names_only():
     assert names["detail"] == "names-only" and names["modified"] == []
 
 
+def test_json_schema_boolean_and_number_consts_are_distinct_changes():
+    old = [{"name": "a", "inputSchema": {"type": "object", "properties": {"flag": {"const": True}}}}]
+    new = [{"name": "a", "inputSchema": {"type": "object", "properties": {"flag": {"const": 1}}}}]
+    # Python equality would hide this; the two JSON Schemas accept different inputs.
+    assert old == new
+    fields = diffing.tool_set_diff(old, new, ["a"], ["a"])["modified"][0]["fields"]
+    assert fields["inputSchema"] == [{"path": '$."properties"."flag"."const"', "old": "true", "new": "1"}]
+
+
+def test_schema_member_presence_is_not_collapsed_with_explicit_null():
+    old = [{"name": "a", "inputSchema": {}}]
+    new = [{"name": "a", "inputSchema": {}, "outputSchema": None}]
+    fields = diffing.tool_set_diff(old, new, ["a"], ["a"])["modified"][0]["fields"]
+    assert "outputSchema" in fields
+
+
 def test_huge_descriptions_are_clipped_not_diffed():
     old = [{"name": "a", "description": "x" * 15000, "inputSchema": {}}]
     new = [{"name": "a", "description": "y" * 15000, "inputSchema": {}}]

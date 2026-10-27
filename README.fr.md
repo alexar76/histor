@@ -54,7 +54,7 @@ le signe, et dit à quiconque le demande si ce qu’il a reçu est bien ce que t
 
 ```mermaid
 flowchart LR
-    R["Registre MCP officiel<br/>~21k serveurs"] --> C["Robot d’exploration<br/>initialize + tools/list<br/>jamais un appel d’outil"]
+    R["Registre MCP officiel<br/>~21k serveurs"] --> C["Robot d’exploration<br/>server/discover + tools/list<br/>jamais un appel d’outil"]
     C --> D["Empreinte MTL/1<br/>RFC 8785 + SHA-256"]
     D --> L["Quatre étiquettes signées<br/>AWR/2 · did:key"]
     W["Sidecar WARDEN<br/>ensemble de motifs publié"] --> L
@@ -66,11 +66,11 @@ flowchart LR
     K -. "décompte d’empreintes, sur option" .-> M
 ```
 
-- **Lit** chaque point de terminaison (endpoint) distant du registre officiel : `initialize`, puis
-  `tools/list` parcouru sur toutes les pages. Aucun outil n’est appelé, rien n’est installé ni
+- **Lit** chaque point de terminaison (endpoint) distant du registre officiel : `server/discover`, puis
+  `tools/list` (initialisation pour les serveurs legacy) parcouru sur toutes les pages. Aucun outil n’est appelé, rien n’est installé ni
   exécuté, les adresses privées sont refusées avant l’ouverture d’une connexion.
 - **Lit aussi** une courte liste de serveurs distants populaires absents du registre ([`histor/curated.json`](histor/curated.json), dont DeepWiki), sous l’espace de noms propre à HISTOR `urn:awr:mtl:1:registry:histor.modelmarket.dev/curated`, pour qu’aucune étiquette n’attribue au serveur une inscription au registre qu’il n’a pas. Quand un tel serveur est publié dans le registre, l’inscription du registre remplace la nôtre.
-- **Exécute les paquets npm et PyPI** — les serveurs qu’on lance en local avec `npx` ou `uvx` — dans un [bac à sable](docs/operations.fr.md#bac-à-sable-des-paquets) : installés sans exécuter leur code, lancés sous gVisor avec des identifiants leurres et sans route vers l’extérieur, lus avec `initialize` + `tools/list`, puis chaque outil appelé une fois avec des arguments canaris, dans le bac à sable. La trace de gVisor lui-même dit ce que le paquet a fait — programmes lancés, noms demandés, leurres ouverts — à l’installation, au démarrage et quand ses outils ont été appelés. Une fois par version publiée ; une nouvelle version qui change ce que ses outils disent au modèle est un changement dans le journal, comme pour tout point de terminaison.
+- **Exécute les paquets npm et PyPI** — les serveurs qu’on lance en local avec `npx` ou `uvx` — dans un [bac à sable](docs/operations.fr.md#bac-à-sable-des-paquets) : installés sans exécuter leur code, lancés sous gVisor avec des identifiants leurres et sans route vers l’extérieur, lus avec discovery et `tools/list` (initialisation legacy si nécessaire), puis chaque outil appelé une fois avec des arguments canaris, dans le bac à sable. La trace de gVisor lui-même dit ce que le paquet a fait — programmes lancés, noms demandés, leurres ouverts — à l’installation, au démarrage et quand ses outils ont été appelés. Une fois par version publiée ; une nouvelle version qui change ce que ses outils disent au modèle est un changement dans le journal, comme pour tout point de terminaison.
 - **Calcule l’empreinte (digest)** de l’ensemble d’outils exactement selon la définition de [MTL/1](https://github.com/alexar76/aicom/blob/main/awr/adoption/mcp-trust-label/PROFILE.md)
   — nom, description, schémas d’entrée et de sortie, ordre des unités de code UTF-16, RFC 8785.
 - **Signe** quatre types d’étiquette, chacune un `VerificationVerdict` AWR/2 autonome : ce qui a été
@@ -82,6 +82,11 @@ flowchart LR
 - **Répond** à `/check` : envoyez les outils que votre client a reçus ; vous obtenez, signée, une
   réponse indiquant si HISTOR a observé sur ce point de terminaison le même ensemble, un ensemble
   antérieur, ou aucun.
+
+**Analyse locale des mises à jour :** choisissez les dépendances et les flux, comparez les
+observations enregistrées et obtenez des vérifications à refaire. Les rapports et vérifications
+acceptent `--lang ru|en|es|fr|zh`, avec l’anglais (`en`) par défaut. [Guide](docs/upgrade-brief.fr.md) ·
+[exemple reproductible](examples/upgrade-brief/README.fr.md).
 
 ## Ce qu’une étiquette ne dit pas
 

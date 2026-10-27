@@ -114,7 +114,7 @@ def test_a_settled_failure_is_not_run_again_until_something_changes(world):
     def observe(registry, name, version, **config):
         version = version or fake.latest.get(f"{registry}:{name}")
         fake.runs.append((registry, name, version))
-        return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer="4")
+        return Observation(status="exited", detail="Traceback: ZeroDivisionError", package_version=version, package_observer=fake.observer)
 
     fake.observe = observe
     s.crawler.packages = fake
@@ -326,12 +326,13 @@ class ObserverPackages(FakePackages):
         return FakePackages.observe(self, registry, name, version)
 
 
-def test_a_newer_observer_keeps_older_successes_and_runs_older_failures_first(world, monkeypatch):
+@pytest.mark.parametrize("older_observer", ["3", "4"])
+def test_a_newer_observer_keeps_older_successes_and_runs_older_failures_first(world, monkeypatch, older_observer):
     import histor.crawler as crawler_mod
 
     s = world["services"]
     fake = ObserverPackages()
-    fake.observer = "3"
+    fake.observer = older_observer
     s.crawler.packages = fake
     good, bad = package_target("io.g/good", "npm:good"), package_target("io.b/bad", "npm:bad")
     for t in (good, bad):
@@ -347,15 +348,15 @@ def test_a_newer_observer_keeps_older_successes_and_runs_older_failures_first(wo
         fake.tools[(t.endpoint, "1.0.0")] = [tool("t", "A tool.")]
     monkeypatch.setattr(crawler_mod, "curated_rank", lambda: {t.endpoint: n for n, t in enumerate(fresh)})
     s.crawler.settings = replace(s.crawler.settings, sandbox_max_per_crawl=2)
-    fake.observer = "4"
+    fake.observer = "5"
     fake.runs.clear()
     world["clock"].advance(days=1)
     stats = s.crawler.run()
-    # The success of observer 3 stands; its failure runs again, beside the most popular new package.
+    # The old complete success stands; its failure retries under 5 beside a new package.
     assert {r[1] for r in fake.runs} == {"bad", "p0"}
     assert stats["packages"]["renewed"] == 1 and stats["packages"]["renewable"] == 1 and stats["packages"]["unchanged"] == 1
     record = json.loads(s.store.target(bad.id)["package_signals"])
-    assert record["observer"] == "4" and record["exit"] == {"kind": "crashed"}
+    assert record["observer"] == "5" and record["exit"] == {"kind": "crashed"}
     fake.runs.clear()
     world["clock"].advance(days=1)
     s.crawler.run()

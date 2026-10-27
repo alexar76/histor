@@ -1,4 +1,4 @@
-"""``histor serve`` · ``histor crawl`` · ``histor audit URL`` · ``histor tool-cost`` · ``histor payer-audit``."""
+"""HISTOR service, read-only inspection and offline reports."""
 
 from __future__ import annotations
 
@@ -40,6 +40,16 @@ def main(argv: list[str] | None = None) -> int:
         from histor.payer_audit_cli import main as payer_audit
 
         return payer_audit(args[1:])
+
+    if command == "upgrade-brief":
+        # The report is entirely offline. Only explicit capture reads an HTTP endpoint.
+        if len(args) > 1 and args[1] == "capture":
+            from histor.upgrade_capture import main as capture
+
+            return capture(args[2:])
+        from histor.upgrade_brief_cli import main as upgrade_brief
+
+        return upgrade_brief(args[1:])
 
     from histor.config import load_settings
     from histor.service import build
@@ -110,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|payer-audit|sandboxes|export-dataset DIR]", file=sys.stderr)
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|payer-audit|upgrade-brief|sandboxes|export-dataset DIR]", file=sys.stderr)
         return 2
     finally:
         services.close()

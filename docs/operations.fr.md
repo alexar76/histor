@@ -10,7 +10,7 @@ flowchart LR
     NGINX --> APP["conteneur histor<br/>127.0.0.1:9490<br/>rootfs en lecture seule · cap-drop ALL"]
     APP --> PG[("histor-postgres<br/>réseau compose uniquement")]
     APP --> VOL[["volume histor-data<br/>issuer.key · provider.key"]]
-    APP -- "initialize + tools/list<br/>≤ 12 workers, ≤ 2 par hôte" --> MCP["points de terminaison MCP publics"]
+    APP -- "server/discover + tools/list<br/>≤ 12 workers, ≤ 2 par hôte" --> MCP["points de terminaison MCP publics"]
     MON["Alien Monitor · SKOPOS"] -- "GET /health, /api/v1/stats" --> NGINX
 ```
 
@@ -171,8 +171,8 @@ volontairement : mettez de côté la base ET la clé avec le marqueur, ensemble.
 
 ## Être un robot d’exploration courtois
 
-HISTOR s’identifie (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)`),
-envoie trois messages JSON-RPC par point de terminaison et par jour, n’appelle jamais d’outil, ne suit aucune
+HISTOR s’identifie (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)`),
+envoie discovery, l’initialisation legacy si nécessaire et toutes les pages de `tools/list`, n’appelle jamais d’outil, ne suit aucune
 redirection et garde au plus deux connexions par hôte. Une observation a une seule échéance pour toutes les requêtes et
 pages, et l’ensemble d’outils est plafonné à 3 Mio et 5 000 outils.
 
@@ -189,7 +189,7 @@ La plupart des serveurs MCP qu’on utilise sont des paquets npm ou PyPI que le 
 **Ce que fait une observation** (`histor/sandbox/histor_observe.py`, bibliothèque standard seulement) :
 
 1. Installation, sous gVisor : npm avec `--ignore-scripts`, pip avec `--only-binary=:all:` — aucun code du paquet ne s’exécute. Un paquet PyPI qui ne publie qu’un sdist est signalé `no-wheel`, jamais construit.
-2. Exécution, sous le runtime de traçage de gVisor (`runsc-trace`) : un réseau interne sans route vers l’extérieur dont le seul résolveur est le journal DNS de l’observateur, racine en lecture seule, copie propre et inscriptible du paquet, `/tmp` un tmpfs de 64 Mo, un uid sans privilèges, sans capabilities ni nouveaux privilèges, 512 Mo de mémoire sans swap, un CPU, 256 processus, aucun environnement hormis `PATH`/`HOME`. HOME contient des identifiants leurres (clés SSH, jetons cloud, de registres et Git, un portefeuille, un historique shell) et le répertoire de travail un `.env` leurre. L’observateur parle MCP par stdin/stdout : `initialize`, `tools/list`, puis chacun d’au plus 15 outils une fois avec des arguments canaris construits d’après son schéma (une adresse sur `histor-trap.invalid`, un chemin vers une note leurre) — dans le bac à sable, sans agir sur rien de réel — puis tue le conteneur. Les scripts d’installation npm, sautés à l’installation, s’exécutent d’abord à part, eux aussi tracés.
+2. Exécution, sous le runtime de traçage de gVisor (`runsc-trace`) : un réseau interne sans route vers l’extérieur dont le seul résolveur est le journal DNS de l’observateur, racine en lecture seule, copie propre et inscriptible du paquet, `/tmp` un tmpfs de 64 Mo, un uid sans privilèges, sans capabilities ni nouveaux privilèges, 512 Mo de mémoire sans swap, un CPU, 256 processus, aucun environnement hormis `PATH`/`HOME`. HOME contient des identifiants leurres (clés SSH, jetons cloud, de registres et Git, un portefeuille, un historique shell) et le répertoire de travail un `.env` leurre. L’observateur parle MCP par stdin/stdout : `server/discover`, `tools/list` (legacy: `initialize`), puis chacun d’au plus 15 outils une fois avec des arguments canaris construits d’après son schéma (une adresse sur `histor-trap.invalid`, un chemin vers une note leurre) — dans le bac à sable, sans agir sur rien de réel — puis tue le conteneur. Les scripts d’installation npm, sautés à l’installation, s’exécutent d’abord à part, eux aussi tracés.
 3. Réponse : la version, son empreinte d’intégrité, l’empreinte de l’image, un statut (`ok`, `exited` — le plus souvent un serveur qui a besoin d’une clé ou d’un chemin pour démarrer —, `install-failed`, `no-entry-point`, `no-wheel`, `timeout`, `protocol`) et les outils.
 
 Si `runsc` n’est pas un runtime Docker, il refuse de s’exécuter plutôt que de se rabattre sur `runc`.
@@ -291,4 +291,4 @@ HISTOR refuse aussi de démarrer avec un hôte à moitié configuré (une URL sa
 
 **Observer une cible à nouveau, maintenant :** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server` (une ou plusieurs adresses ou ids). Le chemin est celui d’un parcours — bac à sable ou client MCP, WARDEN, l’écriture, la chaîne d’étiquettes, un événement de sécurité — et l’observation est rattachée au parcours en cours, sinon au dernier, pour qu’un parcours d’une seule cible ne devienne pas le dernier parcours public. Un paquet reçoit ce que son enregistrement dit qu’il a demandé (valeurs factices, argument de démarrage, environnement). Elle sert à remplacer un enregistrement faux aujourd’hui sans attendre qu’un parcours l’atteigne ; l’observation précédente reste dans l’historique.
 
-**Nouvelle version de l’observateur :** mettez d’abord à jour tous les hôtes (`install.sh` à nouveau depuis le nouveau commit — il est idempotent), vérifiez avec `histor sandboxes`, et seulement ensuite relevez `HISTOR_SANDBOX_OBSERVER` côté HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` liste les observateurs antérieurs dont les observations ok et complètes comptent encore (par défaut `3` : l’observateur 4 a changé la façon de lancer un paquet qui échoue, pas ce que rapporte un paquet qui tourne) ; leurs échecs sont relancés avant les paquets jamais observés, avec au moins la moitié d’un parcours. Une page ok et complète tracée par un lecteur antérieur à `gvisor-trace/9` (qui ne voyait ni renommages ni liens) est tracée une fois de plus et partage cette moitié avec les échecs. **Retirer un hôte :** supprimez ses quatre lignes et redémarrez HISTOR ; les numéros n’ont pas à se suivre.
+**Nouvelle version de l’observateur :** mettez d’abord à jour tous les hôtes (`install.sh` à nouveau depuis le nouveau commit — il est idempotent), vérifiez avec `histor sandboxes`, et seulement ensuite relevez `HISTOR_SANDBOX_OBSERVER` côté HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` liste les observateurs antérieurs dont les observations ok et complètes comptent encore (par défaut `3,4` : l’observateur 4 a changé la façon de lancer un paquet qui échoue, pas ce que rapporte un paquet qui tourne) ; leurs échecs sont relancés avant les paquets jamais observés, avec au moins la moitié d’un parcours. Une page ok et complète tracée par un lecteur antérieur à `gvisor-trace/9` (qui ne voyait ni renommages ni liens) est tracée une fois de plus et partage cette moitié avec les échecs. **Retirer un hôte :** supprimez ses quatre lignes et redémarrez HISTOR ; les numéros n’ont pas à se suivre.

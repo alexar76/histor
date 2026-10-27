@@ -13,6 +13,16 @@ obs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(obs)
 
 
+def test_sandbox_generation_matches_default_config_without_invalidating_old_successes(monkeypatch):
+    from histor.config import load_settings
+
+    monkeypatch.delenv("HISTOR_SANDBOX_OBSERVER", raising=False)
+    monkeypatch.delenv("HISTOR_SANDBOX_OBSERVERS_VALID", raising=False)
+    settings = load_settings()
+    assert settings.sandbox_observer == obs.VERSION == "5"
+    assert settings.sandbox_observers_valid == ("3", "4")
+
+
 @pytest.mark.parametrize('body', [None, {}, {'seed': 'ok', 'index': 72},
                                   {'seed': '../escape', 'index': 0}, {'seed': 'ok', 'index': True},
                                   {'seed': 'ok', 'index': 0, 'source': 'arbitrary code'}])
@@ -91,6 +101,8 @@ def test_call_errors_timeouts_and_limit_are_not_success(monkeypatch):
             pass
 
         def call(self, rid, method, params, wait):
+            if method == "server/discover":
+                return {"error": {"code": -32602, "message": "not initialized"}}
             if method == "initialize":
                 return {"result": {}}
             if method == "tools/list":
@@ -110,6 +122,227 @@ def test_call_errors_timeouts_and_limit_are_not_success(monkeypatch):
     assert marks["coverage"]["successful"] == 12
     assert marks["coverage"]["errors"] == 2 and marks["coverage"]["timeouts"] == 1
     assert marks["coverage"]["skipped"] == 2 and not marks["callsComplete"]
+
+
+def _protocol_fixture(monkeypatch, handler):
+    """Only synthetic replies: never starts Docker, an installed package or a network client."""
+    calls, sends = [], []
+
+    class Session:
+        def __init__(self, proc, deadline):
+            self.deadline = deadline
+
+        def call(self, rid, method, params, wait):
+            calls.append((rid, method, params, wait))
+            return handler(rid, method, params, wait)
+
+        def send(self, message):
+            sends.append(message)
+
+    monkeypatch.setattr(obs, "Session", Session)
+    return calls, sends
+
+
+def _discover_result(versions=None):
+    return {"result": {"resultType": "complete", "supportedVersions": versions or [obs.MODERN_PROTOCOL],
+                       "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "public",
+                       "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "fixture", "version": "self-report"}}}}
+
+
+@pytest.mark.parametrize("failure", [-32601, -32602, -32000, -32700, "timeout"])
+def test_stdio_discovery_falls_back_for_arbitrary_legacy_errors_or_silence(monkeypatch, failure):
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            assert 0 < wait <= obs.INIT_TIMEOUT_S
+            if failure == "timeout":
+                raise TimeoutError
+            return {"error": {"code": failure, "message": "legacy rejection"}}
+        if method == "initialize":
+            return {"result": {"protocolVersion": obs.PROTOCOL, "serverInfo": {"name": "old", "version": "1"}}}
+        assert method == "tools/list" and "_meta" not in params
+        return {"result": {"tools": []}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result == {"status": "ok", "protocolVersion": obs.PROTOCOL,
+                      "serverInfo": {"name": "old", "version": "1"}, "tools": []}
+    assert [call[1] for call in calls] == ["server/discover", "initialize", "tools/list"]
+    assert len({call[0] for call in calls}) == len(calls)
+    assert sends == [{"jsonrpc": "2.0", "method": "notifications/initialized"}]
+
+
+def test_modern_stdio_paginates_and_canary_calls_with_metadata_and_no_handshake(monkeypatch):
+    tool = {"name": "fixture_read", "inputSchema": {"type": "object"}}
+
+    def handler(rid, method, params, wait):
+        assert params["_meta"] == {
+            "io.modelcontextprotocol/protocolVersion": obs.MODERN_PROTOCOL,
+            "io.modelcontextprotocol/clientCapabilities": {},
+            "io.modelcontextprotocol/clientInfo": {"name": "histor-sandbox", "version": obs.VERSION},
+        }
+        if method == "server/discover":
+            return _discover_result()
+        if method == "tools/list":
+            return {"result": {"resultType": "complete", "tools": [tool] if rid == 2 else [],
+                               **({"nextCursor": "page-2"} if rid == 2 else {})}}
+        assert method == "tools/call" and params["name"] == "fixture_read"
+        return {"result": {"resultType": "complete", "content": []}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    marks = {}
+    result = obs.talk(None, obs.time.monotonic(), "fixture", True, marks)
+    assert result == {"status": "ok", "protocolVersion": obs.MODERN_PROTOCOL,
+                      "serverInfo": {"name": "fixture", "version": "self-report"}, "tools": [tool]}
+    assert [call[1] for call in calls] == ["server/discover", "tools/list", "tools/list", "tools/call"]
+    assert calls[2][2]["cursor"] == "page-2"
+    assert not sends and marks["callsComplete"] and marks["coverage"]["successful"] == 1
+
+
+@pytest.mark.parametrize("reply", [
+    {"error": {"code": -32022, "data": {"supported": ["2099-01-01", "2025-06-18"]}}},
+    {"error": {"code": -32021, "data": {"requiredCapabilities": {"elicitation": {}}}}},
+    {"error": {"code": -32020, "message": "metadata mismatch"}},
+    {"result": {"resultType": "complete", "supportedVersions": ["2099-01-01", "2025-06-18"]}},
+    {"result": {"resultType": "input_required", "inputRequests": []}},
+    {"result": {"resultType": "complete", "supportedVersions": "2026-07-28"}},
+])
+def test_modern_incompatible_or_incomplete_discovery_never_downgrades(monkeypatch, reply):
+    def handler(rid, method, params, wait):
+        assert method == "server/discover"
+        return reply
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "protocol" and "tools" not in result
+    assert len(calls) == 1 and not sends
+
+
+@pytest.mark.parametrize("repeated_error", [False, True])
+def test_modern_advertised_version_retry_is_bounded_and_never_legacy(monkeypatch, repeated_error):
+    attempts = []
+
+    def handler(rid, method, params, wait):
+        attempts.append(method)
+        if method == "server/discover":
+            if len(attempts) == 1 or repeated_error:
+                return {"error": {"code": -32022, "data": {"supported": [obs.MODERN_PROTOCOL]}}}
+            return _discover_result()
+        assert method == "tools/list"
+        return {"result": {"resultType": "complete", "tools": []}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == ("protocol" if repeated_error else "ok")
+    assert attempts.count("server/discover") == 2 and "initialize" not in attempts and not sends
+    assert len({call[0] for call in calls}) == len(calls)
+
+
+@pytest.mark.parametrize("stage", ["tools/list", "tools/call"])
+def test_input_required_never_completes_listing_or_canary_coverage(monkeypatch, stage):
+    tool = {"name": "fixture", "inputSchema": {"type": "object"}}
+
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            return _discover_result()
+        if method == stage:
+            return {"result": {"resultType": "input_required", "content": [], "tools": [tool]}}
+        assert method == "tools/list"
+        return {"result": {"resultType": "complete", "tools": [tool]}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    marks = {}
+    result = obs.talk(None, obs.time.monotonic(), "fixture", True, marks)
+    if stage == "tools/list":
+        assert result["status"] == "protocol" and "tools" not in result
+        assert "input_required" in result["detail"] and "coverage" not in marks
+    else:
+        assert result["status"] == "ok" and result["tools"] == [tool]
+        assert marks["coverage"]["successful"] == 0 and marks["coverage"]["errors"] == 1
+        assert marks["callsComplete"] is False
+    assert not sends
+
+
+def test_modern_session_never_replies_to_server_requests_or_provides_roots():
+    import json
+
+    session = obs.Session.__new__(obs.Session)
+    session.modern = True
+    sent = []
+    session.send = sent.append
+    session._lines = lambda until: iter([json.dumps({"jsonrpc": "2.0", "id": "server", "method": "roots/list"}).encode()])
+    with pytest.raises(obs.ProtocolFailure, match="unexpected modern server request"):
+        session.call(1, "server/discover", obs.modern_params(), 1)
+    assert len(sent) == 1 and sent[0]["method"] == "server/discover"
+
+
+@pytest.mark.parametrize("request_id", [None, "missing"])
+def test_stdio_recognizes_modern_protocol_errors_without_a_request_id(request_id):
+    import json
+
+    session = obs.Session.__new__(obs.Session)
+    session.modern = True
+    session.send = lambda msg: None
+    error = {"jsonrpc": "2.0", "error": {"code": -32022, "data": {"supported": ["2099-01-01"]}}}
+    if request_id != "missing":
+        error["id"] = request_id
+    session._lines = lambda until: iter([json.dumps(error).encode()])
+    assert session.call(0, "server/discover", obs.modern_params(), 1) == error
+
+
+@pytest.mark.parametrize("reply", [
+    {"jsonrpc": "2.0", "id": 0, "error": {"code": "-32022"}},
+    {"jsonrpc": "2.0", "id": 0, "error": {"code": -32022.0}},
+    {"jsonrpc": "2.0", "id": 0, "error": None},
+    {"jsonrpc": "2.0", "id": 0, "error": {"code": -32601}, "result": {}},
+    {"id": 0, "error": {"code": -32601}},
+    {"jsonrpc": "2.0", "id": 999, "error": {"code": -32021}},
+    {"jsonrpc": "2.0", "id": False, "error": {"code": -32021}},
+])
+def test_malformed_or_wrong_id_modern_discovery_never_reaches_initialize(reply):
+    import json
+
+    session = obs.Session.__new__(obs.Session)
+    session.modern = True
+    sent = []
+    session.send = sent.append
+    session._lines = lambda until: iter([json.dumps(reply).encode()])
+    with pytest.raises(obs.ProtocolFailure, match="no downgrade"):
+        obs.negotiate(session)
+    assert [msg["method"] for msg in sent] == ["server/discover"]
+
+
+@pytest.mark.parametrize("code", [-32600, -32601, -32602, -32000, -32700])
+def test_valid_legacy_errors_without_id_still_initialize_in_same_session(code):
+    import json
+
+    session = obs.Session.__new__(obs.Session)
+    session.modern = True
+    sent = []
+    session.send = sent.append
+
+    def lines(until):
+        if sent[-1]["method"] == "server/discover":
+            return iter([json.dumps({"jsonrpc": "2.0", "id": None, "error": {"code": code}}).encode()])
+        return iter([json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": obs.PROTOCOL}}).encode()])
+
+    session._lines = lines
+    _, version, modern = obs.negotiate(session)
+    assert version == obs.PROTOCOL and modern is False
+    assert [msg["method"] for msg in sent] == ["server/discover", "initialize"]
+
+
+@pytest.mark.parametrize("cursor", [False, 0, [], {}, "", 1, ["next"]])
+def test_invalid_observer_cursor_never_marks_listing_complete(monkeypatch, cursor):
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            return _discover_result()
+        return {"result": {"resultType": "complete", "tools": [], "nextCursor": cursor}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "protocol" and "tools" not in result
+    assert "invalid pagination cursor" in result["detail"]
+    assert [call[1] for call in calls] == ["server/discover", "tools/list"] and not sends
 
 
 def test_failed_open_does_not_report_secret_read(tmp_path, monkeypatch):

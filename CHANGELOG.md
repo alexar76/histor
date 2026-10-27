@@ -1,6 +1,38 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-10-27
+
+- Add `upgrade-brief --lang ru|en|es|fr|zh` for Markdown explanations and tool/workflow
+  checklists, including checklist text and limits in JSON. Use English as the default in the
+  CLI, Python API and renderer fallback, and record the selected language in `report.json`. Machine status
+  codes, diagnostic reasons, schemas, IDs and hashes stay stable; supplied titles, workflow
+  descriptions and definition excerpts remain verbatim. Verify all five report languages
+  with the reproducible offline example.
+
+- Real HISTOR imports can declare unknown historical extras with `extrasCoverage: "unknown"`.
+  The personal brief preserves observed core definition changes, skips unsupported annotation
+  comparisons and leaves overall comparability unknown instead of treating missing extras as
+  unchanged or removed.
+
+- Support MCP `2026-07-28` in the remote reader, package sandbox observer, `tool-cost` stdio
+  client and local `histor mcp` server. Probe discovery before legacy initialization; send
+  per-request modern metadata and preserve bounded legacy fallback. Recognized modern errors
+  never trigger a downgrade, and interactive/incomplete results never become empty successful
+  observations. Existing network, deadline and sandbox boundaries remain in force.
+- Keep observed protocol versions in API timelines and package dataset rows, including separate
+  timeline rows when the same tool list is read under another protocol. Sandbox observer 5
+  preserves completed observations from observers 3 and 4 while retrying their failures.
+- Add the local `histor upgrade-brief` prototype: an explicit watchlist connects definition,
+  schema and annotation changes to chosen workflows, produces a retest checklist and records
+  missing observations and changed launch/protocol context. Reports run offline; the separate
+  `capture` subcommand reads an HTTP endpoint into a new unsigned local snapshot. Include a
+  fully synthetic example bundle, [guide](docs/upgrade-brief.md) and
+  [reproducible walkthrough](examples/upgrade-brief/README.md) in English, Russian, Spanish,
+  French and Chinese. Localized watchlists share the same observations; a standard-library
+  verifier checks expected findings, input hashes and byte-for-byte repeatability across five
+  languages.
+- Preserve JSON type differences in schema diffs, so `const: true` changing to `const: 1`
+  is visible to the upgrade report and existing continuity summaries.
 
 ## 0.4.2 — 2026-10-27
 

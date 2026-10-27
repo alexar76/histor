@@ -1,0 +1,67 @@
+{
+  "format": "histor.upgrade-watchlist/v1",
+  "title": "Weekly research workflow — synthetic example",
+  "dependencies": [
+    {
+      "id": "demo:research",
+      "before": "snapshots/research-before.json",
+      "after": "snapshots/research-after.json",
+      "tools": [
+        "search_docs",
+        "export_brief",
+        "legacy_fetch"
+      ],
+      "workflows": [
+        {
+          "id": "weekly-review",
+          "description": "Prepare the weekly document review",
+          "tools": [
+            "search_docs",
+            "export_brief"
+          ]
+        },
+        {
+          "id": "archive-import",
+          "description": "Read archived documents",
+          "tools": [
+            "legacy_fetch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:migration",
+      "before": "snapshots/migration-before.json",
+      "after": "snapshots/migration-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "status-check",
+          "description": "Check service status after MCP migration",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:offline",
+      "before": "snapshots/offline-before.json",
+      "after": "snapshots/offline-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "daily-status",
+          "description": "Get the external service daily status",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    }
+  ]
+}

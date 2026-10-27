@@ -1,0 +1,67 @@
+{
+  "format": "histor.upgrade-watchlist/v1",
+  "title": "每周研究流程 合成示例",
+  "dependencies": [
+    {
+      "id": "demo:research",
+      "before": "snapshots/research-before.json",
+      "after": "snapshots/research-after.json",
+      "tools": [
+        "search_docs",
+        "export_brief",
+        "legacy_fetch"
+      ],
+      "workflows": [
+        {
+          "id": "weekly-review",
+          "description": "准备每周文档综述",
+          "tools": [
+            "search_docs",
+            "export_brief"
+          ]
+        },
+        {
+          "id": "archive-import",
+          "description": "读取归档文档",
+          "tools": [
+            "legacy_fetch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:migration",
+      "before": "snapshots/migration-before.json",
+      "after": "snapshots/migration-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "status-check",
+          "description": "检查 MCP 迁移后的服务状态",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:offline",
+      "before": "snapshots/offline-before.json",
+      "after": "snapshots/offline-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "daily-status",
+          "description": "获取外部服务的每日状态",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    }
+  ]
+}

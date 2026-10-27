@@ -1,0 +1,24 @@
+{
+  "format": "histor.upgrade-observation/v1",
+  "targetId": "demo:offline",
+  "status": "ok",
+  "observedAt": "2026-10-26T09:00:00Z",
+  "packageVersion": null,
+  "serverName": "synthetic-fixture",
+  "serverVersion": "1",
+  "protocol": "2025-06-18",
+  "launch": {
+    "transport": "streamable-http",
+    "runtime": "synthetic-example",
+    "network": "fixture-only"
+  },
+  "tools": [
+    {
+      "name": "read_status",
+      "description": "Read service status.",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

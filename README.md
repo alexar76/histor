@@ -61,7 +61,7 @@ everyone else is seeing.
 
 ```mermaid
 flowchart LR
-    R["Official MCP registry<br/>~21k servers"] --> C["Crawler<br/>initialize + tools/list<br/>never a tool call"]
+    R["Official MCP registry<br/>~21k servers"] --> C["Crawler<br/>server/discover + tools/list<br/>never a tool call"]
     C --> D["MTL/1 digest<br/>RFC 8785 + SHA-256"]
     D --> L["Four signed labels<br/>AWR/2 · did:key"]
     W["WARDEN sidecar<br/>published pattern set"] --> L
@@ -73,11 +73,11 @@ flowchart LR
     K -. "opt-in digest count" .-> M
 ```
 
-- **Reads** every remote endpoint in the official registry: `initialize`, then `tools/list`
+- **Reads** every remote endpoint in the official registry: `server/discover`, then `tools/list` (legacy servers use initialization)
   drained across pages. No tool is called, nothing is installed or executed, private addresses
   are refused before a connection opens.
 - **Also reads** a short list of popular remote servers the registry does not carry ([`histor/curated.json`](histor/curated.json), DeepWiki among them), under HISTOR's own namespace `urn:awr:mtl:1:registry:histor.modelmarket.dev/curated`, so no label claims a registry listing. When such a server publishes to the registry, the registry's listing replaces ours.
-- **Runs npm and PyPI packages** — the servers people start locally with `npx` or `uvx` — in a [sandbox](docs/operations.md#package-sandbox): installed without running their code, started under gVisor with decoy credentials and no route out, read with `initialize` + `tools/list`, then up to 15 tools called once with canary arguments, inside the sandbox. gVisor's own trace says what the package did — programs started, names looked up, decoys opened — at install, at startup and when its tools were called. Completed observations are cached per published version; incomplete observations are retried; a new version that changes what its tools tell the model is a change in the log, like any endpoint's.
+- **Runs npm and PyPI packages** — the servers people start locally with `npx` or `uvx` — in a [sandbox](docs/operations.md#package-sandbox): installed without running their code, started under gVisor with decoy credentials and no route out, read with discovery and `tools/list` (legacy initialization when needed), then up to 15 tools called once with canary arguments, inside the sandbox. gVisor's own trace says what the package did — programs started, names looked up, decoys opened — at install, at startup and when its tools were called. Completed observations are cached per published version; incomplete observations are retried; a new version that changes what its tools tell the model is a change in the log, like any endpoint's.
 - **Digests** the tool set exactly as [MTL/1](https://github.com/alexar76/aicom/blob/main/awr/adoption/mcp-trust-label/PROFILE.md)
   defines it — name, description, input and output schema, UTF-16 code-unit order, RFC 8785.
 - **Signs** four kinds of label, each a standalone AWR/2 `VerificationVerdict`: what was observed,
@@ -95,6 +95,12 @@ make actual gaps longer. Intermediate states can still be missed. See
 [remote polling operations](docs/remote-polling.md) for configuration and measured intervals.
 
 Release changes and upgrade notes: [CHANGELOG.md](CHANGELOG.md).
+
+**MCP 2026-07-28:** [modern and legacy compatibility](docs/mcp-compatibility.md).
+**Local upgrade brief:** choose your dependencies and workflows, compare saved observations, and get a retest checklist.
+From this source directory, run `python3 -m histor upgrade-brief --watchlist examples/upgrade-brief/watchlist.json --out-dir ../output/histor-upgrade-brief-example/en` (Python 3.11+).
+Reports and checklists support `--lang ru|en|es|fr|zh` (default `en`).
+See the [guide](docs/upgrade-brief.md) and [reproducible synthetic example](examples/upgrade-brief/README.md), available in five languages.
 
 ## What a label does not say
 

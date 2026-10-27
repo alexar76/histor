@@ -154,7 +154,7 @@ def test_histor_sandboxes_checks_every_host_and_never_prints_a_token(clean, monk
 
     for k, v in {**sandbox_env(), **sandbox_env(2, slots="4")}.items():
         clean.setenv(k, v)
-    good = {"observer": "4", "gvisor": True, "trace": True, "observeNetwork": True}
+    good = {"observer": "5", "gvisor": True, "trace": True, "observeNetwork": True}
 
     def selftest(reader):
         if reader.host == "10.0.0.2":
@@ -166,7 +166,7 @@ def test_histor_sandboxes_checks_every_host_and_never_prints_a_token(clean, monk
     out = capsys.readouterr().out
     assert '"host": 1' in out and '"ok": true' in out and '"host": 2' in out and "OSError" in out
     assert "t" * 40 not in out
-    monkeypatch.setattr(PackageReader, "selftest", lambda reader: {**good, "observer": "2"})
+    monkeypatch.setattr(PackageReader, "selftest", lambda reader: {**good, "observer": "4"})
     assert main(["sandboxes"]) == 1, "a host on another observer version is not ready"
     monkeypatch.setattr(PackageReader, "selftest", lambda reader: good)
     assert main(["sandboxes"]) == 0

@@ -1,0 +1,67 @@
+{
+  "format": "histor.upgrade-watchlist/v1",
+  "title": "Еженедельный исследовательский процесс — синтетический пример",
+  "dependencies": [
+    {
+      "id": "demo:research",
+      "before": "snapshots/research-before.json",
+      "after": "snapshots/research-after.json",
+      "tools": [
+        "search_docs",
+        "export_brief",
+        "legacy_fetch"
+      ],
+      "workflows": [
+        {
+          "id": "weekly-review",
+          "description": "Подготовить еженедельный обзор документов",
+          "tools": [
+            "search_docs",
+            "export_brief"
+          ]
+        },
+        {
+          "id": "archive-import",
+          "description": "Прочитать архивные документы",
+          "tools": [
+            "legacy_fetch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:migration",
+      "before": "snapshots/migration-before.json",
+      "after": "snapshots/migration-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "status-check",
+          "description": "Проверить статус сервиса после миграции MCP",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:offline",
+      "before": "snapshots/offline-before.json",
+      "after": "snapshots/offline-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "daily-status",
+          "description": "Получить ежедневный статус внешнего сервиса",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    }
+  ]
+}

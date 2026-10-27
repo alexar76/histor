@@ -5,8 +5,8 @@
     histor tool-cost diff before.json after.json
 
 A source is one of ``--tools FILE`` (a tools/list result, a JSON-RPC response carrying one, a bare
-array, or ``-`` for stdin), ``--stdio COMMAND`` (started here, asked ``initialize`` and
-``tools/list``, then stopped) or ``--url URL`` (a streamable HTTP endpoint, local addresses
+array, or ``-`` for stdin), ``--stdio COMMAND`` (started here, probed with ``server/discover``
+or initialized for legacy MCP, asked ``tools/list``, then stopped) or ``--url URL`` (a streamable HTTP endpoint, local addresses
 allowed: this runs on your machine, not on HISTOR's). ``diff`` also takes snapshots.
 
 ``check`` exits 1 when a gated total grew more than ``--max-increase`` or the list is over
@@ -36,16 +36,31 @@ from histor import __version__, toolcost
 from histor.mcpclient import MAX_PAGES, MAX_TOOLS, PROTOCOL_VERSION
 
 MAX_LINE_BYTES = 8 * 1024 * 1024
+MODERN_PROTOCOL_VERSIONS = ("2026-07-28",)
+MODERN_ERRORS = {-32020, -32021, -32022}
+DISCOVER_TIMEOUT_S = 10.0
 
 
 class SourceError(RuntimeError):
     pass
 
 
+class _ReplyTimeout(SourceError):
+    pass
+
+
+class _RpcError(SourceError):
+    def __init__(self, method: str, error: Any) -> None:
+        self.error = error
+        super().__init__(f"{method} failed: {json.dumps(error)[:300]}")
+
+
 def tools_from_json(data: Any) -> list[Any]:
     """The tools of a tools/list result in any of the shapes people save it in."""
     if isinstance(data, dict) and isinstance(data.get("result"), dict):
         data = data["result"]
+    if isinstance(data, dict) and data.get("resultType", "complete") != "complete":
+        raise SourceError(f"{data['resultType']}; tool list incomplete (no client interaction)")
     if isinstance(data, dict) and isinstance(data.get("tools"), list):
         return data["tools"]
     if isinstance(data, list):
@@ -62,7 +77,7 @@ def _read_json(path: str) -> Any:
 
 
 class _Stdio:
-    """Just enough of an MCP client over stdio: ``initialize``, the notification, ``tools/list`` drained."""
+    """Read a complete tool list over modern or legacy MCP without client interactions."""
 
     def __init__(self, argv: list[str], deadline: float) -> None:
         self.deadline = deadline
@@ -72,6 +87,9 @@ class _Stdio:
             raise SourceError(f"could not start {argv[0]!r}: {exc}") from exc
         self.inbox: queue.Queue[dict[str, Any] | None] = queue.Queue()
         self.next_id = 0
+        self.modern = True  # discover is sent before any era-ambiguous request
+        self.protocol_version: str | None = None
+        self.server_info: dict[str, Any] | None = None
         threading.Thread(target=self._read, daemon=True).start()
 
     def _read(self) -> None:
@@ -93,39 +111,107 @@ class _Stdio:
         except OSError as exc:
             raise SourceError(f"the server closed its input ({exc})") from exc
 
-    def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+    def request(self, method: str, params: dict[str, Any], wait_s: float | None = None) -> dict[str, Any]:
         self.next_id += 1
         want = self.next_id
+        until = self.deadline if wait_s is None else min(self.deadline, time.monotonic() + wait_s)
         self.send({"jsonrpc": "2.0", "id": want, "method": method, "params": params})
         while True:
-            left = self.deadline - time.monotonic()
+            left = until - time.monotonic()
             if left <= 0:
-                raise SourceError(f"no answer to {method} in time")
+                raise _ReplyTimeout(f"no answer to {method} in time")
             try:
                 msg = self.inbox.get(timeout=left)
             except queue.Empty:
-                raise SourceError(f"no answer to {method} in time") from None
+                raise _ReplyTimeout(f"no answer to {method} in time") from None
             if msg is None:
                 raise SourceError(f"the server exited before answering {method} (exit code {self.proc.poll()})")
             if "method" in msg and "id" in msg:
+                if self.modern:
+                    raise SourceError("modern server sent a server-to-client request; no client interaction supported")
                 # A request from the server (roots, sampling, elicitation): refused, so it does not wait.
                 self.send({"jsonrpc": "2.0", "id": msg["id"],
                            "error": {"code": -32601, "message": "not supported by histor tool-cost"}})
                 continue
-            if msg.get("id") != want:
+            error = msg.get("error")
+            if self.modern and ("result" in msg or "error" in msg):
+                if msg.get("jsonrpc") != "2.0" or ("result" in msg) == ("error" in msg):
+                    raise SourceError("invalid modern JSON-RPC response envelope; no downgrade")
+                if "error" in msg and (not isinstance(error, dict) or type(error.get("code")) is not int):
+                    raise SourceError("invalid modern JSON-RPC error code; no downgrade")
+                if msg.get("id") is None and "error" in msg:
+                    raise _RpcError(method, error)  # protocol errors may omit the id
+                if type(msg.get("id")) is not int or msg["id"] != want:
+                    raise SourceError("modern response did not match the request id; no downgrade")
+            if type(msg.get("id")) is not int or msg["id"] != want:
                 continue
-            if "error" in msg or not isinstance(msg.get("result"), dict):
-                raise SourceError(f"{method} failed: {json.dumps(msg.get('error'))[:300]}")
-            return msg["result"]
+            if "error" in msg:
+                raise _RpcError(method, msg["error"])
+            result = msg.get("result")
+            if not isinstance(result, dict):
+                raise SourceError(f"{method} returned a malformed result")
+            if result.get("resultType", "complete") != "complete":
+                raise SourceError(f"{method}: {result['resultType']}; observation incomplete (no client interaction)")
+            return result
+
+    @staticmethod
+    def metadata(params: dict[str, Any] | None = None, version: str = MODERN_PROTOCOL_VERSIONS[0]) -> dict[str, Any]:
+        return {**(params or {}), "_meta": {
+            "io.modelcontextprotocol/protocolVersion": version,
+            "io.modelcontextprotocol/clientCapabilities": {},
+            "io.modelcontextprotocol/clientInfo": {"name": "histor-tool-cost", "version": __version__},
+        }}
+
+    def negotiate(self) -> None:
+        # Leave most of the caller's total deadline for legacy initialization/listing if the
+        # old server silently ignores discovery. Both attempts use the same process and budget.
+        probe_wait = min(DISCOVER_TIMEOUT_S, max(0.001, (self.deadline - time.monotonic()) / 4))
+        preferred = MODERN_PROTOCOL_VERSIONS[0]
+        try:
+            info = self.request("server/discover", self.metadata(version=preferred), probe_wait)
+        except _ReplyTimeout:
+            info = None
+        except _RpcError as exc:
+            error = exc.error
+            if not isinstance(error, dict) or error.get("code") not in MODERN_ERRORS:
+                info = None
+            elif error.get("code") != -32022:
+                raise
+            else:
+                data = error.get("data")
+                supported = data.get("supported") if isinstance(data, dict) else None
+                mutual = [v for v in MODERN_PROTOCOL_VERSIONS if isinstance(supported, list) and v in supported]
+                if not mutual:
+                    raise SourceError("server/discover: no mutually supported modern protocol version") from exc
+                # A second failure propagates. Never repeatedly negotiate or downgrade a
+                # positively identified modern server to initialize.
+                info = self.request("server/discover", self.metadata(version=mutual[0]), probe_wait)
+        if info is not None:
+            versions = info.get("supportedVersions")
+            if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
+                raise SourceError("server/discover: malformed supportedVersions")
+            mutual = [v for v in MODERN_PROTOCOL_VERSIONS if v in versions]
+            if not mutual:
+                raise SourceError("server/discover: no mutually supported modern protocol version")
+            self.protocol_version = mutual[0]
+            meta = info.get("_meta") if isinstance(info.get("_meta"), dict) else {}
+            reported = meta.get("io.modelcontextprotocol/serverInfo")
+        else:
+            self.modern = False
+            info = self.request("initialize", {"protocolVersion": PROTOCOL_VERSION, "capabilities": {},
+                                               "clientInfo": {"name": "histor-tool-cost", "version": __version__}})
+            self.protocol_version = info.get("protocolVersion")
+            reported = info.get("serverInfo")
+            self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        self.server_info = reported if isinstance(reported, dict) else None
 
     def tools(self) -> list[Any]:
-        self.request("initialize", {"protocolVersion": PROTOCOL_VERSION, "capabilities": {},
-                                    "clientInfo": {"name": "histor-tool-cost", "version": __version__}})
-        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        self.negotiate()
         tools: list[Any] = []
         cursor = None
         for _ in range(MAX_PAGES):
-            result = self.request("tools/list", {"cursor": cursor} if cursor else {})
+            params = {"cursor": cursor} if cursor else {}
+            result = self.request("tools/list", self.metadata(params, self.protocol_version) if self.modern else params)
             page = result.get("tools")
             if not isinstance(page, list):
                 raise SourceError("tools/list returned no tools array")
@@ -133,8 +219,10 @@ class _Stdio:
             if len(tools) > MAX_TOOLS:
                 raise SourceError(f"more than {MAX_TOOLS} tools")
             cursor = result.get("nextCursor")
-            if not cursor:
+            if cursor is None:
                 return tools
+            if not isinstance(cursor, str) or not cursor:
+                raise SourceError("tools/list returned an invalid pagination cursor; observation incomplete")
         raise SourceError(f"tools/list still had pages after {MAX_PAGES}")
 
     def close(self) -> None:

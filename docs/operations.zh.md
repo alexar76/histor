@@ -10,7 +10,7 @@ flowchart LR
     NGINX --> APP["histor 容器<br/>127.0.0.1:9490<br/>只读 rootfs · cap-drop ALL"]
     APP --> PG[("histor-postgres<br/>仅限 compose 网络")]
     APP --> VOL[["histor-data 卷<br/>issuer.key · provider.key"]]
-    APP -- "initialize + tools/list<br/>≤ 12 个工作线程，每主机 ≤ 2 个" --> MCP["公开 MCP 端点"]
+    APP -- "server/discover + tools/list<br/>≤ 12 个工作线程，每主机 ≤ 2 个" --> MCP["公开 MCP 端点"]
     MON["Alien Monitor · SKOPOS"] -- "GET /health, /api/v1/stats" --> NGINX
 ```
 
@@ -150,8 +150,8 @@ docker compose -p histor start histor
 
 ## 做一个守规矩的抓取程序
 
-HISTOR 会表明身份（`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)`），
-每个端点每天发送三条 JSON-RPC 消息，从不调用工具，不跟随重定向，每个主机最多保持两个连接。一次观测的所有请求和分页共用一个截止时间，
+HISTOR 会表明身份（`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)`），
+发送 discovery，必要时进行旧版初始化，然后读取所有 `tools/list` 分页，从不调用工具，不跟随重定向，每个主机最多保持两个连接。一次观测的所有请求和分页共用一个截止时间，
 工具集上限为 3 MiB 和 5 000 个工具。
 
 不希望自己的端点被抓取的运营者可以提交 issue 说明。把主机（同时覆盖其子域名）或 URL 前缀加入 `HISTOR_OPT_OUT`（逗号分隔），
@@ -259,4 +259,4 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
 
 **立即重新观察单个目标：** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server`（一个或多个地址或目标 id）。它走与抓取相同的路径——沙箱或 MCP 客户端、WARDEN、提交、标签链、安全事件——并把观察结果挂到正在进行的抓取上，否则挂到最近一次抓取上，这样只含一个目标的抓取不会成为公开的“最近一次抓取”。软件包会得到其记录所示它曾要求的内容（占位值、启动参数、运行时）。用于立即替换一条现在错误的记录，而不必等抓取轮到它；旧的观察结果仍留在历史中。
 
-**观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。由 `gvisor-trace/9` 之前的读取器（看不到重命名和链接）跟踪的成功且完整的记录会再跟踪一次，并与失败的重跑共享这一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。
+**观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3,4`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。由 `gvisor-trace/9` 之前的读取器（看不到重命名和链接）跟踪的成功且完整的记录会再跟踪一次，并与失败的重跑共享这一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。

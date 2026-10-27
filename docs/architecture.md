@@ -17,7 +17,7 @@ flowchart TB
         SCHED["scheduler<br/>every HISTOR_CRAWL_INTERVAL_S"]
         CRAWL["crawler<br/>harvest · observe · commit"]
         GUARD["netguard<br/>resolve once, refuse private,<br/>pin the checked address"]
-        READER["read-only MCP client<br/>initialize · tools/list"]
+        READER["read-only MCP client<br/>server/discover · tools/list"]
         SUBJ["MTL/1 subject + digests"]
         LABELS["label issuer<br/>AWR/2 · did:key"]
         LOG["logbook<br/>RFC 9162 leaves + STH"]
@@ -42,9 +42,9 @@ flowchart TB
 | Module | Responsibility |
 |---|---|
 | `histor/registry.py` | Pages the official registry (`version=latest`, retried: pages take 1–50 s), keeps one record per name, turns every remote into a target. Endpoints it will not dial are kept with a reason (`transport-not-observed`, `templated-url`, `cleartext-url`) so the public numbers never shrink their denominator. It then adds HISTOR's curated list (`histor/curated.json`) of popular servers the registry does not carry, in their own namespace; an endpoint the registry lists is read from the registry only. |
-| `histor/packages.py` + `histor/sandbox/` | npm and PyPI packages: `npm:<name>` / `pypi:<name>` targets, the latest version and the registry's facts (provenance, publisher, install scripts, dependencies) every crawl, and an observation from the sandbox host over HTTPS pinned to its certificate: install without running the package's code, install scripts on their own, start under gVisor's tracing runtime with decoy credentials and no route out, `initialize` + `tools/list`, each tool once with canary arguments; gVisor's trace and the observer's DNS logger say what it did. A version is observed once (a published version cannot change), again when the observer is newer; a sandbox failure is HISTOR's internal error, never a label about the package. `histor/lookalike.py` names a package imitating a popular one. Up to eight sandbox hosts share the packages, each by its free slots; a host that fails is passed over and the package tried once elsewhere ([several sandbox hosts](operations.md#several-sandbox-hosts)). See [operations](operations.md#package-sandbox). |
+| `histor/packages.py` + `histor/sandbox/` | npm and PyPI packages: `npm:<name>` / `pypi:<name>` targets, the latest version and the registry's facts (provenance, publisher, install scripts, dependencies) every crawl, and an observation from the sandbox host over HTTPS pinned to its certificate: install without running the package's code, install scripts on their own, start under gVisor's tracing runtime with decoy credentials and no route out, `server/discover` + `tools/list` (legacy: `initialize`), each tool once with canary arguments; gVisor's trace and the observer's DNS logger say what it did. A version is observed once (a published version cannot change), again when the observer is newer; a sandbox failure is HISTOR's internal error, never a label about the package. `histor/lookalike.py` names a package imitating a popular one. Up to eight sandbox hosts share the packages, each by its free slots; a host that fails is passed over and the package tried once elsewhere ([several sandbox hosts](operations.md#several-sandbox-hosts)). See [operations](operations.md#package-sandbox). |
 | `histor/netguard.py` | Resolves the host once, refuses the target if **any** answer is non-public, then connects to the checked address with `Host` and TLS SNI set to the name. DNS rebinding never gets a second lookup. |
-| `histor/mcpclient.py` | `initialize` → `notifications/initialized` → `tools/list` drained over `nextCursor`. Size-capped streaming, SSE read up to our response id, no redirects, duplicate JSON members refused. It has no code path that calls a tool. |
+| `histor/mcpclient.py` | `server/discover` → modern `tools/list`, or legacy `initialize` → `notifications/initialized` → `tools/list` drained over `nextCursor`. Size-capped streaming, SSE read up to our response id, no redirects, duplicate JSON members refused. It has no code path that calls a tool. |
 | `histor/subject.py` | The MTL/1 descriptor and both digests, over the AWR/2 reference canonicalizer. A byte-for-byte parity test runs it against the profile's own `mtl_subject.py`. |
 | `histor/scanner.py` + `scanner/scan.mjs` | Runs the **published** WARDEN gates. The sidecar describes its own pattern set and record set at startup, so a label names the digest of the rules that actually ran. |
 | `histor/labels.py` | Four label methods, each one signed AWR/2 document. The verdict rules of MTL/1 are enforced in code (`MTL-METH-002`). |
@@ -72,7 +72,7 @@ sequenceDiagram
     C->>W: describe → pattern set + record set, digested
     loop batches of 400 endpoints, each saved before the next is read
     par 12 workers, ≤ 2 per host, hosts interleaved
-        C->>M: initialize, tools/list (all pages)
+        C->>M: server/discover, [legacy initialize], tools/list (all pages)
         M-->>C: tool set or a status (http-401, timeout, …)
     end
     C->>W: scan tool sets never seen before (batches of 64)

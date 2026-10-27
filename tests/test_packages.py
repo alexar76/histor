@@ -227,7 +227,7 @@ class FakePackages:
         self.tools: dict[tuple[str, str], list] = {}
         self.runs: list[tuple[str, str, str | None]] = []
         self.fail = False
-        self.observer = "4"
+        self.observer = "5"
         # What the sandbox reports about the launch, per version (None: nothing, as older tests expect).
         self.conditions: dict[str, dict] = {}
         self.supplied: dict[str, dict] = {}
@@ -267,7 +267,7 @@ class FakePackages:
             package_conditions=self.conditions.get(version),
             package_supplied=self.supplied.get(version),
             behaviour={"complete": True, "startup": {}, "calls": {"tools": 1, "lookups": ["api.example.com"]}}
-            if self.observer in ("3", "4")
+            if self.observer in ("3", "4", "5")
             else None,
         )
 
@@ -373,7 +373,7 @@ def test_every_observation_names_its_version_and_a_change_the_two_it_lies_betwee
     history = s.store.history(t.id)
     assert [h["package_version"] for h in history] == ["1.0.2", "1.0.1", "1.0.0"]
     launches = [json.loads(h["launch"]) for h in history]
-    assert launches[2] == {"observer": "4", "image": "node:22-slim", "entry": "dist/index.js", "network": "no route out"}
+    assert launches[2] == {"observer": "5", "image": "node:22-slim", "entry": "dist/index.js", "network": "no route out"}
     assert launches[0]["supplied"] == {"env": ["MEM_API_KEY"]} and "supplied" not in launches[1]
     (change,) = s.store.changes(target_id=t.id)
     assert (change["from_package_version"], change["to_package_version"]) == ("1.0.1", "1.0.2")
@@ -484,6 +484,39 @@ def test_a_version_seen_by_an_older_observer_runs_again_and_keeps_what_it_did(wo
     assert record["observer"] == "4" and record["behaviour"]["calls"]["lookups"] == ["api.example.com"]
     world["clock"].advance(days=1)
     assert s.crawler.run()["packages"]["unchanged"] == 1 and len(fake.runs) == 2
+
+
+@pytest.mark.parametrize("old_status", ["protocol", "timeout"])
+def test_modern_observer_retries_legacy_protocol_failures_without_repeating_new_successes(world, old_status):
+    from dataclasses import replace
+
+    services = world["services"]
+    fake = FakePackages()
+    fake.observer = "4"
+    services.crawler.packages = fake
+    target = package_target()
+    world["targets"].append(target)
+    fake.latest[target.endpoint] = "1.0.0"
+    fake.tools[(target.endpoint, "1.0.0")] = [tool("read", "A modern tool.")]
+    successful_observe = fake.observe
+
+    def old_reader(*args):
+        return replace(successful_observe(*args), status=old_status, tools=None,
+                       detail="legacy initialize could not observe this server")
+
+    fake.observe = old_reader
+    services.crawler.run()
+    assert services.store.target(target.id)["last_status"] == old_status
+    fake.observer = "5"
+    fake.observe = successful_observe
+    world["clock"].advance(days=1)
+    stats = services.crawler.run()
+    assert len(fake.runs) == 2 and stats["packages"]["renewed"] == 1
+    assert services.store.target(target.id)["last_status"] == "ok"
+    record = json.loads(services.store.target(target.id)["package_signals"])
+    assert record["observer"] == "5"
+    world["clock"].advance(days=1)
+    assert services.crawler.run()["packages"]["unchanged"] == 1 and len(fake.runs) == 2
 
 
 def test_unknown_attestation_is_not_provenance_loss():

@@ -43,6 +43,8 @@ def server(*, init=None, init_headers=None, tools_reply=None):
     def handle(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         method = body.get("method")
+        if method == "server/discover":
+            return httpx.Response(400)
         if method == "notifications/initialized":
             return httpx.Response(202)
         if method == "initialize":

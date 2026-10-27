@@ -54,7 +54,7 @@ dice a quien pregunte si lo que recibió es lo mismo que está viendo todo el mu
 
 ```mermaid
 flowchart LR
-    R["Registro oficial de MCP<br/>~21k servidores"] --> C["Rastreador<br/>initialize + tools/list<br/>nunca una llamada a una herramienta"]
+    R["Registro oficial de MCP<br/>~21k servidores"] --> C["Rastreador<br/>server/discover + tools/list<br/>nunca una llamada a una herramienta"]
     C --> D["Resumen MTL/1<br/>RFC 8785 + SHA-256"]
     D --> L["Cuatro etiquetas firmadas<br/>AWR/2 · did:key"]
     W["Sidecar de WARDEN<br/>conjunto de patrones publicado"] --> L
@@ -66,11 +66,11 @@ flowchart LR
     K -. "recuento voluntario de resúmenes" .-> M
 ```
 
-- **Lee** cada endpoint remoto del registro oficial de MCP: `initialize` y después `tools/list`,
+- **Lee** cada endpoint remoto del registro oficial de MCP: `server/discover` y después `tools/list` (inicialización para servidores legacy),
   recorriendo todas las páginas. No se llama a ninguna herramienta, no se instala ni se ejecuta
   nada, y las direcciones privadas se rechazan antes de abrir una conexión.
 - **Lee además** una lista corta de servidores remotos populares que el registro no incluye ([`histor/curated.json`](histor/curated.json), DeepWiki entre ellos), bajo el espacio de nombres propio de HISTOR `urn:awr:mtl:1:registry:histor.modelmarket.dev/curated`, para que ninguna etiqueta atribuya una entrada de registro que no existe. Cuando un servidor así se publica en el registro, la entrada del registro sustituye a la nuestra.
-- **Ejecuta paquetes de npm y PyPI** —los servidores que la gente arranca en local con `npx` o `uvx`— en un [sandbox](docs/operations.es.md#sandbox-de-paquetes): instalados sin ejecutar su código, arrancados bajo gVisor con credenciales señuelo y sin ruta hacia fuera, leídos con `initialize` + `tools/list`, y luego cada herramienta llamada una vez con argumentos canario, dentro del sandbox. La traza del propio gVisor dice lo que hizo el paquete —programas lanzados, nombres consultados, señuelos abiertos— al instalarse, al arrancar y al llamar a sus herramientas. Una vez por versión publicada; una versión nueva que cambia lo que sus herramientas le dicen al modelo es un cambio en el registro, como el de cualquier endpoint.
+- **Ejecuta paquetes de npm y PyPI** —los servidores que la gente arranca en local con `npx` o `uvx`— en un [sandbox](docs/operations.es.md#sandbox-de-paquetes): instalados sin ejecutar su código, arrancados bajo gVisor con credenciales señuelo y sin ruta hacia fuera, leídos con discovery y `tools/list` (inicialización legacy cuando sea necesaria), y luego cada herramienta llamada una vez con argumentos canario, dentro del sandbox. La traza del propio gVisor dice lo que hizo el paquete —programas lanzados, nombres consultados, señuelos abiertos— al instalarse, al arrancar y al llamar a sus herramientas. Una vez por versión publicada; una versión nueva que cambia lo que sus herramientas le dicen al modelo es un cambio en el registro, como el de cualquier endpoint.
 - **Calcula el resumen criptográfico (digest)** del conjunto de herramientas exactamente como lo define [MTL/1](https://github.com/alexar76/aicom/blob/main/awr/adoption/mcp-trust-label/PROFILE.md):
   nombre, descripción, esquema de entrada y de salida, orden por unidades de código UTF-16, RFC 8785.
 - **Firma** cuatro tipos de etiqueta, cada una un `VerificationVerdict` AWR/2 independiente: qué se
@@ -80,6 +80,11 @@ flowchart LR
   rastreo, de modo que una prueba de consistencia muestra que a la historia solo se le ha ido añadiendo contenido.
 - **Responde** a `/check`: envíe las herramientas que recibió su cliente y obtendrá, con firma, si
   HISTOR observó ese mismo conjunto en ese endpoint, uno anterior o ninguno.
+
+**Análisis local de actualizaciones:** seleccione dependencias y flujos, compare observaciones
+guardadas y obtenga una lista de comprobaciones. Los informes y las comprobaciones admiten
+`--lang ru|en|es|fr|zh`, con inglés (`en`) por defecto. [Guía](docs/upgrade-brief.es.md) ·
+[ejemplo reproducible](examples/upgrade-brief/README.es.md).
 
 ## Lo que una etiqueta no dice
 

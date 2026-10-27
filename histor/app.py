@@ -509,7 +509,7 @@ def create_app(services: Services) -> FastAPI:
         # package versions are two facts even when they served the same list, so the version is in the key.
         runs: list[dict[str, Any]] = []
         for h in reversed(history):
-            key = (h["status"], h["toolset"], h["subject"], h.get("package_version"), h.get("launch"))
+            key = (h["status"], h["toolset"], h["subject"], h.get("package_version"), h.get("launch"), h.get("protocol"))
             if runs and runs[-1]["key"] == key:
                 runs[-1]["until"] = h["observed_at"]
                 runs[-1]["count"] += 1
@@ -519,6 +519,7 @@ def create_app(services: Services) -> FastAPI:
                              "subjectDigest": h["subject"], "toolCount": h["tool_count"],
                              "serverName": h["server_name"], "serverVersion": h["server_version"],
                              "packageVersion": h.get("package_version"),
+                             "protocolVersion": h.get("protocol") or None,
                              "launch": _json_or_none(h.get("launch"))})
         for r in runs:
             r.pop("key")

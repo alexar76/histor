@@ -1,0 +1,67 @@
+{
+  "format": "histor.upgrade-watchlist/v1",
+  "title": "Investigación semanal — ejemplo sintético",
+  "dependencies": [
+    {
+      "id": "demo:research",
+      "before": "snapshots/research-before.json",
+      "after": "snapshots/research-after.json",
+      "tools": [
+        "search_docs",
+        "export_brief",
+        "legacy_fetch"
+      ],
+      "workflows": [
+        {
+          "id": "weekly-review",
+          "description": "Preparar la revisión semanal de documentos",
+          "tools": [
+            "search_docs",
+            "export_brief"
+          ]
+        },
+        {
+          "id": "archive-import",
+          "description": "Leer documentos de archivo",
+          "tools": [
+            "legacy_fetch"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:migration",
+      "before": "snapshots/migration-before.json",
+      "after": "snapshots/migration-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "status-check",
+          "description": "Comprobar el estado del servicio tras la migración MCP",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo:offline",
+      "before": "snapshots/offline-before.json",
+      "after": "snapshots/offline-after.json",
+      "tools": [
+        "read_status"
+      ],
+      "workflows": [
+        {
+          "id": "daily-status",
+          "description": "Consultar el estado diario del servicio externo",
+          "tools": [
+            "read_status"
+          ]
+        }
+      ]
+    }
+  ]
+}

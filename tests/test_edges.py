@@ -21,7 +21,12 @@ URL = "https://127.0.0.1/mcp"
 
 
 def reader_for(handler) -> McpReader:
-    return McpReader(timeout=5, allow_private=True, transport=httpx.MockTransport(handler))
+    def legacy(request):
+        if rpc(request).get("method") == "server/discover":
+            return httpx.Response(400)
+        return handler(request)
+
+    return McpReader(timeout=5, allow_private=True, transport=httpx.MockTransport(legacy))
 
 
 def rpc(request):

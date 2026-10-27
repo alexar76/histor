@@ -1,0 +1,77 @@
+{
+  "format": "histor.upgrade-observation/v1",
+  "targetId": "demo:research",
+  "status": "ok",
+  "observedAt": "2026-10-26T09:00:00Z",
+  "packageVersion": "1.0.0",
+  "serverName": "synthetic-fixture",
+  "serverVersion": "1.0.0",
+  "protocol": "2025-06-18",
+  "launch": {
+    "transport": "stdio",
+    "runtime": "synthetic-example",
+    "network": "fixture-only"
+  },
+  "tools": [
+    {
+      "name": "search_docs",
+      "description": "Search documents using the query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array"
+          }
+        }
+      }
+    },
+    {
+      "name": "export_brief",
+      "description": "Return the research brief as text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false
+      }
+    },
+    {
+      "name": "legacy_fetch",
+      "description": "Read a saved document.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id"
+        ]
+      }
+    }
+  ]
+}

@@ -103,12 +103,12 @@ class Settings:
     sandbox_max_per_crawl: int = 300
     # Observations in flight at once; match HISTOR_SANDBOX_SLOTS on the sandbox host.
     sandbox_concurrency: int = 2
-    # The observer version an observation must come from to count: an older one is run again
-    # (histor/sandbox/histor_observe.py VERSION; 2 = behaviour, 4 = how a failing package is started).
-    sandbox_observer: str = "4"
-    # Older observers whose ok, complete observations still count (observer 4 changed nothing a
-    # running server reports); their failures are run again ahead of never-observed packages.
-    sandbox_observers_valid: tuple[str, ...] = ("3",)
+    # Current sandbox generation (histor/sandbox/histor_observe.py VERSION): 5 adds modern MCP
+    # discovery with legacy fallback. Failed older observations may now be readable and retry.
+    sandbox_observer: str = "5"
+    # Preserve dated, complete successful observations from older supported readers. Their
+    # failures retry under the current observer; this is not a blanket re-observation campaign.
+    sandbox_observers_valid: tuple[str, ...] = ("3", "4")
     # Seconds HISTOR waits for one observation: a free slot, install (360 s), install scripts
     # (120 s), start and calls (150 s).
     sandbox_timeout_s: int = 720
@@ -228,8 +228,8 @@ def load_settings() -> Settings:
         sandbox_max_per_crawl=_int("HISTOR_SANDBOX_MAX_PER_CRAWL", 300, minimum=0),
         sandbox_concurrency=min(_int("HISTOR_SANDBOX_CONCURRENCY", 2, minimum=1), SANDBOX_SLOTS_PER_HOST),
         sandbox_max_slots=min(_int("HISTOR_SANDBOX_MAX_SLOTS", 12, minimum=1), 32),
-        sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "4").strip(),
-        sandbox_observers_valid=tuple(v.strip() for v in os.environ.get("HISTOR_SANDBOX_OBSERVERS_VALID", "3").split(",") if v.strip()),
+        sandbox_observer=os.environ.get("HISTOR_SANDBOX_OBSERVER", "5").strip(),
+        sandbox_observers_valid=tuple(v.strip() for v in os.environ.get("HISTOR_SANDBOX_OBSERVERS_VALID", "3,4").split(",") if v.strip()),
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
         declaration_refresh_s=_int("HISTOR_DECLARATION_REFRESH_S", 3600, minimum=0),

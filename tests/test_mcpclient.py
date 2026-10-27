@@ -22,7 +22,7 @@ def test_only_the_three_read_methods_are_ever_sent():
     mcp.tools["/mcp"] = [tool("a"), tool("b")]
     obs = reader(mcp).list_tools(URL)
     assert obs.status == "ok" and [t["name"] for t in obs.tools] == ["a", "b"]
-    assert {m for _, m in mcp.calls} == {"initialize", "notifications/initialized", "tools/list"}
+    assert {m for _, m in mcp.calls} == {"server/discover", "initialize", "notifications/initialized", "tools/list"}
     assert obs.server_info["name"] == "fake/mcp" and obs.protocol_version == "2025-06-18"
 
 
@@ -37,6 +37,8 @@ def test_pages_are_drained():
 def test_a_cursor_that_does_not_advance_is_partial_not_ok():
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
+        if body["method"] == "server/discover":
+            return httpx.Response(400)
         if body["method"] == "initialize":
             return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": {}})
         if body["method"] == "tools/list":

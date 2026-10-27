@@ -10,7 +10,7 @@ flowchart LR
     NGINX --> APP["histor container<br/>127.0.0.1:9490<br/>read-only rootfs · cap-drop ALL"]
     APP --> PG[("histor-postgres<br/>compose network only")]
     APP --> VOL[["histor-data volume<br/>issuer.key · provider.key"]]
-    APP -- "initialize + tools/list<br/>≤ 12 workers, ≤ 2 per host" --> MCP["public MCP endpoints"]
+    APP -- "server/discover + tools/list<br/>≤ 12 workers, ≤ 2 per host" --> MCP["public MCP endpoints"]
     MON["Alien Monitor · SKOPOS"] -- "GET /health, /api/v1/stats" --> NGINX
 ```
 
@@ -167,8 +167,8 @@ purpose: move the database AND the key and marker aside, together.
 
 ## Being a good crawler
 
-HISTOR identifies itself (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: initialize + tools/list)`),
-sends `initialize`, the initialized notification and `tools/list` per observation (plus pagination), never calls a tool, follows no redirects and keeps at most
+HISTOR identifies itself (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)`),
+sends `server/discover`, legacy initialization when needed, and `tools/list` per observation (plus pagination), never calls a tool, follows no redirects and keeps at most
 two connections per host. One observation has one deadline across every request and page, and the tool set is
 capped at 3 MiB and 5 000 tools.
 
@@ -188,7 +188,7 @@ Most MCP servers people run are npm or PyPI packages that their client starts on
 **What one observation does** (`histor/sandbox/histor_observe.py`, stdlib only):
 
 1. Install, under gVisor: npm with `--ignore-scripts`, pip with `--only-binary=:all:` — no code of the package runs. A PyPI package that only ships an sdist is reported as `no-wheel`, never built.
-2. Run, under gVisor's tracing runtime (`runsc-trace`): an internal network with no route out whose only resolver is the observer's DNS logger, read-only root, the package's own writable copy, `/tmp` a 64 MB tmpfs, an unprivileged uid, no capabilities, no new privileges, 512 MB memory with swap off, one CPU, 256 processes, no environment beyond `PATH`/`HOME`. HOME holds decoy credentials (SSH keys, cloud, registry and Git tokens, a wallet, shell history) and the working directory a decoy `.env`. The observer speaks MCP over stdin/stdout: `initialize`, `tools/list`, then each of up to 15 tools once with canary arguments built from its schema (an address on `histor-trap.invalid`, a path to a decoy note) — inside the sandbox, against nothing real — then kills the container. npm install scripts, skipped at install, run on their own in a traced stage first.
+2. Run, under gVisor's tracing runtime (`runsc-trace`): an internal network with no route out whose only resolver is the observer's DNS logger, read-only root, the package's own writable copy, `/tmp` a 64 MB tmpfs, an unprivileged uid, no capabilities, no new privileges, 512 MB memory with swap off, one CPU, 256 processes, no environment beyond `PATH`/`HOME`. HOME holds decoy credentials (SSH keys, cloud, registry and Git tokens, a wallet, shell history) and the working directory a decoy `.env`. The observer speaks MCP over stdin/stdout: `server/discover`, `tools/list` (legacy: `initialize`), then each of up to 15 tools once with canary arguments built from its schema (an address on `histor-trap.invalid`, a path to a decoy note) — inside the sandbox, against nothing real — then kills the container. npm install scripts, skipped at install, run on their own in a traced stage first.
 3. Answer: the version, its integrity hash, the image digest, a status (`ok`, `exited` — most often a server that needs a key or a path to start —, `install-failed`, `no-entry-point`, `no-wheel`, `timeout`, `protocol`) and the tools.
 
 It refuses to run if `runsc` is not a Docker runtime rather than fall back to plain `runc`.
@@ -292,4 +292,4 @@ HISTOR also refuses to start with a half-configured host (a URL without its toke
 
 **Observe one target again, now:** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server` (one or more endpoints or target ids). It takes the path a crawl takes — sandbox or MCP client, WARDEN, the commit, the label chain, a security event — and attaches the observation to the crawl in progress, or else to the last one, so no one-target run becomes the public last run. A package gets what its record says it asked for (placeholders, start argument, runtime). Use it to replace a record that is wrong now instead of waiting for a crawl to reach it; the old observation stays in the history.
 
-**A new observer version:** update every host first (`install.sh` again from the new commit — it is idempotent), check with `histor sandboxes`, and only then raise `HISTOR_SANDBOX_OBSERVER` on HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` lists older observers whose ok, complete observations still count (default `3`: observer 4 changed how a failing package is started, not what a running one reports); their failures run again ahead of never-observed packages, with at least half of a crawl. An ok, complete page traced by a reader before `gvisor-trace/9` (which could not see renames and links) is traced once more, sharing that half with the failures. **Removing a host:** delete its four lines and restart HISTOR; the numbers do not have to be contiguous.
+**A new observer version:** update every host first (`install.sh` again from the new commit — it is idempotent), check with `histor sandboxes`, and only then raise `HISTOR_SANDBOX_OBSERVER` on HISTOR. `HISTOR_SANDBOX_OBSERVERS_VALID` lists older observers whose ok, complete observations still count (default `3,4`: observer 5 adds modern MCP discovery; earlier complete successful observations remain valid); their failures run again ahead of never-observed packages, with at least half of a crawl. An ok, complete page traced by a reader before `gvisor-trace/9` (which could not see renames and links) is traced once more, sharing that half with the failures. **Removing a host:** delete its four lines and restart HISTOR; the numbers do not have to be contiguous.

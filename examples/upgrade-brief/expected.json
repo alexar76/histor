@@ -1,0 +1,69 @@
+{
+  "format": "histor.upgrade-brief/v1",
+  "analysis": "deterministic-offline",
+  "summary": {"changed": 1, "unchanged": 0, "context_changed": 1, "unknown": 1},
+  "dependencies": {
+    "demo:research": {
+      "status": "changed",
+      "comparability": "comparable",
+      "fieldCoverage": "full",
+      "contextChanges": [],
+      "observedChanges": true,
+      "toolSet": {"beforeCount": 3, "afterCount": 3, "added": ["fetch_document"], "removed": ["legacy_fetch"]},
+      "selectedTools": {
+        "export_brief": {
+          "status": "changed", "changes": ["extras"], "requiredAdded": [], "inputTypeChangedPaths": [],
+          "inputSchemaPaths": [], "outputSchemaPaths": [],
+          "annotationHints": {"destructiveHint": [false, true], "readOnlyHint": [true, false]},
+          "annotationEscalation": true
+        },
+        "legacy_fetch": {
+          "status": "removed", "changes": ["removed"], "requiredAdded": [], "inputTypeChangedPaths": [],
+          "inputSchemaPaths": [], "outputSchemaPaths": [], "annotationHints": null, "annotationEscalation": null
+        },
+        "search_docs": {
+          "status": "changed", "changes": ["description", "inputSchema", "outputSchema"],
+          "requiredAdded": ["workspace"],
+          "inputSchemaPaths": ["$.\"properties\".\"limit\".\"type\"", "$.\"properties\".\"workspace\".\"type\"", "$.\"required\"[1]"],
+          "outputSchemaPaths": ["$.\"properties\".\"items\".\"type\"", "$.\"properties\".\"results\".\"type\""],
+          "inputTypeChangedPaths": ["$/properties/limit", "$/properties/workspace"], "annotationHints": null,
+          "annotationEscalation": null
+        }
+      },
+      "workflows": {
+        "weekly-review": {"status": "retest", "affectedTools": ["export_brief", "search_docs"], "retestCount": 4},
+        "archive-import": {"status": "retest", "affectedTools": ["legacy_fetch"], "retestCount": 1}
+      }
+    },
+    "demo:migration": {
+      "status": "context_changed",
+      "comparability": "bounded",
+      "fieldCoverage": "full",
+      "contextChanges": ["protocol"],
+      "observedChanges": false,
+      "toolSet": {"beforeCount": 1, "afterCount": 1, "added": [], "removed": []},
+      "selectedTools": {
+        "read_status": {
+          "status": "unchanged", "changes": [], "requiredAdded": [], "inputTypeChangedPaths": [],
+          "inputSchemaPaths": [], "outputSchemaPaths": [], "annotationHints": null, "annotationEscalation": null
+        }
+      },
+      "workflows": {"status-check": {"status": "unknown", "affectedTools": [], "retestCount": 1}}
+    },
+    "demo:offline": {
+      "status": "unknown",
+      "comparability": "unknown",
+      "fieldCoverage": "none",
+      "contextChanges": [],
+      "observedChanges": null,
+      "toolSet": null,
+      "selectedTools": {
+        "read_status": {
+          "status": "unknown", "changes": [], "requiredAdded": [], "inputTypeChangedPaths": [],
+          "inputSchemaPaths": [], "outputSchemaPaths": [], "annotationHints": null, "annotationEscalation": null
+        }
+      },
+      "workflows": {"daily-status": {"status": "unknown", "affectedTools": ["read_status"], "retestCount": 2}}
+    }
+  }
+}
