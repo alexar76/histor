@@ -228,6 +228,9 @@ class FakePackages:
         self.runs: list[tuple[str, str, str | None]] = []
         self.fail = False
         self.observer = "4"
+        # What the sandbox reports about the launch, per version (None: nothing, as older tests expect).
+        self.conditions: dict[str, dict] = {}
+        self.supplied: dict[str, dict] = {}
 
     def latest_version(self, registry, name):
         return self.latest.get(f"{registry}:{name}")
@@ -261,6 +264,8 @@ class FakePackages:
             pages=1,
             package_version=version,
             package_observer=self.observer,
+            package_conditions=self.conditions.get(version),
+            package_supplied=self.supplied.get(version),
             behaviour={"complete": True, "startup": {}, "calls": {"tools": 1, "lookups": ["api.example.com"]}}
             if self.observer in ("3", "4")
             else None,
@@ -358,12 +363,18 @@ def test_every_observation_names_its_version_and_a_change_the_two_it_lies_betwee
     for version, tools in (("1.0.0", v1), ("1.0.1", v1), ("1.0.2", v2)):
         fake.latest["npm:@a/mem"] = version
         fake.tools[("npm:@a/mem", version)] = tools
+        fake.conditions[version] = {"image": "node:22-slim", "entry": "dist/index.js"}
+        if version == "1.0.2":
+            fake.supplied[version] = {"env": ["MEM_API_KEY"]}  # a name: the sandbox makes the placeholder
         s.crawler.run()
         world["clock"].advance(days=1)
     assert [r[2] for r in fake.runs] == ["1.0.0", "1.0.1", "1.0.2"]
 
     history = s.store.history(t.id)
     assert [h["package_version"] for h in history] == ["1.0.2", "1.0.1", "1.0.0"]
+    launches = [json.loads(h["launch"]) for h in history]
+    assert launches[2] == {"observer": "4", "image": "node:22-slim", "entry": "dist/index.js", "network": "no route out"}
+    assert launches[0]["supplied"] == {"env": ["MEM_API_KEY"]} and "supplied" not in launches[1]
     (change,) = s.store.changes(target_id=t.id)
     assert (change["from_package_version"], change["to_package_version"]) == ("1.0.1", "1.0.2")
 
@@ -371,6 +382,8 @@ def test_every_observation_names_its_version_and_a_change_the_two_it_lies_betwee
         page = client.get(f"/api/v1/servers/{t.id}").json()
         assert [(r["packageVersion"], r["count"]) for r in page["timeline"]] == [("1.0.2", 1), ("1.0.1", 1), ("1.0.0", 1)]
         assert page["timeline"][1]["toolSetDigest"] == page["timeline"][2]["toolSetDigest"]
+        assert page["timeline"][0]["launch"]["supplied"] == {"env": ["MEM_API_KEY"]}
+        assert page["timeline"][2]["launch"]["network"] == "no route out"
         assert page["changes"][0]["to_package_version"] == "1.0.2"
         one = client.get(f"/api/v1/changes/{change['id']}").json()
         assert (one["from_package_version"], one["to_package_version"]) == ("1.0.1", "1.0.2")
@@ -380,13 +393,15 @@ def test_every_observation_names_its_version_and_a_change_the_two_it_lies_betwee
     runs = [r for r in rows(out / "package_observations.jsonl.gz") if r["serverId"] == t.id]
     assert [(r["packageVersion"], r["status"]) for r in runs] == [("1.0.0", "ok"), ("1.0.1", "ok"), ("1.0.2", "ok")]
     assert runs[0]["toolSetDigest"] == runs[1]["toolSetDigest"] != runs[2]["toolSetDigest"]
+    assert json.loads(runs[2]["launchJson"])["supplied"] == {"env": ["MEM_API_KEY"]}
+    assert json.loads(runs[0]["launchJson"])["entry"] == "dist/index.js"
     sets = {r["digest"] for r in rows(out / "toolsets.jsonl.gz")}
     assert {r["toolSetDigest"] for r in runs} <= sets, "every list a run served is in the snapshot"
     (exported,) = [c for c in rows(out / "changes.jsonl.gz") if c["serverId"] == t.id]
     assert (exported["fromPackageVersion"], exported["toPackageVersion"]) == ("1.0.1", "1.0.2")
     assert manifest["files"]["package_observations.jsonl.gz"]["rows"] == len(runs)
     card = (out / "README.md").read_text()
-    assert "package_observations" in card and "fromPackageVersion" in card
+    assert "package_observations" in card and "fromPackageVersion" in card and "launchJson" in card
 
 
 def test_a_remote_server_has_no_package_observations_and_its_changes_no_versions(world, tmp_path):
@@ -401,7 +416,7 @@ def test_a_remote_server_has_no_package_observations_and_its_changes_no_versions
     s.crawler.run()
     (change,) = s.store.changes()
     assert change["from_package_version"] is None and change["to_package_version"] is None
-    assert all(h["package_version"] is None for h in s.store.history(change["target_id"]))
+    assert all(h["package_version"] is None and h["launch"] is None for h in s.store.history(change["target_id"]))
     out = tmp_path / "snap"
     dataset.export(s.store, s.key, out)
     assert rows(out / "package_observations.jsonl.gz") == []

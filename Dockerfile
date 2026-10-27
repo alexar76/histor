@@ -2,7 +2,14 @@
 # HISTOR: the Python service and the WARDEN scanner sidecar in one image. The sidecar is a
 # Node subprocess per batch, so the base is Node and Python comes from Debian (3.11 on bookworm,
 # which pyproject allows): one libc, one libstdc++, no copied binaries.
-FROM node:22.23.4-bookworm-slim
+# The deployment target can retain the accepted live scanner and its complete dependency tree.
+# Ordinary builds use the bundled scanner; they do not need a production image.
+ARG HISTOR_SCANNER_IMAGE=node:22.23.4-bookworm-slim
+FROM ${HISTOR_SCANNER_IMAGE} AS accepted-scanner
+# Legacy builders also visit unused stages. Give the ordinary Node fallback an empty source.
+USER root
+RUN mkdir -p /app/scanner/node_modules
+FROM node:22.23.4-bookworm-slim AS application
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -40,3 +47,12 @@ EXPOSE 9490
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9490/health', timeout=4).read()"
 CMD ["python", "-m", "histor", "serve"]
+
+FROM application AS with-live-scanner
+USER root
+RUN rm -rf /app/scanner/node_modules
+COPY --from=accepted-scanner /app/scanner/node_modules /app/scanner/node_modules
+USER 65532:65532
+
+# Keep the regular, reproducible vendored build as the default target.
+FROM application AS bundled

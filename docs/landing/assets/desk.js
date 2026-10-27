@@ -598,7 +598,7 @@ async function serverView(id, done) {
     const cls = r.status === "ok" ? "ok" : r.status === "undigestible" ? "chg" : "";
     tl.append(el("div", { class: `tl ${cls}` }, el("span", { class: "mono", text: `${fmt(r.from)}${r.count > 1 ? ` → ${fmt(r.until)} (×${r.count})` : ""}` }), " · ",
       r.packageVersion ? `v${r.packageVersion} · ` : "", r.status, r.toolSetDigest ? ` · ${short(r.toolSetDigest, 18)}` : "",
-      r.detail ? ` · ${r.detail}` : ""));
+      supplied(r.launch), r.detail ? ` · ${r.detail}` : ""));
   }
   root.append(tl);
   root.append(el("h3", { class: "block-h", text: t("js_h_labels") }));
@@ -629,6 +629,13 @@ async function changesView(done) {
     root.append(el("details", { class: "result" }, el("summary", {}, head, counts), renderDiff(s)));
   }
   done(root);
+}
+
+// What a package run was started with beyond the bare install: env names (never values), args, pins.
+function supplied(launch) {
+  const s = launch && launch.supplied;
+  if (!s) return "";
+  return " · " + Object.entries(s).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(" ") : v}`).join(" · ");
 }
 
 // A package change lies between two versions; the old one is unknown before 2026-10-26.

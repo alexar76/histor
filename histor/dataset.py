@@ -116,11 +116,15 @@ def _server_row(t: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _has_migration(store: Store, version: int) -> bool:
+    with store.db.read() as tx:
+        row = tx.one("SELECT 1 AS x FROM schema_migrations WHERE version >= ? LIMIT 1", (version,))
+    return row is not None
+
+
 def _has_package_versions(store: Store) -> bool:
     """Whether the database has migration 014: observations and changes carry the package version."""
-    with store.db.read() as tx:
-        row = tx.one("SELECT 1 AS x FROM schema_migrations WHERE version >= 14 LIMIT 1")
-    return row is not None
+    return _has_migration(store, 14)
 
 
 def _has_extras(store: Store) -> bool:
@@ -221,8 +225,9 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
     # than their changes do). packageVersion is null on rows from before migration 014.
     package_observations = _Writer(d / "package_observations.jsonl.gz")
     if _has_package_versions(store):
+        launch = "o.launch" if _has_migration(store, 15) else "NULL AS launch"  # how the run was launched (015)
         for o in _pages(store, "SELECT o.id, o.target_id, o.observed_at, o.status, o.package_version, o.toolset, "
-                        "o.subject, o.extras, o.tool_count, o.server_name, o.server_version FROM observations o "
+                        f"o.subject, o.extras, o.tool_count, o.server_name, o.server_version, {launch} FROM observations o "
                         "JOIN targets t ON t.id = o.target_id WHERE t.transport = 'stdio' AND o.id > ? "
                         "ORDER BY o.id LIMIT ?", "id", 0, PAGE):
             if o["target_id"] in excluded:
@@ -233,7 +238,7 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
                 "id": o["id"], "serverId": o["target_id"], "observedAt": o["observed_at"], "status": o["status"],
                 "packageVersion": o["package_version"], "toolSetDigest": o["toolset"], "subjectDigest": o["subject"],
                 "toolExtrasDigest": o["extras"], "toolCount": o["tool_count"], "serverName": o["server_name"],
-                "serverVersion": o["server_version"],
+                "serverVersion": o["server_version"], "launchJson": o["launch"],
             })
     package_observations.close()
 
@@ -358,8 +363,13 @@ def _package_observation_fields(f: dict[str, Any]) -> str:
   `serverId`, `observedAt`, `status`, `packageVersion` (the version the sandbox ran), `toolSetDigest`
   (join to toolsets; null when the run failed), `subjectDigest`, `toolExtrasDigest`, `toolCount`, and
   `serverName`/`serverVersion` as the server reported them in `initialize` (often not the package
-  version). `packageVersion` is recorded since 2026-10-26; older rows have it null. Remote servers
-  are not in this file: their record is their changes."""
+  version). `packageVersion` is recorded since 2026-10-26; older rows have it null. `launchJson`
+  says how the run was launched: `observer` (the sandbox's version), `image`/`imageTag`/`runtime`/
+  `entry`, `network` (`no route out`: a server that fetches something at startup gets nothing), and
+  `supplied` when HISTOR started it again with configuration: the env variable NAMES it set to
+  placeholders (never a value), start `args`, `pins`. The same version can serve different tools under
+  other launch args or with the network, so compare lists launched alike. Null on runs before it was
+  recorded (2026-10-26). Remote servers are not in this file: their record is their changes."""
 
 
 def _mb(n: int) -> str:

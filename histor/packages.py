@@ -62,6 +62,20 @@ def parse_package(key: str) -> tuple[str, str] | None:
     return registry, name
 
 
+# The run stage's network (sandbox/histor_observe.py): an internal network with no route out (names
+# resolve only to HISTOR's DNS logger and its traps), or none at all when the run is not traced.
+# Either way a server that fetches something at startup gets nothing back.
+SANDBOX_NETWORK = "no route out"
+
+
+def launch_record(observer: str, conditions: dict[str, Any] | None, supplied: dict[str, Any] | None) -> dict[str, Any]:
+    """How one package run was launched, for its observation: who ran it, in what, with what supplied."""
+    record: dict[str, Any] = {"observer": observer or None, **(conditions or {}), "network": SANDBOX_NETWORK}
+    if supplied:
+        record["supplied"] = supplied
+    return record
+
+
 class VersionCache:
     """``url → (etag, version)`` for the latest-version lookups, kept across crawls and restarts.
 
@@ -263,7 +277,9 @@ class PackageReader:
         status = doc.get("status") if isinstance(doc, dict) else None
         if code != 200 or not isinstance(status, str) or status in SANDBOX_FAULTS:
             return Observation(status=SANDBOX_ERROR, detail=f"sandbox answered {code} {status or ''}".strip())
-        observed = doc.get("version") if isinstance(doc.get("version"), str) else (version or "")
+        # A requested version is not evidence of an installed one (resolution/install can fail).
+        # Keep it unknown when the observer does not report it; never infer it from the request.
+        observed = doc.get("version") if isinstance(doc.get("version"), str) else ""
         observer = str(doc.get("observer") or "")[:20]
         behaviour = doc.get("behaviour") if isinstance(doc.get("behaviour"), dict) else None
         conditions = {k: str(doc[k])[:200] for k in ("image", "imageTag", "runtime", "entry") if isinstance(doc.get(k), str) and doc[k]} or None

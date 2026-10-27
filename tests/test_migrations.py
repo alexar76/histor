@@ -76,11 +76,26 @@ def test_014_adds_package_versions_and_leaves_older_rows_unknown(backend, monkey
         tx.execute("INSERT INTO changes(target_id, observed_at, from_toolset, to_toolset, summary) VALUES(?, ?, ?, ?, ?)",
                    ("pkg", "2026-10-25T01:00:00Z", "sha256-a", "sha256-b", "{}"))
     monkeypatch.undo()
-    assert apply_migrations(backend) == 14
+    assert apply_migrations(backend) == m.MIGRATIONS[-1][0]
     with backend.read() as tx:
         assert tx.one("SELECT package_version FROM observations WHERE target_id='pkg'")["package_version"] is None
         row = tx.one("SELECT from_package_version, to_package_version FROM changes WHERE target_id='pkg'")
     assert row["from_package_version"] is None and row["to_package_version"] is None
+
+
+def test_015_adds_the_launch_record_and_leaves_older_runs_unknown(backend, monkeypatch):
+    import histor.migrations as m
+
+    monkeypatch.setattr(m, "MIGRATIONS", m.MIGRATIONS[:14])
+    apply_migrations(backend)
+    with backend.transaction() as tx:
+        tx.execute("INSERT INTO observations(target_id, observed_at, status, package_version) VALUES(?, ?, 'ok', ?)",
+                   ("pkg", "2026-10-26T10:00:00Z", "1.0.0"))
+    monkeypatch.undo()
+    assert apply_migrations(backend) == m.MIGRATIONS[-1][0]
+    with backend.read() as tx:
+        row = tx.one("SELECT package_version, launch FROM observations WHERE target_id='pkg'")
+    assert row["package_version"] == "1.0.0" and row["launch"] is None
 
 
 def test_a_failed_transaction_leaves_nothing_behind(backend):

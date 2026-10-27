@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.4.2 — 2026-10-27
+
+- **Reviewed launch defaults for the capture gaps found with RugSnare.** Filesystem receives only
+  the container's `/work/app`; Azure DevOps uses a synthetic organization and envvar auth;
+  LaunchDarkly starts on stdio with a per-run placeholder; Figma starts with `--stdio` and a
+  placeholder variable. Previously failed captures retry with the profile, including on an
+  unchanged package version, and retain their earlier history. Explicit registry arguments take
+  precedence. No network route or real credential is introduced; a service requiring either can
+  still remain unobserved. See [capture conditions](docs/capture-conditions.md).
+- **Do not substitute a requested package version for an unreported observed version.** Failed
+  resolution, and responses that omit the version, now leave it unknown rather than attributing
+  a capture to the version in the request. Existing stored observations are not rewritten.
+
+- **Every package observation records how the run was launched.** The same version can serve other
+  tools under other launch args (mongodb-mcp-server with `--readOnly` has nine write tools fewer) or
+  when it reaches the network at startup (@netlify/mcp registers `netlify-coding-rules` only after its
+  topic fetch), so a list without its launch cannot be compared with another capture (RugSnare,
+  2026-10-26). Migration 015 adds `observations.launch`: the observer version, image, runtime and
+  entry, the network (`no route out`) and, when HISTOR started a server again with configuration,
+  the env variable names (never values), args and pins it supplied. The timeline gives it per row,
+  the desk shows what was supplied, and `package_observations.jsonl.gz` carries it as `launchJson`.
+  Until now these facts were kept only for a target's last run. Older rows stay `null`.
 - **Every observation of a package records the version it ran.** Only the target kept a version (the
   last one), so a history could not be matched to releases: cross-checking 26 packages against the
   RugSnare pins on 2026-10-26 took npm publish times to guess which version served which list.

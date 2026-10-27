@@ -34,7 +34,7 @@ flowchart LR
 `<id>` est formé des 16 premiers caractères hexadécimaux de `sha256(name + "\n" + endpoint)` —
 stable, un par entrée distante.
 
-Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version exécutée lors de cette observation (`serverVersion` est ce que le serveur a annoncé dans `initialize`, souvent différent de la version du paquet), et deux versions font deux lignes même si elles servaient la même liste. Enregistré depuis le 2026-10-26 ; les lignes plus anciennes ont `null`.
+Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version exécutée lors de cette observation (`serverVersion` est ce que le serveur a annoncé dans `initialize`, souvent différent de la version du paquet), et deux versions font deux lignes même si elles servaient la même liste. Enregistré depuis le 2026-10-26 ; les lignes plus anciennes ont `null`. `launch` indique comment cette exécution a été lancée : `observer`, `image`, `entry`, `network` (`no route out`) et, quand HISTOR a fourni une configuration, `supplied` avec les noms des variables d’environnement (jamais leurs valeurs), les arguments et les pins. La même version peut lister d’autres outils avec d’autres arguments de lancement ou avec le réseau.
 
 ## Changements
 

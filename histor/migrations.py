@@ -375,6 +375,15 @@ MIGRATION_014: tuple[str, ...] = (
     "ALTER TABLE changes ADD COLUMN to_package_version TEXT",
 )
 
+# How each package run was launched (histor.packages.launch_record): the observer, the image and entry,
+# the names of what was supplied (env names, args, pins; never a value) and the network. The same
+# version serves different tools by launch args or by whether it can reach the network at startup
+# (mongodb-mcp-server --readOnly, @netlify/mcp's topic fetch; RugSnare, 2026-10-26), so a recorded
+# list says how it was produced. NULL for remote servers and for runs before this migration.
+MIGRATION_015: tuple[str, ...] = (
+    "ALTER TABLE observations ADD COLUMN launch TEXT",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -391,6 +400,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (12, "012_crawl_plans", MIGRATION_012),
     (13, "013_remote_schedule", MIGRATION_013),
     (14, "014_observation_package_version", MIGRATION_014),
+    (15, "015_observation_launch", MIGRATION_015),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

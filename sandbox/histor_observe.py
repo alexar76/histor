@@ -45,6 +45,9 @@ The package is a stranger's code and some packages are hostile, so:
   server written for MCP SDK 1.x ran before 2.0); for npm, a runtime from a fixed list
   (``node24``: the current LTS image, for a package that requires it). HISTOR never sends a value. The traps record where a placeholder
   key was sent, so "sent the key to its own API" and "sent it somewhere else" can be told apart.
+  Reviewed launch profiles may also supply the container's exact working directory, ``/work/app``,
+  or the argument token ``histor-placeholder-token``. Only that exact token is replaced with a
+  per-run placeholder before exec; no shell expansion or external credential is involved.
 * ``--memory-swap`` equals ``--memory``: Docker's default doubles the limit with swap, and a
   900 MB allocation passed a 512 MB container on a host with swap until it was set.
 
@@ -112,6 +115,9 @@ ENV_DENY = re.compile(r"^(PATH|HOME|USER|SHELL|PWD|TMPDIR|TERM|LANG|LC_[A-Z_]+|N
 ARG_TOKEN = re.compile(r"^(?:[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,63}|-{1,2}[A-Za-z0-9][A-Za-z0-9._-]{0,40}(?:=[A-Za-z0-9._:/@+-]{1,63})?)$")
 MAX_ENV = 8
 MAX_ARGS = 6
+# Exact, bounded local path and symbolic token used by HISTOR's reviewed launch profiles.
+# The path is already inside this run's container; arbitrary absolute paths stay refused.
+PLACEHOLDER_TOKEN = "histor-placeholder-token"
 # Dependency pins HISTOR may ask for, by registry: a fixed list, never a requirement string from
 # outside. mcp<2 is how a server written for the MCP SDK 1.x ran before 2.0 renamed FastMCP.
 PINS = {"pypi": ("mcp<2",)}
@@ -268,7 +274,7 @@ def check_config(env: Any, args: Any, pins: Any = None, registry: str = "pypi",
         if not isinstance(name, str) or not ENV_NAME.match(name) or ENV_DENY.match(name) or len(name) > 64:
             raise Refused("bad variable name")
     for arg in args:
-        if not isinstance(arg, str) or not ARG_TOKEN.match(arg):
+        if not isinstance(arg, str) or (arg != APP_IN and not ARG_TOKEN.fullmatch(arg)):
             raise Refused("bad start argument")
     return sorted(set(env)), args, sorted(set(pins)), runtime
 
@@ -1106,7 +1112,8 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
     flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile, package_rw=True), "-i", "-w", APP_IN]
     for name in env or []:
         flags += ["-e", f"{name}={env_value(name, run_id)}"]
-    entry = [*entry, *(args or [])]
+    entry = [*entry, *(env_value("PACKAGE_API_KEY", run_id) if arg == PLACEHOLDER_TOKEN else arg
+                       for arg in (args or []))]
     if registry == "pypi":
         flags += ["-e", "PYTHONPATH=/work/pkg", "-e", "PYTHONDONTWRITEBYTECODE=1"]
     start, wall = time.monotonic(), time.time()

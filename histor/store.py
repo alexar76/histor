@@ -204,7 +204,7 @@ class Store:
         with self.db.read() as tx:
             return tx.execute(
                 "SELECT observed_at, status, detail, subject, toolset, tool_count, server_name, server_version, "
-                "package_version FROM observations WHERE target_id=? ORDER BY observed_at DESC, id DESC LIMIT ?",
+                "package_version, launch FROM observations WHERE target_id=? ORDER BY observed_at DESC, id DESC LIMIT ?",
                 (target_id, limit),
             )
 

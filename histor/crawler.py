@@ -43,12 +43,14 @@ from histor.declared import DeclarationError, DeclarationFetcher
 from histor.exit_reasons import NODE_RUNTIMES, classify, excerpt
 from histor.extras import extras_diff, tool_extras
 from histor.labels import LabelIssuer
+from histor.launch_profiles import package_launch_defaults
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import McpReader, Observation
 from histor.packages import (
     SANDBOX_ERROR,
     PackageReader,
     SandboxPool,
+    launch_record,
     parse_package,
     sandbox_readers,
     version_signals,
@@ -196,15 +198,19 @@ LEGACY_PINS = {"sdk-incompatible": ["mcp<2"]}
 
 
 def _config_for(t: Target, record: dict[str, Any]) -> dict[str, Any]:
-    """Variable names and start arguments to start a package with: what its registry entry
-    declares, plus what it named when it last exited without them."""
+    """Reviewed defaults, registry declarations, and configuration named by an earlier run.
+
+    Explicit arguments take precedence over a profile; only placeholder variable names are merged.
+    """
+    defaults = package_launch_defaults(t.endpoint)
     declared = t.needs or {}
     asked = record.get("exit") if isinstance(record.get("exit"), dict) else {}
     # What the last run was given goes on: a new version of a package that started with a
     # placeholder key needs it too, and a name asked for later adds to the ones already given.
     given = record.get("supplied") if isinstance(record.get("supplied"), dict) else {}
-    env = sorted({str(n) for n in [*(declared.get("env") or []), *(asked.get("env") or []), *(given.get("env") or [])]})[:8]
-    args = list(declared.get("args") or asked.get("args") or given.get("args") or [])[:6]
+    env = sorted({str(n) for n in [*(defaults.get("env") or []), *(declared.get("env") or []),
+                                 *(asked.get("env") or []), *(given.get("env") or [])]})[:8]
+    args = list(declared.get("args") or asked.get("args") or given.get("args") or defaults.get("args") or [])[:6]
     plan: dict[str, Any] = {k: v for k, v in (("env", env), ("args", args)) if v}
     if given.get("runtime") in NODE_RUNTIMES.values() and t.endpoint.startswith("npm:"):
         plan["runtime"] = given["runtime"]
@@ -859,8 +865,9 @@ class Crawler:
         looked_up = 0
         never_seconds = round(time.monotonic() - clock)
         for t in never:
-            if t.needs:
-                config[t.id] = _config_for(t, {})
+            plan = _config_for(t, {})
+            if plan:
+                config[t.id] = plan
         due = (updates + retrace + configured + renewed + reread + chosen)[:cap]
         unknown = sum(unknown_by.values())
         if unknown:
@@ -1116,16 +1123,23 @@ class Crawler:
             out[p.target.id] = {"verdict": verdict, "flags": flags}
         return out, budget
 
+    @staticmethod
+    def _launch(p: Prepared) -> str | None:
+        """The observation's launch record (histor.packages.launch_record): only a package run has one."""
+        if p.target.transport != "stdio" or not (p.obs.package_version or p.obs.package_observer):
+            return None
+        return dumps(launch_record(p.obs.package_observer, p.obs.package_conditions, p.obs.package_supplied))
+
     def _commit_internal(self, p: Prepared, run_id: int, why: str) -> None:
         """Record an observation OUR side could not process, without touching the target's chain."""
         try:
             with self.store.db.transaction() as tx:
                 Store.record_attempt(tx, p.target.id, run_id, p.observed_at)
                 tx.execute(
-                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages, package_version) "
-                    "VALUES(?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages, package_version, launch) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
                     (p.target.id, run_id, p.observed_at, "internal-error", clean_text(why, 300), p.obs.pages,
-                     clean_text(p.obs.package_version or "", 64) or None),
+                     clean_text(p.obs.package_version or "", 64) or None, self._launch(p)),
                 )
                 tx.execute("UPDATE targets SET last_attempt=? WHERE id=?", (p.observed_at, p.target.id))
         except Exception:  # noqa: BLE001 - even the record of a failure must not end the crawl
@@ -1215,8 +1229,8 @@ class Crawler:
                     Store.put_blob(tx, found, "toolextras", extras_body)
             tx.execute(
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
-                "tool_count, pages, protocol, server_name, server_version, extras, package_version) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_count, pages, protocol, server_name, server_version, extras, package_version, launch) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
                  clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
@@ -1224,7 +1238,7 @@ class Crawler:
                  clean_text(p.obs.protocol_version, 40),
                  clean_text(p.obs.server_info.get("name") or "", 200) or None,
                  clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest,
-                 clean_text(p.obs.package_version or "", 64) or None),
+                 clean_text(p.obs.package_version or "", 64) or None, self._launch(p)),
             )
             update: dict[str, Any] = {
                 "last_attempt": p.observed_at,

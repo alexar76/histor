@@ -33,7 +33,7 @@ flowchart LR
 
 `<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符——稳定不变，每个远程端点一个。
 
-对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。
+对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。`launch` 说明该次运行如何启动：`observer`、`image`、`entry`、`network`（`no route out`），以及 HISTOR 提供配置时的 `supplied`：环境变量名（从不包含值）、参数和 pins。同一版本在不同启动参数下或有网络时，可能列出不同的工具。
 
 ## 变更
 

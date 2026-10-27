@@ -33,7 +33,7 @@ flowchart LR
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
 
-For a package, each `timeline` row carries `packageVersion`, the version that run was about (`serverVersion` is what the server said in `initialize`, often not the package version), and two versions are two rows even when they served the same list. Recorded since 2026-10-26; older rows have `null`.
+For a package, each `timeline` row carries `packageVersion`, the version that run was about (`serverVersion` is what the server said in `initialize`, often not the package version), and two versions are two rows even when they served the same list. Recorded since 2026-10-26; older rows have `null`. `launch` says how that run was started: `observer`, `image`, `entry`, `network` (`no route out`) and, when HISTOR supplied configuration, `supplied` with the env variable names (never values), args and pins. The same version can list other tools under other launch args or with the network.
 
 ## Changes
 
