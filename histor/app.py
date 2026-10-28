@@ -506,10 +506,12 @@ def create_app(services: Services) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown server")
         history = store.history(target_id)
         # Runs of the same outcome collapse into one row: 300 identical "ok" days are one fact. Two
-        # package versions are two facts even when they served the same list, so the version is in the key.
+        # versions (package, server-reported or registry-listed) are two facts even when they served
+        # the same list, so the versions are in the key.
         runs: list[dict[str, Any]] = []
         for h in reversed(history):
-            key = (h["status"], h["toolset"], h["subject"], h.get("package_version"), h.get("launch"), h.get("protocol"))
+            key = (h["status"], h["toolset"], h["subject"], h.get("package_version"), h.get("launch"), h.get("protocol"),
+                   h["server_version"], h.get("registry_version"))
             if runs and runs[-1]["key"] == key:
                 runs[-1]["until"] = h["observed_at"]
                 runs[-1]["count"] += 1
@@ -519,6 +521,7 @@ def create_app(services: Services) -> FastAPI:
                              "subjectDigest": h["subject"], "toolCount": h["tool_count"],
                              "serverName": h["server_name"], "serverVersion": h["server_version"],
                              "packageVersion": h.get("package_version"),
+                             "registryVersion": h.get("registry_version"),
                              "protocolVersion": h.get("protocol") or None,
                              "launch": _json_or_none(h.get("launch"))})
         for r in runs:
@@ -672,7 +675,10 @@ def create_app(services: Services) -> FastAPI:
         return {"change": {"id": row["id"], "targetId": row["target_id"], "name": row["name"], "endpoint": row["endpoint"],
                            "observedAt": row["observed_at"], "fromToolSetDigest": row["from_toolset"],
                            "toToolSetDigest": row["to_toolset"], "fromPackageVersion": row.get("from_package_version"),
-                           "toPackageVersion": row.get("to_package_version")},
+                           "toPackageVersion": row.get("to_package_version"),
+                           "fromServerVersion": row.get("from_server_version"), "toServerVersion": row.get("to_server_version"),
+                           "fromRegistryVersion": row.get("from_registry_version"),
+                           "toRegistryVersion": row.get("to_registry_version")},
                 **cost_diff(row)}
 
     @app.get("/api/v1/servers/{target_id}/cost")

@@ -384,6 +384,29 @@ MIGRATION_015: tuple[str, ...] = (
     "ALTER TABLE observations ADD COLUMN launch TEXT",
 )
 
+# The registry's version of the entry at each observation, and on both sides of a change the version
+# the server reported (serverInfo) and the one the registry listed. A list that moves while both stay
+# the same is the redefinition a version-keyed record cannot see (agent-control-standard #38,
+# 2026-10-28); until now a researcher had to rebuild it from the registry's publish history. serverInfo
+# has been on every observation since 001, so the two server versions of an older change are filled
+# from those rows: the run that recorded the change, and the newest successful run before it, which
+# served the old list (a different list in between would have been a change). The registry version was
+# kept only as the target's current one, so it stays NULL on older rows rather than guessed.
+_SERVED_A_LIST = "o.status IN ('ok', 'undigestible')"
+MIGRATION_016: tuple[str, ...] = (
+    "ALTER TABLE observations ADD COLUMN registry_version TEXT",
+    "ALTER TABLE changes ADD COLUMN from_server_version TEXT",
+    "ALTER TABLE changes ADD COLUMN to_server_version TEXT",
+    "ALTER TABLE changes ADD COLUMN from_registry_version TEXT",
+    "ALTER TABLE changes ADD COLUMN to_registry_version TEXT",
+    "UPDATE changes SET to_server_version = (SELECT o.server_version FROM observations o "
+    f"WHERE o.target_id = changes.target_id AND o.observed_at = changes.observed_at AND {_SERVED_A_LIST} "
+    "ORDER BY o.id DESC LIMIT 1)",
+    "UPDATE changes SET from_server_version = (SELECT o.server_version FROM observations o "
+    f"WHERE o.target_id = changes.target_id AND o.observed_at < changes.observed_at AND {_SERVED_A_LIST} "
+    "ORDER BY o.observed_at DESC, o.id DESC LIMIT 1)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -401,6 +424,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (13, "013_remote_schedule", MIGRATION_013),
     (14, "014_observation_package_version", MIGRATION_014),
     (15, "015_observation_launch", MIGRATION_015),
+    (16, "016_change_versions", MIGRATION_016),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

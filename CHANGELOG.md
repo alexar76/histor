@@ -2,6 +2,14 @@
 
 ## 0.5.0 — 2026-10-27
 
+- Every change carries the server's own version (`serverInfo`) and the version the MCP registry
+  listed, on both sides (`from_/to_server_version`, `from_/to_registry_version`; migration 016),
+  and every observation the registry version. Equal pairs mark a list that moved at an unchanged
+  version (agent-control-standard #38). Server versions are filled for older changes from the
+  recorded runs; registry versions start on 2026-10-28. In the API, the timeline and the
+  snapshot (`changes.jsonl.gz`, `package_observations.registryVersion`, manifest `changeVersions`).
+  Live on histor.modelmarket.dev since 2026-10-28, ahead of the rest of 0.5.0.
+
 - Add `upgrade-brief --lang ru|en|es|fr|zh` for Markdown explanations and tool/workflow
   checklists, including checklist text and limits in JSON. Use English as the default in the
   CLI, Python API and renderer fallback, and record the selected language in `report.json`. Machine status

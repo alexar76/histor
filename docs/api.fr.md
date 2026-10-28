@@ -51,6 +51,8 @@ Compté comme dans [tool-list-cost.fr.md](tool-list-cost.fr.md) (`o200k_base`). 
 
 Pour un paquet, un changement porte aussi `from_package_version` et `to_package_version` (dans `/cost`, `fromPackageVersion` et `toPackageVersion`) : la dernière version qui servait l’ancienne liste et la version qui sert la nouvelle. Les deux valent `null` pour un serveur distant ; `from_package_version` vaut `null` quand l’ancienne liste a été servie pour la dernière fois avant le 2026-10-26.
 
+Chaque changement, de serveur distant ou de paquet, porte aussi `from_server_version` et `to_server_version` (dans `/cost`, `fromServerVersion` et `toServerVersion`) : la version que le serveur annonçait de lui-même (`serverInfo`) lors de la dernière observation qui servait l’ancienne liste et lors de celle qui a vu la nouvelle ; et `from_registry_version` et `to_registry_version` (`fromRegistryVersion`, `toRegistryVersion`) : la version que le registre MCP indiquait pour l’entrée lors de ces deux observations. Quand les deux paires sont égales, la liste a changé à version inchangée, ce qu’un enregistrement indexé sur la version ne peut pas voir. Les versions du serveur sont renseignées pour tous les changements (`null` si le serveur n’en annonçait aucune) ; celles du registre sont enregistrées depuis le 2026-10-28 et valent `null` avant cette date et pour les entrées de la liste curée. Chaque ligne de `timeline` porte aussi `registryVersion`, et une nouvelle version du serveur ou du registre ouvre une nouvelle ligne.
+
 ## Étiquettes et éléments de preuve
 
 | Méthode | Chemin | Renvoie |

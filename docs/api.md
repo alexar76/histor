@@ -50,6 +50,8 @@ Counted as [tool-list-cost.md](tool-list-cost.md) counts (`o200k_base`). A deplo
 
 For a package, a change also carries `from_package_version` and `to_package_version` (in `/cost`, `fromPackageVersion` and `toPackageVersion`): the last version that served the old list and the version that served the new one. Both are `null` for a remote server; `from_package_version` is `null` when the old list was last served before 2026-10-26.
 
+Every change, remote or package, also carries `from_server_version` and `to_server_version` (in `/cost`, `fromServerVersion` and `toServerVersion`): the version the server reported about itself (`serverInfo`) in the last run that served the old list and in the run that saw the new one; and `from_registry_version` and `to_registry_version` (`fromRegistryVersion`, `toRegistryVersion`): the version the MCP registry listed for the entry at those two runs. When both pairs are equal, the list changed at an unchanged version, which a record keyed on the version cannot see. Server versions are filled for every change (`null` when the server reported none); registry versions are recorded since 2026-10-28 and are `null` before that and for curated entries. Each `timeline` row carries `registryVersion` too, and a new server or registry version starts a new row.
+
 ## Labels and evidence
 
 | Method | Path | Returns |

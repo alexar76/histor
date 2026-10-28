@@ -50,6 +50,8 @@ flowchart LR
 
 对于软件包，变更还带有 `from_package_version` 和 `to_package_version`（在 `/cost` 中为 `fromPackageVersion` 和 `toPackageVersion`）：最后一个提供旧列表的版本，以及提供新列表的版本。远程服务器两者均为 `null`；旧列表最后一次提供早于 2026-10-26 时，`from_package_version` 为 `null`。
 
+每个变更（远程服务器或软件包）还带有 `from_server_version` 和 `to_server_version`（在 `/cost` 中为 `fromServerVersion` 和 `toServerVersion`）：服务器在提供旧列表的最后一次观测和看到新列表的那次观测中自报的版本（`serverInfo`）；以及 `from_registry_version` 和 `to_registry_version`（`fromRegistryVersion`、`toRegistryVersion`）：MCP 注册表在这两次观测时为该条目列出的版本。两组值都相同时，说明列表在版本未变的情况下发生了变化，以版本为键的记录看不到这种变化。所有变更都填有服务器版本（服务器未报告时为 `null`）；注册表版本自 2026-10-28 起记录，此前以及精选条目为 `null`。`timeline` 的每一行也带有 `registryVersion`，服务器或注册表版本变化时另起一行。
+
 ## 标签与证据
 
 | 方法 | 路径 | 返回 |

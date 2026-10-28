@@ -98,6 +98,33 @@ def test_015_adds_the_launch_record_and_leaves_older_runs_unknown(backend, monke
     assert row["package_version"] == "1.0.0" and row["launch"] is None
 
 
+def test_016_fills_server_versions_from_recorded_runs_and_leaves_registry_versions_unknown(backend, monkeypatch):
+    """serverInfo was on every observation, so an older change gets both server versions: the run that
+    recorded it and the newest run before it that served a list (the failed day in between served none).
+    The registry version was never kept per run: NULL, not guessed."""
+    import histor.migrations as m
+
+    monkeypatch.setattr(m, "MIGRATIONS", m.MIGRATIONS[:15])
+    apply_migrations(backend)
+    runs = [("2026-10-20T01:00:00Z", "ok", "1.0"), ("2026-10-21T01:00:00Z", "ok", "1.0"),
+            ("2026-10-22T01:00:00Z", "timeout", None), ("2026-10-23T01:00:00Z", "undigestible", "1.1"),
+            ("2026-10-24T01:00:00Z", "ok", "1.1")]
+    with backend.transaction() as tx:
+        for at, status, version in runs:
+            tx.execute("INSERT INTO observations(target_id, observed_at, status, server_version) VALUES(?, ?, ?, ?)",
+                       ("srv", at, status, version))
+        for at in ("2026-10-23T01:00:00Z", "2026-10-24T01:00:00Z"):
+            tx.execute("INSERT INTO changes(target_id, observed_at, summary) VALUES(?, ?, ?)", ("srv", at, "{}"))
+    monkeypatch.undo()
+    assert apply_migrations(backend) == m.MIGRATIONS[-1][0]
+    with backend.read() as tx:
+        rows = tx.execute("SELECT observed_at, from_server_version, to_server_version, from_registry_version, "
+                          "to_registry_version FROM changes ORDER BY observed_at")
+        assert {r["registry_version"] for r in tx.execute("SELECT registry_version FROM observations")} == {None}
+    assert [(r["from_server_version"], r["to_server_version"]) for r in rows] == [("1.0", "1.1"), ("1.1", "1.1")]
+    assert all(r["from_registry_version"] is None and r["to_registry_version"] is None for r in rows)
+
+
 def test_a_failed_transaction_leaves_nothing_behind(backend):
     apply_migrations(backend)
     with pytest.raises(RuntimeError), backend.transaction() as tx:

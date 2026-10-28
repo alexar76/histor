@@ -50,6 +50,8 @@ Contado como en [tool-list-cost.es.md](tool-list-cost.es.md) (`o200k_base`). Un 
 
 Para un paquete, un cambio lleva además `from_package_version` y `to_package_version` (en `/cost`, `fromPackageVersion` y `toPackageVersion`): la última versión que sirvió la lista anterior y la versión que sirvió la nueva. Ambas son `null` en un servidor remoto; `from_package_version` es `null` cuando la lista anterior se sirvió por última vez antes del 2026-10-26.
 
+Todo cambio, de servidor remoto o de paquete, lleva además `from_server_version` y `to_server_version` (en `/cost`, `fromServerVersion` y `toServerVersion`): la versión que el servidor declaró de sí mismo (`serverInfo`) en la última observación que sirvió la lista anterior y en la que vio la nueva; y `from_registry_version` y `to_registry_version` (`fromRegistryVersion`, `toRegistryVersion`): la versión que el registro MCP indicaba para la entrada en esas dos observaciones. Si ambos pares coinciden, la lista cambió con la versión intacta, algo que un registro indexado por versión no puede ver. Las versiones del servidor están en todos los cambios (`null` si el servidor no declaró ninguna); las del registro se guardan desde el 2026-10-28 y son `null` antes de esa fecha y en las entradas curadas. Cada fila de `timeline` lleva también `registryVersion`, y una nueva versión del servidor o del registro abre una fila nueva.
+
 ## Etiquetas y evidencia
 
 | Método | Ruta | Devuelve |

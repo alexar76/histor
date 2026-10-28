@@ -110,6 +110,20 @@ def _observer_of(record: str | None) -> str:
         return ""
 
 
+# An observation that recorded a tool list, digestible or not (a failed run recorded none).
+SERVED_A_LIST = "status IN ('ok', 'undigestible')"
+
+
+def _server_version(p: Prepared) -> str | None:
+    """The version the server reported about itself (serverInfo), as stored on the observation."""
+    return clean_text(p.obs.server_info.get("version") or "", 100) or None
+
+
+def _registry_version(t: Target) -> str | None:
+    """The version the registry listed for the entry when this run was planned (none for curated ones)."""
+    return clean_text(t.version or "", 100) or None
+
+
 def _artifact(t: Target) -> dict[str, str]:
     """The subject descriptor's artifact members: what HISTOR connected to."""
     if parse_package(t.endpoint):
@@ -1136,10 +1150,10 @@ class Crawler:
             with self.store.db.transaction() as tx:
                 Store.record_attempt(tx, p.target.id, run_id, p.observed_at)
                 tx.execute(
-                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages, package_version, launch) "
-                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO observations(target_id, run_id, observed_at, status, detail, pages, package_version, launch, "
+                    "registry_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (p.target.id, run_id, p.observed_at, "internal-error", clean_text(why, 300), p.obs.pages,
-                     clean_text(p.obs.package_version or "", 64) or None, self._launch(p)),
+                     clean_text(p.obs.package_version or "", 64) or None, self._launch(p), _registry_version(p.target)),
                 )
                 tx.execute("UPDATE targets SET last_attempt=? WHERE id=?", (p.observed_at, p.target.id))
         except Exception:  # noqa: BLE001 - even the record of a failure must not end the crawl
@@ -1229,8 +1243,8 @@ class Crawler:
                     Store.put_blob(tx, found, "toolextras", extras_body)
             tx.execute(
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
-                "tool_count, pages, protocol, server_name, server_version, extras, package_version, launch) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_count, pages, protocol, server_name, server_version, extras, package_version, launch, registry_version) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
                  clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
@@ -1238,7 +1252,7 @@ class Crawler:
                  clean_text(p.obs.protocol_version, 40),
                  clean_text(p.obs.server_info.get("name") or "", 200) or None,
                  clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest,
-                 clean_text(p.obs.package_version or "", 64) or None, self._launch(p)),
+                 clean_text(p.obs.package_version or "", 64) or None, self._launch(p), _registry_version(t)),
             )
             update: dict[str, Any] = {
                 "last_attempt": p.observed_at,
@@ -1315,7 +1329,7 @@ class Crawler:
                     if state.get("current_subject"):
                         changed = 1
                         self._record_change(tx, t.id, state, fallback, p.observed_at, link["id"], run_id,
-                                            p.obs.package_version)
+                                            p.obs.package_version, _server_version(p), _registry_version(t))
                         update["changes"] = int(state.get("changes") or 0) + 1
                     update.update(
                         chain_label=link["id"], last_continuity_at=p.observed_at, current_subject=fallback.digest,
@@ -1397,7 +1411,7 @@ class Crawler:
                 if new_subject and state.get("current_subject"):
                     changed = 1
                     self._record_change(tx, t.id, state, subject, p.observed_at, row["id"], run_id,
-                                        p.obs.package_version)
+                                        p.obs.package_version, _server_version(p), _registry_version(t))
                     update["changes"] = int(state.get("changes") or 0) + 1
             elif not prior_id and obs_row is not None:
                 # The observation starts the chain and counts as its first link: the next
@@ -1431,7 +1445,8 @@ class Crawler:
         return json.loads(row["body"])
 
     def _record_change(self, tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
-                       label_id: str, run_id: int, package_version: str | None = None) -> None:
+                       label_id: str, run_id: int, package_version: str | None = None,
+                       server_version: str | None = None, registry_version: str | None = None) -> None:
         old_toolset = state.get("current_toolset")
         # For a package, the change lies between two versions: the last one that served the old list
         # (an unchanged release keeps the list, so the newest such observation) and the one just run.
@@ -1441,6 +1456,12 @@ class Crawler:
             row = tx.one("SELECT package_version FROM observations WHERE target_id=? AND toolset=? AND status='ok' "
                          "ORDER BY id DESC LIMIT 1", (target_id, old_toolset))
             from_version = row["package_version"] if row else None
+        # Every change also carries the version the server reported and the one the registry listed, on
+        # both sides: the "before" side is the newest run before this one that served a list, which was
+        # the old list (another list in between would have been a change). A list that moved while both
+        # stayed the same is a redefinition at an unchanged version (migration 016).
+        before = tx.one(f"SELECT server_version, registry_version FROM observations WHERE target_id=? AND observed_at<? "
+                        f"AND {SERVED_A_LIST} ORDER BY observed_at DESC, id DESC LIMIT 1", (target_id, observed_at))
         old_entries = None
         if old_toolset:
             row = tx.one("SELECT body FROM blobs WHERE digest=?", (old_toolset,))
@@ -1456,10 +1477,13 @@ class Crawler:
         summary = diffing.tool_set_diff(old_entries, subject.entries, old_names, subject.names)
         tx.execute(
             "INSERT INTO changes(target_id, observed_at, from_subject, to_subject, from_toolset, to_toolset, summary, label_id, "
-            "run_id, from_package_version, to_package_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "run_id, from_package_version, to_package_version, from_server_version, to_server_version, "
+            "from_registry_version, to_registry_version) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (target_id, observed_at, state.get("current_subject"), subject.digest, old_toolset,
              subject.tool_set_digest, dumps(summary), label_id, run_id, from_version,
-             clean_text(package_version or "", 64) or None),
+             clean_text(package_version or "", 64) or None,
+             before["server_version"] if before else None, server_version,
+             before["registry_version"] if before else None, registry_version),
         )
 
     @staticmethod

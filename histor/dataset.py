@@ -216,6 +216,8 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
             "fromToolSetDigest": c["from_toolset"], "toToolSetDigest": c["to_toolset"],
             "fromSubjectDigest": c["from_subject"], "toSubjectDigest": c["to_subject"],
             "fromPackageVersion": c.get("from_package_version"), "toPackageVersion": c.get("to_package_version"),
+            "fromServerVersion": c.get("from_server_version"), "toServerVersion": c.get("to_server_version"),
+            "fromRegistryVersion": c.get("from_registry_version"), "toRegistryVersion": c.get("to_registry_version"),
             "labelId": c["label_id"], "summaryJson": c["summary"],
         })
     changes.close()
@@ -226,8 +228,10 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
     package_observations = _Writer(d / "package_observations.jsonl.gz")
     if _has_package_versions(store):
         launch = "o.launch" if _has_migration(store, 15) else "NULL AS launch"  # how the run was launched (015)
+        listed = "o.registry_version" if _has_migration(store, 16) else "NULL AS registry_version"  # 016
         for o in _pages(store, "SELECT o.id, o.target_id, o.observed_at, o.status, o.package_version, o.toolset, "
-                        f"o.subject, o.extras, o.tool_count, o.server_name, o.server_version, o.protocol, {launch} FROM observations o "
+                        f"o.subject, o.extras, o.tool_count, o.server_name, o.server_version, o.protocol, {launch}, {listed} "
+                        "FROM observations o "
                         "JOIN targets t ON t.id = o.target_id WHERE t.transport = 'stdio' AND o.id > ? "
                         "ORDER BY o.id LIMIT ?", "id", 0, PAGE):
             if o["target_id"] in excluded:
@@ -238,8 +242,8 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
                 "id": o["id"], "serverId": o["target_id"], "observedAt": o["observed_at"], "status": o["status"],
                 "packageVersion": o["package_version"], "toolSetDigest": o["toolset"], "subjectDigest": o["subject"],
                 "toolExtrasDigest": o["extras"], "toolCount": o["tool_count"], "serverName": o["server_name"],
-                "serverVersion": o["server_version"], "launchJson": o["launch"],
-                "protocolVersion": o["protocol"] or None,
+                "serverVersion": o["server_version"], "registryVersion": o["registry_version"],
+                "launchJson": o["launch"], "protocolVersion": o["protocol"] or None,
             })
     package_observations.close()
 
@@ -314,6 +318,8 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
         "recordSet": record_set,
         "changesFrom": first_change,
         "changesUntil": last_change,
+        # Whether changes carry server and registry versions on both sides (migration 016).
+        "changeVersions": _has_migration(store, 16),
         "counts": tally,
         "files": files,
     }
@@ -355,6 +361,20 @@ def _package_change_fields(f: dict[str, Any]) -> str:
   and the one that served the new list (null for remote servers and before 2026-10-26)."""
 
 
+def _version_change_fields(m: dict[str, Any]) -> str:
+    """The changes line about server and registry versions, when the snapshot records them."""
+    if not m.get("changeVersions"):
+        return ""
+    return """
+  For every change, `fromServerVersion` → `toServerVersion`: the version the server reported about itself
+  (`serverInfo`) in the last run that served the old list and in the run that saw the new one; and
+  `fromRegistryVersion` → `toRegistryVersion`: the version the MCP registry listed for the entry at those
+  two runs. A change whose versions are equal on both sides moved at an unchanged version: a record keyed
+  on the version cannot see it. Server versions come from every run since the log began (null when the
+  server reported none); registry versions are recorded since 2026-10-28 and null before, and null for
+  entries that come from no registry."""
+
+
 def _package_observation_fields(f: dict[str, Any]) -> str:
     """The card's line for package_observations, when the snapshot has it."""
     if "package_observations.jsonl.gz" not in f:
@@ -364,7 +384,8 @@ def _package_observation_fields(f: dict[str, Any]) -> str:
   `serverId`, `observedAt`, `status`, `packageVersion` (the version the sandbox ran), `toolSetDigest`
   (join to toolsets; null when the run failed), `subjectDigest`, `toolExtrasDigest`, `toolCount`, and
   `serverName`/`serverVersion` as the server reported them in legacy initialization or modern result
-  metadata (often not the package version), and `protocolVersion` when recorded (otherwise null).
+  metadata (often not the package version), `registryVersion` (what the MCP registry listed for the entry
+  at that run; since 2026-10-28), and `protocolVersion` when recorded (otherwise null).
   `packageVersion` is recorded since 2026-10-26; older rows have it null. `launchJson`
   says how the run was launched: `observer` (the sandbox's version), `image`/`imageTag`/`runtime`/
   `entry`, `network` (`no route out`: a server that fetches something at startup gets nothing), and
@@ -458,7 +479,7 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
 - **toolsets** — `digest`, `toolsJson`: per tool the four members the digest covers, as served
   (`name`, `description`, `inputSchema`, and `outputSchema` when sent).{_extras_fields(f)}
 - **changes** — `serverId`, `observedAt`, `fromToolSetDigest` → `toToolSetDigest`, `summaryJson`
-  (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).{_package_change_fields(f)}
+  (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).{_package_change_fields(f)}{_version_change_fields(m)}
 - **scans** — `toolSetDigest`, `patternSet`, `matchesJson` (rule code, tier, severity, tool, where).
   The rules are in `pattern-set.json`. A match is a pattern hit to look at, not a verdict.
 - **classifications** — `toolSetDigest`, `model`, `verdictJson`: an LLM's advisory reading of the
