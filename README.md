@@ -1,11 +1,6 @@
-<!-- aicom-mirror-notice -->
-> **🔄 Synced from a monorepo — but with a live history.** `histor` mirrors the
-> canonical AI-Factory monorepo. History here is append-only (no force-push).
-> **Pull requests are welcome** — merged PRs are imported back into the monorepo
-> and re-synced here, so your contribution becomes canonical.
-> 💬 **[Issues](https://github.com/alexar76/histor/issues)** · **[Pull requests](https://github.com/alexar76/histor/pulls)** both welcome.
-
 # HISTOR
+
+<!-- mcp-name: io.github.alexar76/histor -->
 
 <!-- aicom-readme-badges -->
 <p align="center">
@@ -26,6 +21,9 @@
   <a href="https://github.com/alexar76/histor/blob/main/LICENSE"><img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/license.svg" alt="License: MIT" /></a>
 </p>
 <!-- /aicom-readme-badges -->
+
+<!-- aicom-mirror-notice -->
+> 🔄 Synced from the [AI-Factory monorepo](https://github.com/alexar76/aicom) (append-only history). **Pull requests are welcome** — merged PRs are imported back and re-synced here. [Issues](https://github.com/alexar76/histor/issues) · [Pull requests](https://github.com/alexar76/histor/pulls)
 
 <p align="center">
   <strong>HISTOR</strong> (ἵστωρ, “the one who knows because they saw”) — a public transparency log of MCP tool definitions<br>
@@ -118,10 +116,28 @@ is shown as a date and a diff, never as an accusation. Details: [docs/labels.md]
 receipts and exports sourced behavioural indications while retaining payment totals and unknown
 cases. It needs no production database or wallet: [docs/payer-audit.md](docs/payer-audit.md).
 
-## Quick start
+## Install
 
 ```bash
-cd histor
+pip install aimarket-histor        # the package is aimarket-histor — "histor" on PyPI is an unrelated project
+histor audit https://histor.modelmarket.dev   # verify the public log's tree heads and proofs; needs no keys or database
+uvx aimarket-histor                           # MCP server over stdio against the public log: histor_changes, histor_check, histor_server
+```
+
+Python 3.11 or newer. `histor audit` is the first command to run: it checks the live log the way a
+stranger should, without trusting HISTOR ([docs/log.md](docs/log.md)).
+
+In an MCP client (Claude Code, Cursor, …): `{ "mcpServers": { "histor": { "command": "uvx", "args": ["aimarket-histor"] } } }` —
+three tools that ask the public log; nothing is crawled or stored locally. `aimarket-histor --local`
+(or `histor mcp`) serves your own log from `HISTOR_DATA_DIR` instead. Listed in the official MCP registry as
+`io.github.alexar76/histor`.
+
+## Quick start
+
+To run your own log from source:
+
+```bash
+git clone https://github.com/alexar76/histor && cd histor
 npm ci --prefix scanner                     # the WARDEN sidecar (node >= 20)
 uv sync --extra dev --project .
 HISTOR_CRAWL_LIMIT=40 uv run --project . python -m histor crawl   # observe 40 endpoints
@@ -146,9 +162,13 @@ service listens; see [docs/operations.md](docs/operations.md).
 ## Ask the log
 
 ```bash
-# Is what my client received what HISTOR observed at that endpoint?
-curl -sS https://histor.modelmarket.dev/api/v1/check -H 'Content-Type: application/json' \
-  -d '{"endpoint":"https://example.com/mcp","tools":[ …the tools/list result… ]}'
+# Is what my client received what HISTOR observed at that endpoint? Three lines that run as
+# written: take a listed server, send its endpoint and tool list to /check, read the signed answer.
+# With your own client, replace the second line by the endpoint and the tools/list result it received.
+H=https://histor.modelmarket.dev/api/v1
+S=$(curl -sS "$H/servers?limit=1" | jq -r '.servers[0].id')
+curl -sS "$H/servers/$S" | jq '{endpoint: .server.endpoint, tools: .tools}' > received.json
+curl -sS "$H/check" -H 'Content-Type: application/json' -d @received.json | jq '.verdict, .target.page'
 
 # The signed tree head, and a proof that today's log extends yesterday's
 curl -sS https://histor.modelmarket.dev/api/v1/log/sth

@@ -1,14 +1,32 @@
 # Changelog
 
-## 0.5.0 — 2026-10-27
+## 0.5.1 — 2026-10-29
 
+- `histor mcp --remote [URL]` and the new console script `aimarket-histor` (what an MCP registry
+  client runs with `uvx aimarket-histor`): the three stdio tools — `histor_changes`, `histor_check`,
+  `histor_server` — query a public HISTOR instance's capability endpoint (default
+  https://histor.modelmarket.dev, env `HISTOR_MCP_REMOTE`) instead of a local log. Until now the
+  only mode was local, so a stranger who installed the package from the registry talked to an
+  empty log. `--local` keeps the old behaviour; `histor mcp` without flags is unchanged.
+- `server.json` for the official MCP registry (`io.github.alexar76/histor`) and the `mcp-name`
+  marker in the README.
+- Hugging Face dataset card: `task_categories`, `task_ids`, `annotations_creators`,
+  `source_datasets`, `multilinguality`, two more tags, and a size bucket computed from the largest
+  file (the card said 10K<n<100K for a 115,897-row file).
+- README: an Install section (`pip install aimarket-histor` — the PyPI project `histor` is
+  unrelated), `histor audit` as the first command, a `/check` example that runs as written;
+  desk routes answer HEAD; `/datasets/` has og:image, a "start here" hint, the `load_dataset`
+  one-liner and a note on which snapshot Zenodo holds; JSON-LD on the landing; `CITATION.cff`.
 - Every change carries the server's own version (`serverInfo`) and the version the MCP registry
   listed, on both sides (`from_/to_server_version`, `from_/to_registry_version`; migration 016),
   and every observation the registry version. Equal pairs mark a list that moved at an unchanged
   version (agent-control-standard #38). Server versions are filled for older changes from the
   recorded runs; registry versions start on 2026-10-28. In the API, the timeline and the
   snapshot (`changes.jsonl.gz`, `package_observations.registryVersion`, manifest `changeVersions`).
-  Live on histor.modelmarket.dev since 2026-10-28, ahead of the rest of 0.5.0.
+  Live on histor.modelmarket.dev since 2026-10-28. This entry was listed under 0.5.0, but the
+  0.5.0 on PyPI was built on 2026-10-27, before it landed.
+
+## 0.5.0 — 2026-10-27
 
 - Add `upgrade-brief --lang ru|en|es|fr|zh` for Markdown explanations and tool/workflow
   checklists, including checklist text and limits in JSON. Use English as the default in the

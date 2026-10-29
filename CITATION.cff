@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use HISTOR or its data, please cite the software and the dataset snapshot you used."
+type: software
+title: "HISTOR — public transparency log of MCP tool definitions"
+abstract: "Reads what remote MCP endpoints and npm/PyPI MCP packages advertise, signs each observation as an MTL/1 label, appends it to an RFC 9162 Merkle log and answers /check: is what a client received what was observed? Weekly open-data snapshots with per-change classification."
+authors:
+  - family-names: Artamokhov
+    given-names: Aleksandr
+repository-code: "https://github.com/alexar76/histor"
+url: "https://histor.modelmarket.dev/"
+license: MIT
+version: 0.5.1
+date-released: 2026-10-29
+keywords:
+  - model-context-protocol
+  - transparency-log
+  - merkle-tree
+  - rfc9162
+  - tool-poisoning
+  - mcp-security
+preferred-citation:
+  type: data
+  title: "HISTOR snapshot: MCP tool definitions and how they change"
+  doi: 10.5281/zenodo.23512759
+  authors:
+    - family-names: Artamokhov
+      given-names: Aleksandr
+  year: 2026
+  publisher:
+    name: Zenodo
+  url: "https://doi.org/10.5281/zenodo.23512759"
+  notes: "Concept DOI; each weekly snapshot has its own version DOI. Also on Hugging Face: alexar76/histor-mcp-tool-definitions."

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.alexar76/histor",
+  "title": "HISTOR — MCP tool-definition transparency log",
+  "description": "Is what your client received what 88k+ MCP servers really advertise? Check, diff and history from a public signed log.",
+  "repository": {
+    "url": "https://github.com/alexar76/histor",
+    "source": "github"
+  },
+  "version": "0.5.1",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "aimarket-histor",
+      "version": "0.5.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "HISTOR_MCP_REMOTE",
+          "description": "Public HISTOR instance to query (default https://histor.modelmarket.dev). Pass --local to serve your own log from HISTOR_DATA_DIR instead.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

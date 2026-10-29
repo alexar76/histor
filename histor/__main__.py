@@ -15,10 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     if command == "mcp":
         from histor.mcp_stdio import main as mcp
 
-        if len(args) != 1:
-            print("usage: histor mcp", file=sys.stderr)
-            return 2
-        return mcp()
+        return mcp(args[1:])
 
     if command == "migrate":
         from histor.migrations import main as migrate

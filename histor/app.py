@@ -288,7 +288,8 @@ def create_app(services: Services) -> FastAPI:
         return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     for route in SPA_ROUTES:
-        app.add_api_route(route, spa, methods=["GET"], include_in_schema=False)
+        # HEAD too: link checkers and card fetchers probe with HEAD, and 405 reads as "down".
+        app.add_api_route(route, spa, methods=["GET", "HEAD"], include_in_schema=False)
 
     @app.get("/s/{target_id}", include_in_schema=False)
     def server_page(target_id: str) -> Response:

@@ -148,3 +148,56 @@ def test_modern_metadata_is_validated_on_every_request(tmp_path):
         # A valid request works after malformed/unsupported ones on the same process.
         assert call(5, "tools/list", _meta={version: "2026-07-28", caps: {}})["result"]["tools"]
 
+
+
+def _spawn_mcp(tmp_path, *cli_args, env_extra=None):
+    """Start `python -m histor mcp <args>` over pipes, with no local data and no network expectation."""
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(("AIMARKET_", "AIFACTORY_", "HISTOR_")) and k not in ("DATABASE_URL", "PYTHONPATH")}
+    env.update(PYTHONPATH=str(ROOT), AIMARKET_AUTO_CRAWL="0", AIMARKET_PQC="0", AIMARKET_SKIP_SEED="1",
+               AIMARKET_UPDATE_CHECK="0", HISTOR_DATA_DIR=str(tmp_path / "data"), **(env_extra or {}))
+    return subprocess.Popen([sys.executable, "-m", PACKAGE, "mcp", *cli_args], cwd=tmp_path, env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+
+
+def test_remote_mode_names_the_public_log_and_fails_closed_without_network(tmp_path):
+    """`--remote URL` talks to a public instance instead of the local store: the instructions say so, the
+    tool list is the same, and an unreachable instance is an isError result, not a crash. Port 1 on
+    loopback refuses at once, so the test needs no network and no local log."""
+    proc = _spawn_mcp(tmp_path, "--remote", "http://127.0.0.1:1")
+    messages = [
+        {"jsonrpc": "2.0", "id": 0, "method": "initialize",
+         "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "t", "version": "1"}}},
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+         "params": {"name": "histor_changes", "arguments": {"limit": 1}}},
+    ]
+    out, err = proc.communicate("".join(json.dumps(m) + "\n" for m in messages).encode(), timeout=60)
+    assert proc.returncode == 0, err.decode()
+    replies = {json.loads(line)["id"]: json.loads(line)["result"] for line in out.decode().splitlines() if line.strip()}
+    assert "http://127.0.0.1:1" in replies[0]["instructions"]
+    assert "fresh log" not in replies[0]["instructions"]  # that caveat belongs to the local mode only
+    assert sorted(t["name"] for t in replies[1]["tools"]) == ["histor_changes", "histor_check", "histor_server"]
+    assert replies[2]["isError"] is True
+    assert "did not answer" in replies[2]["content"][0]["text"]
+    assert not (tmp_path / "data").exists(), "remote mode must not create a local log"
+
+
+def test_mcp_rejects_unknown_arguments(tmp_path):
+    proc = _spawn_mcp(tmp_path, "--nope")
+    out, err = proc.communicate(b"", timeout=30)
+    assert proc.returncode == 2
+    assert out == b""
+    assert b"usage: histor mcp" in err
+
+
+def test_parse_args_defaults():
+    from histor.mcp_stdio import DEFAULT_REMOTE, parse_args
+    assert parse_args([], default_remote=False) is None
+    assert parse_args([], default_remote=True) == DEFAULT_REMOTE          # `aimarket-histor`
+    assert parse_args(["--local"], default_remote=True) is None
+    assert parse_args(["--remote"], default_remote=False) == DEFAULT_REMOTE
+    assert parse_args(["--remote", "https://log.example"], default_remote=False) == "https://log.example"
+    assert parse_args(["--remote=https://log.example/"], default_remote=False) == "https://log.example/"
+    assert parse_args(["--remote", "ftp://x"], default_remote=False) is False
+    assert parse_args(["--bogus"], default_remote=True) is False

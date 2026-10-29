@@ -119,6 +119,9 @@ def page(snaps: list[dict[str, Any]]) -> str:
 <title>HISTOR open data: MCP tool definitions and how they change</title>
 <meta name="description" content="{esc(DESCRIPTION)}">
 <link rel="canonical" href="{BASE}/">
+<meta property="og:type" content="website"><meta property="og:title" content="HISTOR open data: MCP tool definitions and how they change">
+<meta property="og:description" content="{esc(DESCRIPTION)}"><meta property="og:url" content="{BASE}/">
+<meta property="og:image" content="{SITE}/assets/og.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="{SITE}/assets/og.png">
 <script type="application/ld+json">
 {ld}
 </script>
@@ -152,9 +155,15 @@ what each server advertised, and every change, field by field. Free under CC BY 
 <div class="tw"><table><thead><tr><th>File</th><th>Rows</th><th>Size</th><th>What</th></tr></thead><tbody>
 {"".join(rows)}
 </tbody></table></div>
+<p><b>New here?</b> Start with <code>servers.jsonl.gz</code> (one row per listed server) and <code>changes.jsonl.gz</code>
+(one row per recorded change, field by field); <code>toolsets.jsonl.gz</code> is the large one — every distinct tool list in full.
+Sizes are in the table.</p>
 <p>The same files: <a href="{HF_DATASET}">Hugging Face</a> (one tag per snapshot) ·
-<a href="https://doi.org/{ZENODO_CONCEPT_DOI}">Zenodo</a> (a DOI per snapshot) · <a href="latest/">latest/</a> always points here.</p>
+<a href="https://doi.org/{ZENODO_CONCEPT_DOI}">Zenodo</a> (a DOI per archived snapshot; the record names its date, and <a href="latest/">latest/</a> here may be newer) ·
+<a href="latest/">latest/</a> always points at the newest snapshot.</p>
 <h2>Load it</h2>
+<pre>from datasets import load_dataset   # Hugging Face, any snapshot tag
+changes = load_dataset("alexar76/histor-mcp-tool-definitions", data_files="changes.jsonl.gz", split="train")</pre>
 <pre>-- DuckDB: the servers whose tool lists changed most often
 SELECT s.name, count(*) AS changes
 FROM '{BASE}/latest/changes.jsonl.gz' c

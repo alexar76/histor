@@ -420,11 +420,27 @@ def dataset_card(m: dict[str, Any], doi: str | None = None) -> str:
                      "package_observations.jsonl.gz")
         if name in f  # a card regenerated for an older snapshot names only the files it has
     )
+    # Hugging Face filters datasets by task and size; a card without task_categories is found
+    # only by free-text search (2026-10-29: 113 downloads next to 3,205 for a census with the
+    # same subject). The size bucket follows the largest configuration, as the Hub computes it.
+    largest = max((meta.get("rows") for meta in f.values() if isinstance(meta.get("rows"), int)), default=0)
+    size_category = ("n<1K" if largest < 1_000 else "1K<n<10K" if largest < 10_000 else
+                     "10K<n<100K" if largest < 100_000 else "100K<n<1M" if largest < 1_000_000 else "1M<n<10M")
     return f"""---
 license: cc-by-4.0
 pretty_name: HISTOR — MCP tool definitions and how they change
 language:
 - en
+task_categories:
+- text-classification
+task_ids:
+- multi-label-classification
+annotations_creators:
+- machine-generated
+source_datasets:
+- original
+multilinguality:
+- monolingual
 tags:
 - mcp
 - model-context-protocol
@@ -432,8 +448,10 @@ tags:
 - prompt-injection
 - tool-poisoning
 - transparency-log
+- supply-chain-security
+- ai-agents
 size_categories:
-- 10K<n<100K
+- {size_category}
 configs:
 {configs}
 ---

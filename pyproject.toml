@@ -2,7 +2,7 @@
 # (see oracles/core/pyproject.toml). Distribution name is always aimarket-*.
 [project]
 name = "aimarket-histor"
-version = "0.5.0"
+version = "0.5.1"
 description = "HISTOR — public transparency log of MCP tool definitions: signed MTL/1 labels over what each server advertised, when it changed, and a Merkle log anyone can audit"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -50,6 +50,8 @@ Homepage = "https://histor.modelmarket.dev/"
 
 [project.scripts]
 histor = "histor.__main__:main"
+# What an MCP registry client runs (`uvx aimarket-histor`): the stdio server against the public log.
+aimarket-histor = "histor.mcp_stdio:main_registry"
 
 [build-system]
 requires = ["hatchling"]

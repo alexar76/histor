@@ -10,4 +10,4 @@ check that nothing was rewritten afterwards.
 It says what a server *advertised*, and when that changed. It does not say a server is safe.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
