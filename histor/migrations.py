@@ -407,6 +407,29 @@ MIGRATION_016: tuple[str, ...] = (
     "ORDER BY o.observed_at DESC, o.id DESC LIMIT 1)",
 )
 
+MIGRATION_017: tuple[str, ...] = (
+    # histor-tlog/2: the newest checkpoint this instance co-signed for each log it witnesses.
+    """
+    CREATE TABLE witness_logs (
+        origin TEXT PRIMARY KEY,
+        tree_size BIGINT NOT NULL,
+        root TEXT NOT NULL,
+        checkpoint TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # Cosignature lines other witnesses returned for this log's own checkpoints.
+    """
+    CREATE TABLE cosignatures (
+        tree_size BIGINT NOT NULL,
+        name TEXT NOT NULL,
+        line TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        PRIMARY KEY (tree_size, name)
+    )
+    """,
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -425,6 +448,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (14, "014_observation_package_version", MIGRATION_014),
     (15, "015_observation_launch", MIGRATION_015),
     (16, "016_change_versions", MIGRATION_016),
+    (17, "017_checkpoints_and_witness", MIGRATION_017),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

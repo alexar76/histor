@@ -134,7 +134,7 @@ curl -sS "https://histor.modelmarket.dev/api/v1/log/proof/consistency?first=1000
 ```
 
 Tous les points de terminaison de l’API sont décrits dans [docs/api.fr.md](docs/api.fr.md). Comment
-auditer le journal sans faire confiance à HISTOR : [docs/log.fr.md](docs/log.fr.md). Les rouages
+auditer le journal sans faire confiance à HISTOR : [docs/log.fr.md](docs/log.fr.md) ; le format lui-même (entrée de la feuille, arbre, tête signée, règle de vérification) est spécifié dans [docs/spec/transparency-log.md](docs/spec/transparency-log.md) (résumé : [docs/spec/README.fr.md](docs/spec/README.fr.md)) avec des vecteurs normatifs dans [test-vectors/](test-vectors/). Les rouages
 internes sont dans [docs/architecture.fr.md](docs/architecture.fr.md).
 
 ## Tests

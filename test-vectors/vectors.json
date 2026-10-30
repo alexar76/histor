@@ -1,0 +1,949 @@
+{
+  "format": "histor-tlog/2",
+  "checkpoints": {
+    "format": "c2sp.org/tlog-checkpoint + c2sp.org/signed-note + c2sp.org/tlog-cosignature",
+    "origin": "example.com/histor-tlog-vectors",
+    "logVkey": "example.com/histor-tlog-vectors+2e59bf2d+ATMCvPrP82nMhEkKKcZfUg4zV8sT0sQ5dI/ooiNWsTze",
+    "witness": {
+      "name": "example.com/witness",
+      "seedHex": "b9e290a5a1076ae240cb11677b57ad8707113fc6d33e271b5ae673de818a035e",
+      "vkey": "example.com/witness+1c2d125b+BO1h6tyQngyciKtdPf/6sL31B1SIajoj5aZ2K6nJr1Bh",
+      "timestamp": 1761800000
+    },
+    "checkpointText": "example.com/histor-tlog-vectors\n8\nke8ZX3dPFbFsuRUf7lM8fuclqZQDGtGzrugM9AjbrD4=\n",
+    "checkpointNote": "example.com/histor-tlog-vectors\n8\nke8ZX3dPFbFsuRUf7lM8fuclqZQDGtGzrugM9AjbrD4=\n\n— example.com/histor-tlog-vectors Llm/LdjHC6gi12Kc4+Kq+ATi08NyBfL0ccLJUtFRn1WcK2QzRSFczp9MU+fYDH+E2yMhDrrMKaiVnhDkrc/PASw4Agc=\n",
+    "cosignatureLine": "— example.com/witness HC0SWwAAAABpAu9AMfIzW+0v4jtiUzq3EgBmoGvzwJehLlCieTY7NochqwHfcMbIAHaxQuBzOARAdMg9J4eLIlD92trxCkQApfGlDg==\n",
+    "cosignedNote": "example.com/histor-tlog-vectors\n8\nke8ZX3dPFbFsuRUf7lM8fuclqZQDGtGzrugM9AjbrD4=\n\n— example.com/histor-tlog-vectors Llm/LdjHC6gi12Kc4+Kq+ATi08NyBfL0ccLJUtFRn1WcK2QzRSFczp9MU+fYDH+E2yMhDrrMKaiVnhDkrc/PASw4Agc=\n— example.com/witness HC0SWwAAAABpAu9AMfIzW+0v4jtiUzq3EgBmoGvzwJehLlCieTY7NochqwHfcMbIAHaxQuBzOARAdMg9J4eLIlD92trxCkQApfGlDg==\n",
+    "cosignatureMessage": "cosignature/v1\ntime 1761800000\nexample.com/histor-tlog-vectors\n8\nke8ZX3dPFbFsuRUf7lM8fuclqZQDGtGzrugM9AjbrD4=\n"
+  },
+  "spec": "docs/spec/transparency-log.md",
+  "testKey": {
+    "seedHex": "58f61eab3d8b0d422342e5fe9fff062f6a6860b7eba7c6c1347f0903db1318d0",
+    "did": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+    "publicKeyHex": "3302bcfacff369cc84490a29c65f520e3357cb13d2c439748fe8a22356b13cde",
+    "verificationMethod": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms#z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+    "note": "vectors only; a log MUST NOT use this key"
+  },
+  "leafHashRule": "SHA-256(0x00 || JCS(document))",
+  "nodeHashRule": "SHA-256(0x01 || left || right)",
+  "emptyRoot": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "leaves": [
+    {
+      "index": 0,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000000",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          },
+          "verdict": "inconclusive",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:00Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 0
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":0,\"observedAt\":\"2026-10-30T00:00:00Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"inconclusive\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000001\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000000\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+      "digestSRI": "sha256-4Eu5GA6RRcTpRcpbwWzlchwo4AxVvJ8hevhxWa1c++c="
+    },
+    {
+      "index": 1,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000001",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000002"
+          },
+          "verdict": "pass",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:01Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 7
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":7,\"observedAt\":\"2026-10-30T00:00:01Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"pass\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000002\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000001\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+      "digestSRI": "sha256-zMfYEdUr/qbAlct1PW3dRK369X5BU5uP3DZ4ycPT4kU="
+    },
+    {
+      "index": 2,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000002",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000003"
+          },
+          "verdict": "pass",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:02Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 14
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":14,\"observedAt\":\"2026-10-30T00:00:02Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"pass\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000003\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000002\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+      "digestSRI": "sha256-SlMVCBcoYY3PmkLNt+WzN6F+/WUT6C1Z3OAvyWUxWTM="
+    },
+    {
+      "index": 3,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000003",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000004"
+          },
+          "verdict": "inconclusive",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:03Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 21
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":21,\"observedAt\":\"2026-10-30T00:00:03Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"inconclusive\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000004\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000003\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+      "digestSRI": "sha256-HesChPWi/6lAtZt6UmmciVAvdhrpQu+t9rD/8VtuOwA="
+    },
+    {
+      "index": 4,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000004",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000005"
+          },
+          "verdict": "pass",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:04Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 28
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":28,\"observedAt\":\"2026-10-30T00:00:04Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"pass\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000005\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000004\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+      "digestSRI": "sha256-nnd2Da/ElAO5t7cfRMUS8Gow0rEa1MRm7h/oZ5ai1Sk="
+    },
+    {
+      "index": 5,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000005",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000006"
+          },
+          "verdict": "pass",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:05Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 35
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":35,\"observedAt\":\"2026-10-30T00:00:05Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"pass\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000006\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000005\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+      "digestSRI": "sha256-tC9FyaVh2slGxRALGX1YqNPmLfv+uvi8Erjp85gWnYk="
+    },
+    {
+      "index": 6,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000006",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000007"
+          },
+          "verdict": "inconclusive",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:06Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 42
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":42,\"observedAt\":\"2026-10-30T00:00:06Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"inconclusive\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000007\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000006\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+      "digestSRI": "sha256-QrLjBrMkvYrtAL+2lFdzO+nTu33J4z97Q+3jJJCttR0="
+    },
+    {
+      "index": 7,
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000007",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000008"
+          },
+          "verdict": "pass",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:07Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 49
+          }
+        }
+      },
+      "canonical": "{\"credentialSubject\":{\"mcpTrustLabel\":{\"count\":49,\"observedAt\":\"2026-10-30T00:00:07Z\",\"profile\":\"MTL/1\",\"unicode\":\"résumé ✓ 𝄞\"},\"method\":{\"id\":\"urn:awr:mtl:1:method:tool-set-observation\"},\"verdict\":\"pass\",\"verifiedWork\":{\"id\":\"urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000008\"}},\"id\":\"urn:uuid:00000000-0000-4000-8000-000000000007\",\"issuer\":\"did:key:TEST\",\"type\":[\"VerifiableCredential\",\"VerificationVerdict\"]}",
+      "leafHash": "61fe507e82a83b3127d8be536a4dd26955d24c01f745ef11faef76cbd8c0b13d",
+      "digestSRI": "sha256-p1GrVrUsej7G6t8d6dYB/oxIO3wvXsudiingoba0tpo="
+    }
+  ],
+  "roots": {
+    "1": "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+    "2": "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+    "3": "0a65919c5ecbf260836a68c6f12c5dfeea2a70a6d40c2c16921ae08d75d19801",
+    "4": "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86",
+    "5": "d392ab5d0d8ade092e41b5905f525656a75d9ccc66790c8c3c6df6cfbd16ae9b",
+    "6": "eeb0869089162b193ea202c8fcfbd838521009f109e20ccc13606bfaa2d06c1f",
+    "7": "b867a2541a0fc1ba570bad1205c26a4185fcbf3e8d49f2dfcc8ab16f985f429d",
+    "8": "91ef195f774f15b16cb9151fee533c7ee725a994031ad1b3aee80cf408dbac3e",
+    "0": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "inclusion": [
+    {
+      "leafIndex": 0,
+      "treeSize": 1,
+      "proof": []
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 2,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 2,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 3,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 3,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 3,
+      "proof": [
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 4,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 4,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 4,
+      "proof": [
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66"
+      ]
+    },
+    {
+      "leafIndex": 3,
+      "treeSize": 4,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 5,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 5,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 5,
+      "proof": [
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "leafIndex": 3,
+      "treeSize": 5,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "leafIndex": 4,
+      "treeSize": 5,
+      "proof": [
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 6,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 6,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 6,
+      "proof": [
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "leafIndex": 3,
+      "treeSize": 6,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "leafIndex": 4,
+      "treeSize": 6,
+      "proof": [
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 5,
+      "treeSize": 6,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 7,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 7,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 7,
+      "proof": [
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "leafIndex": 3,
+      "treeSize": 7,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "leafIndex": 4,
+      "treeSize": 7,
+      "proof": [
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 5,
+      "treeSize": 7,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 6,
+      "treeSize": 7,
+      "proof": [
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 0,
+      "treeSize": 8,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "leafIndex": 1,
+      "treeSize": 8,
+      "proof": [
+        "e060e1c173df45de859b283a82827fd24259e63da6744ba0c24267b8dc22019f",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "leafIndex": 2,
+      "treeSize": 8,
+      "proof": [
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "leafIndex": 3,
+      "treeSize": 8,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "leafIndex": 4,
+      "treeSize": 8,
+      "proof": [
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "c0a30c0792bc568326b062cd95ac6ec4e3ac98da806a90bf82895c474382c141",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 5,
+      "treeSize": 8,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "c0a30c0792bc568326b062cd95ac6ec4e3ac98da806a90bf82895c474382c141",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 6,
+      "treeSize": 8,
+      "proof": [
+        "61fe507e82a83b3127d8be536a4dd26955d24c01f745ef11faef76cbd8c0b13d",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "leafIndex": 7,
+      "treeSize": 8,
+      "proof": [
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    }
+  ],
+  "consistency": [
+    {
+      "first": 1,
+      "second": 1,
+      "proof": []
+    },
+    {
+      "first": 1,
+      "second": 2,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 3,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 4,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 5,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 6,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 7,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "first": 1,
+      "second": 8,
+      "proof": [
+        "6d6a5ed8a241cbb81f4ac5bdc56fb944845265bb51ad0c8845507f1f1f6f2b3c",
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 2,
+      "proof": []
+    },
+    {
+      "first": 2,
+      "second": 3,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 4,
+      "proof": [
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 5,
+      "proof": [
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 6,
+      "proof": [
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 7,
+      "proof": [
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "first": 2,
+      "second": 8,
+      "proof": [
+        "372fe1597ddb449c0b2866f871b8728d74ef98c28f6cc03fddbfcc6120df0322",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "first": 3,
+      "second": 3,
+      "proof": []
+    },
+    {
+      "first": 3,
+      "second": 4,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66"
+      ]
+    },
+    {
+      "first": 3,
+      "second": 5,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "first": 3,
+      "second": 6,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "first": 3,
+      "second": 7,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "first": 3,
+      "second": 8,
+      "proof": [
+        "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+        "5b03baae86d0b7da26b4718b80207f268a5e62e9233fa72cb2e41605e6f0eaca",
+        "3681d77c1fa0365f015524392dbfd341fc26c59e562a7d476f936fbd55957c66",
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "first": 4,
+      "second": 4,
+      "proof": []
+    },
+    {
+      "first": 4,
+      "second": 5,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85"
+      ]
+    },
+    {
+      "first": 4,
+      "second": 6,
+      "proof": [
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e"
+      ]
+    },
+    {
+      "first": 4,
+      "second": 7,
+      "proof": [
+        "9e0c9e9d07b6f4773ea44b2cf2a135a95504f16a4e49d938a34d647b2764386f"
+      ]
+    },
+    {
+      "first": 4,
+      "second": 8,
+      "proof": [
+        "3da24c4eadb1da05b4ae58ed57d16905db007084cb303018298453660fff5eb5"
+      ]
+    },
+    {
+      "first": 5,
+      "second": 5,
+      "proof": []
+    },
+    {
+      "first": 5,
+      "second": 6,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 5,
+      "second": 7,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 5,
+      "second": 8,
+      "proof": [
+        "3394fc72c5bee816e3a1f6924f68d22446ce48de3d7480b8177b0717b0bfae85",
+        "d7c9d6f235f810861fdc9400ca77056b2d1657e7ba7668f1308376ee59bdc3f6",
+        "c0a30c0792bc568326b062cd95ac6ec4e3ac98da806a90bf82895c474382c141",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 6,
+      "second": 6,
+      "proof": []
+    },
+    {
+      "first": 6,
+      "second": 7,
+      "proof": [
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 6,
+      "second": 8,
+      "proof": [
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "c0a30c0792bc568326b062cd95ac6ec4e3ac98da806a90bf82895c474382c141",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 7,
+      "second": 7,
+      "proof": []
+    },
+    {
+      "first": 7,
+      "second": 8,
+      "proof": [
+        "493d570376fd1c585016f2d5a3d4f29582b8ccd5a85b9c5dc415a6522332b7d1",
+        "61fe507e82a83b3127d8be536a4dd26955d24c01f745ef11faef76cbd8c0b13d",
+        "a75f846bcdced85c6aae6779088e76461b5621aa320de27ddc76f922ddca348e",
+        "b320a908793d7984266be3bb9e9b505075a86e218a9d4659ef306da18259af86"
+      ]
+    },
+    {
+      "first": 8,
+      "second": 8,
+      "proof": []
+    }
+  ],
+  "signedTreeHeads": {
+    "5": {
+      "type": "histor.sth/v1",
+      "log": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+      "treeSize": 5,
+      "rootHash": "d392ab5d0d8ade092e41b5905f525656a75d9ccc66790c8c3c6df6cfbd16ae9b",
+      "timestamp": "2026-10-30T00:00:05Z",
+      "signature": {
+        "alg": "Ed25519",
+        "verificationMethod": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms#z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+        "value": "i090dJdq_sDyZxPVPsRkyZodG_F-KDsIFhgyIvv8iM1vTof79iZ8lGp80Fp5zVPH9Y5JYh3xYfSt-L45Yr5nAg"
+      }
+    },
+    "8": {
+      "type": "histor.sth/v1",
+      "log": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+      "treeSize": 8,
+      "rootHash": "91ef195f774f15b16cb9151fee533c7ee725a994031ad1b3aee80cf408dbac3e",
+      "timestamp": "2026-10-30T00:00:08Z",
+      "signature": {
+        "alg": "Ed25519",
+        "verificationMethod": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms#z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+        "value": "zQJAIHS30Cwmk1uiTuh_0WDPi4EAPn1sPk_IlveVWt8q6p53T7bf98Pm93_JyJwtmSAMvXMaJ-MGJYmEqp6yCw"
+      }
+    }
+  },
+  "negative": [
+    {
+      "name": "tampered-leaf",
+      "document": {
+        "id": "urn:uuid:00000000-0000-4000-8000-000000000002",
+        "type": [
+          "VerifiableCredential",
+          "VerificationVerdict"
+        ],
+        "issuer": "did:key:TEST",
+        "credentialSubject": {
+          "verifiedWork": {
+            "id": "urn:awr:mtl:1:subject:sha256:0000000000000000000000000000000000000000000000000000000000000003"
+          },
+          "verdict": "fail",
+          "method": {
+            "id": "urn:awr:mtl:1:method:tool-set-observation"
+          },
+          "mcpTrustLabel": {
+            "profile": "MTL/1",
+            "observedAt": "2026-10-30T00:00:02Z",
+            "unicode": "résumé ✓ 𝄞",
+            "count": 14
+          }
+        }
+      },
+      "claimedLeafHash": "608dbe1a18190733ca131dfcd2e479d3811f8475136ef2d194a1f393bb09f8a9",
+      "expect": "leaf hash does not match: SHA-256(0x00 || JCS(document)) differs"
+    },
+    {
+      "name": "sth-type-changed-after-signing",
+      "document": {
+        "type": "histor.check/v1",
+        "log": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+        "treeSize": 8,
+        "rootHash": "91ef195f774f15b16cb9151fee533c7ee725a994031ad1b3aee80cf408dbac3e",
+        "timestamp": "2026-10-30T00:00:08Z",
+        "signature": {
+          "alg": "Ed25519",
+          "verificationMethod": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms#z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+          "value": "zQJAIHS30Cwmk1uiTuh_0WDPi4EAPn1sPk_IlveVWt8q6p53T7bf98Pm93_JyJwtmSAMvXMaJ-MGJYmEqp6yCw"
+        }
+      },
+      "expect": "signature invalid: type is inside the signed bytes"
+    },
+    {
+      "name": "sth-signature-moved-to-another-size",
+      "document": {
+        "type": "histor.sth/v1",
+        "log": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+        "treeSize": 8,
+        "rootHash": "91ef195f774f15b16cb9151fee533c7ee725a994031ad1b3aee80cf408dbac3e",
+        "timestamp": "2026-10-30T00:00:05Z",
+        "signature": {
+          "alg": "Ed25519",
+          "verificationMethod": "did:key:z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms#z6MkhtPG233dxKrXB2dA95tprTMoSFB5fsMWiVVEpqj9kxms",
+          "value": "i090dJdq_sDyZxPVPsRkyZodG_F-KDsIFhgyIvv8iM1vTof79iZ8lGp80Fp5zVPH9Y5JYh3xYfSt-L45Yr5nAg"
+        }
+      },
+      "expect": "signature invalid: treeSize and rootHash are inside the signed bytes"
+    }
+  ]
+}

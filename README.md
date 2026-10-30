@@ -176,7 +176,7 @@ curl -sS "https://histor.modelmarket.dev/api/v1/log/proof/consistency?first=1000
 ```
 
 Every endpoint is in [docs/api.md](docs/api.md). How to audit the log without trusting HISTOR is
-in [docs/log.md](docs/log.md). The internals are in [docs/architecture.md](docs/architecture.md).
+in [docs/log.md](docs/log.md); the format itself (leaf input, tree, signed head, verification rule) is specified in [docs/spec/transparency-log.md](docs/spec/transparency-log.md) with normative vectors in [test-vectors/](test-vectors/). The internals are in [docs/architecture.md](docs/architecture.md).
 
 ## Tests
 

@@ -121,7 +121,7 @@ curl -sS "https://histor.modelmarket.dev/api/v1/log/proof/consistency?first=1000
 ```
 
 所有端点见 [docs/api.zh.md](docs/api.zh.md)。如何在不信任 HISTOR 的前提下审计日志，见
-[docs/log.zh.md](docs/log.zh.md)。内部结构见 [docs/architecture.zh.md](docs/architecture.zh.md)。
+[docs/log.zh.md](docs/log.zh.md)；格式本身（叶子输入、树、签名树头、校验规则）见规范 [docs/spec/transparency-log.md](docs/spec/transparency-log.md)（摘要：[docs/spec/README.zh.md](docs/spec/README.zh.md)），规范性向量在 [test-vectors/](test-vectors/)。内部结构见 [docs/architecture.zh.md](docs/architecture.zh.md)。
 
 ## 测试
 

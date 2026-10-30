@@ -138,7 +138,7 @@ curl -sS "https://histor.modelmarket.dev/api/v1/log/proof/consistency?first=1000
 ```
 
 Все эндпоинты описаны в [docs/api.ru.md](docs/api.ru.md). Как провести аудит журнала, не доверяя
-HISTOR, — в [docs/log.ru.md](docs/log.ru.md). Внутреннее устройство — в [docs/architecture.ru.md](docs/architecture.ru.md).
+HISTOR, — в [docs/log.ru.md](docs/log.ru.md); сам формат (вход листа, дерево, подписанная голова, правило проверки) — спецификация [docs/spec/transparency-log.md](docs/spec/transparency-log.md) (краткое содержание: [docs/spec/README.ru.md](docs/spec/README.ru.md)) с нормативными векторами в [test-vectors/](test-vectors/). Внутреннее устройство — в [docs/architecture.ru.md](docs/architecture.ru.md).
 
 ## Тесты
 

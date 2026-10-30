@@ -7,7 +7,7 @@ Backend-neutral: every statement here runs unchanged on SQLite (development) and
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from histor import merkle
@@ -289,6 +289,21 @@ class Store:
         with self.db.read() as tx:
             row = tx.one("SELECT body FROM sths WHERE tree_size=?", (tree_size,))
         return json.loads(row["body"]) if row else None
+
+    def cosignature_lines(self, tree_size: int) -> list[str]:
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT line FROM cosignatures WHERE tree_size=? ORDER BY name", (tree_size,))
+        return [row["line"] for row in rows]
+
+    def store_cosignatures(self, tree_size: int, lines: list[tuple[str, str]]) -> int:
+        """Keep one line per (size, witness name); a repeat replaces. Returns how many were written."""
+        now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with self.db.transaction() as tx:
+            for name, line in lines:
+                tx.execute("DELETE FROM cosignatures WHERE tree_size=? AND name=?", (tree_size, name))
+                tx.execute("INSERT INTO cosignatures(tree_size, name, line, received_at) VALUES(?, ?, ?, ?)",
+                           (tree_size, name, line, now))
+        return len(lines)
 
     def entries(self, start: int, end: int) -> list[dict[str, Any]]:
         with self.db.read() as tx:

@@ -121,6 +121,14 @@ class Settings:
     # Seconds between reads of the declaration files publishers point at from their registry entry
     # (histor.declared); the crawl reads them too. 0 = only at the crawl.
     declaration_refresh_s: int = 3600
+    # histor-tlog/2 (histor.checkpoint): the log's checkpoint origin — a schema-less URL that
+    # never changes once published (HISTOR_LOG_ORIGIN; default: the public host + "/log") — and
+    # this instance's witness name (HISTOR_WITNESS_NAME; default: the public host + "/witness").
+    # The witness co-signs only logs listed in HISTOR_WITNESS_LOGS, a JSON file of
+    # [{"origin": ..., "vkey": ...}]; unset = it knows no log and answers 404 to every origin.
+    log_origin: str = ""
+    witness_name: str = ""
+    witness_logs: str = ""
     # Pages the deployment serves beside the app that sitemap-site.xml should name too, e.g.
     # /datasets/ (nginx, from deploy/export_dataset.sh). Paths only, comma-separated.
     sitemap_extra: tuple[str, ...] = ()
@@ -161,6 +169,24 @@ class Settings:
     @property
     def head_marker_path(self) -> Path:
         return self.data_dir / "sth-marker.json"
+
+    @property
+    def witness_key_path(self) -> Path:
+        # A key of its own: the cosignature message is not bound to the cosigner name, and the
+        # specification tells an operator of several Ed25519 cosigners to use distinct keys.
+        return self.data_dir / "witness.key"
+
+    @property
+    def public_host(self) -> str:
+        return self.public_base.split("://", 1)[-1].rstrip("/")
+
+    @property
+    def checkpoint_origin(self) -> str:
+        return self.log_origin or f"{self.public_host}/log"
+
+    @property
+    def cosigner_name(self) -> str:
+        return self.witness_name or f"{self.public_host}/witness"
 
     @property
     def provider_key_path(self) -> Path:
@@ -233,6 +259,9 @@ def load_settings() -> Settings:
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
         declaration_refresh_s=_int("HISTOR_DECLARATION_REFRESH_S", 3600, minimum=0),
+        log_origin=os.environ.get("HISTOR_LOG_ORIGIN", "").strip(),
+        witness_name=os.environ.get("HISTOR_WITNESS_NAME", "").strip(),
+        witness_logs=os.environ.get("HISTOR_WITNESS_LOGS", "").strip(),
         sitemap_extra=tuple(
             p.strip() for p in os.environ.get("HISTOR_SITEMAP_EXTRA", "").split(",") if p.strip().startswith("/")
         ),

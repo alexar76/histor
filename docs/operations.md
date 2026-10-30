@@ -59,6 +59,9 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | Variable | Default | Notes |
 |---|---|---|
 | `HISTOR_PROFILE` | `dev` | `prod` fails closed without the next three |
+| `HISTOR_LOG_ORIGIN` | checkpoint origin (histor-tlog/2 §4.3); default = public host + `/log`. Set it once and never change it |
+| `HISTOR_WITNESS_NAME` | this instance's cosigner name; default = public host + `/witness` |
+| `HISTOR_WITNESS_LOGS` | JSON file `[{"origin": …, "vkey": …}]` of logs this instance witnesses; unset = witness answers 404 to every origin |
 | `HISTOR_DATABASE_URL` | empty (SQLite) | prod: `postgresql://…` — required |
 | `HISTOR_OPERATOR_TOKEN` | empty | prod: ≥ 24 characters; guards `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; used in badges, feed, federation |

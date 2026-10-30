@@ -22,6 +22,8 @@ def test_every_script_tag_is_external() -> None:
     tags = re.findall(r"<script\b[^>]*>", html)
     assert tags, "the desk needs at least its module script"
     for tag in tags:
+        if re.search(r'\stype="application/ld\+json"', tag):
+            continue  # a data block: never executed, so CSP script-src does not apply to it
         assert re.search(r'\ssrc="[^"]+"', tag), f"inline script is blocked by CSP: {tag}"
     assert "importmap" not in html
 

@@ -21,6 +21,10 @@ def main(argv: list[str] | None = None) -> int:
         from histor.migrations import main as migrate
 
         return migrate(args[1:])
+    if command == "witness-submit":
+        from histor.cosign_cli import main as witness_submit
+
+        return witness_submit(args[1:])
     if command == "audit":
         # Needs no settings, no database and no keys: an auditor is a stranger to the log.
         from histor.audit import main as audit

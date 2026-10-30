@@ -132,7 +132,7 @@ curl -sS "https://histor.modelmarket.dev/api/v1/log/proof/consistency?first=1000
 ```
 
 Todos los endpoints están en [docs/api.es.md](docs/api.es.md). Cómo auditar el registro sin confiar
-en HISTOR se explica en [docs/log.es.md](docs/log.es.md). El funcionamiento interno está en [docs/architecture.es.md](docs/architecture.es.md).
+en HISTOR se explica en [docs/log.es.md](docs/log.es.md); el formato en sí (entrada de la hoja, árbol, cabeza firmada, regla de verificación) está especificado en [docs/spec/transparency-log.md](docs/spec/transparency-log.md) (resumen: [docs/spec/README.es.md](docs/spec/README.es.md)) con vectores normativos en [test-vectors/](test-vectors/). El funcionamiento interno está en [docs/architecture.es.md](docs/architecture.es.md).
 
 ## Pruebas
 

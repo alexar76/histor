@@ -27,6 +27,14 @@ from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge, toolcost
 from histor.check import MAX_MATCHES, CheckError
+from histor.checkpoint import (
+    COSIGNATURE_V1_TYPE,
+    LOG_KEY_TYPE,
+    NoteError,
+    parse_signature_line,
+    sign_checkpoint,
+    vkey,
+)
 from histor.declared import public as declared_public
 from histor.labels import SHORT
 from histor.lookalike import default_index
@@ -385,6 +393,20 @@ def create_app(services: Services) -> FastAPI:
             "patternSet": store.get_meta("pattern_set"),
             "recordSet": store.get_meta("record_set"),
             "logType": "RFC 9162 Merkle tree over JCS(label); STH type histor.sth/v1",
+            # histor-tlog/2: the same head as a C2SP checkpoint, and this instance as a witness.
+            "checkpoint": {
+                "format": "c2sp.org/tlog-checkpoint",
+                "origin": settings.checkpoint_origin,
+                "vkey": vkey(settings.checkpoint_origin, LOG_KEY_TYPE, services.key.public_key_bytes),
+                "url": f"{settings.public_base}/checkpoint",
+            },
+            "witness": {
+                "name": settings.cosigner_name,
+                "vkey": vkey(settings.cosigner_name, COSIGNATURE_V1_TYPE, services.witness.key.public_key_bytes),
+                "submission": f"{settings.public_base}/witness/v1",
+                "monitoring": f"{settings.public_base}/witness/v1/logs",
+                "knownLogs": sorted(services.witness.known),
+            } if services.witness else None,
             "source": "https://github.com/alexar76/histor",
         }
 
@@ -757,6 +779,75 @@ def create_app(services: Services) -> FastAPI:
         if sth is None:
             raise HTTPException(status_code=404, detail="no signed tree head at that size")
         return sth
+
+    def _checkpoint(sth: dict[str, Any]) -> str:
+        """The STH as a C2SP checkpoint note: the log's signature line, then every cosignature
+        line a witness returned for that size (histor-tlog/2 §4.4)."""
+        note = sign_checkpoint(services.key, settings.checkpoint_origin, int(sth["treeSize"]),
+                               bytes.fromhex(sth["rootHash"]))
+        return note + "".join(store.cosignature_lines(int(sth["treeSize"])))
+
+    @app.get("/checkpoint")
+    def latest_checkpoint() -> Response:
+        sth = store.latest_sth()
+        if sth is None:
+            raise HTTPException(status_code=404, detail="the log is empty")
+        return Response(_checkpoint(sth), media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/log/checkpoint/{tree_size}")
+    def checkpoint_at(tree_size: int) -> Response:
+        sth = store.sth(tree_size)
+        if sth is None:
+            raise HTTPException(status_code=404, detail="no signed tree head at that size")
+        return Response(_checkpoint(sth), media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+    @app.post("/api/v1/log/cosignatures")
+    async def add_cosignatures(request: Request) -> dict[str, Any]:
+        """Operator: store cosignature lines a witness returned for one of this log's heads.
+        Lines are checked for shape only — a witness's key is the reader's to trust, not ours to
+        vouch for — and a line for a size this log never signed is refused."""
+        operator(request)
+        body = await request.json()
+        try:
+            size = int(body["treeSize"])
+            lines = [str(line) for line in body["lines"]]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="body is {treeSize, lines}") from exc
+        if store.sth(size) is None:
+            raise HTTPException(status_code=404, detail="no signed tree head at that size")
+        if len(lines) > 16:
+            raise HTTPException(status_code=400, detail="at most 16 lines")
+        parsed = []
+        for line in lines:
+            try:
+                bare = line.rstrip("\n")
+                parsed.append((parse_signature_line(bare).name, bare + "\n"))
+            except NoteError as exc:
+                raise HTTPException(status_code=400, detail=f"bad signature line: {exc}") from exc
+        return {"treeSize": size, "stored": store.store_cosignatures(size, parsed)}
+
+    @app.post("/witness/v1/add-checkpoint")
+    async def witness_add_checkpoint(request: Request) -> Response:
+        if services.witness is None:
+            raise HTTPException(status_code=404, detail="unknown log origin")
+        raw = await request.body()
+        if len(raw) > 16384:
+            raise HTTPException(status_code=413, detail="request too large")
+        try:
+            body = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=400, detail="body is UTF-8 text") from exc
+        reply = await run_in_threadpool(services.witness.add_checkpoint, body)
+        return Response(reply.body, status_code=reply.status, media_type=reply.media_type)
+
+    @app.get("/witness/v1/logs/{origin_hex}/checkpoint")
+    def witness_checkpoint(origin_hex: str) -> Response:
+        checkpoint = services.witness.checkpoint_for(origin_hex.lower()) if services.witness else None
+        if checkpoint is None:
+            raise HTTPException(status_code=404, detail="this witness has not co-signed that log")
+        return Response(checkpoint, media_type="text/plain; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/v1/log/proof/inclusion")
     def inclusion(leaf_index: int = Query(..., ge=0), tree_size: int = Query(..., ge=1)) -> dict[str, Any]:

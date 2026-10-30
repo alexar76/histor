@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 
 from awr import SigningKey
 
@@ -15,7 +16,7 @@ from histor.classifier import Classifier
 from histor.config import Settings
 from histor.crawler import Crawler, CrawlInProgress
 from histor.db import Backend, open_backend
-from histor.keys import bind_key_to_log, issuer_key
+from histor.keys import bind_key_to_log, issuer_key, load_or_create_seed
 from histor.labels import LabelIssuer
 from histor.logbook import Logbook
 from histor.migrations import apply_migrations
@@ -23,6 +24,7 @@ from histor.receipts import ReceiptLog
 from histor.scanner import Scanner
 from histor.signing import ProviderSigner
 from histor.store import Store
+from histor.witness import Witness, load_known_logs
 
 log = logging.getLogger("histor")
 
@@ -40,6 +42,7 @@ class Services:
     checker: Checker
     provider: ProviderSigner
     receipts: ReceiptLog | None = None
+    witness: Witness | None = None
     stop: threading.Event = field(default_factory=threading.Event)
     last_error: str | None = None
     remote_error: str | None = None
@@ -78,8 +81,13 @@ def build(settings: Settings, *, crawler_kwargs: dict | None = None, backend: Ba
                       classifier_enabled=settings.classifier_enabled)
     provider = ProviderSigner(settings.provider_key_path, pqc=settings.pqc)
     receipts = ReceiptLog(store, key, set(settings.receipt_issuers))
+    # histor-tlog/2: the witness has its own key (created on first use) and knows only the
+    # logs the operator listed.
+    witness_key = SigningKey.from_seed(load_or_create_seed(settings.witness_key_path, create=True))
+    witness = Witness(store, witness_key, settings.cosigner_name,
+                      load_known_logs(Path(settings.witness_logs) if settings.witness_logs else None))
     return Services(settings, backend, store, key, issuer, logbook, scanner, crawler, checker, provider,
-                    receipts=receipts)
+                    receipts=receipts, witness=witness)
 
 
 def crawl_in_background(services: Services, *, include_remote: bool = True) -> bool:

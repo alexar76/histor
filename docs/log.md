@@ -5,6 +5,10 @@
 A transparency log is only worth something if a reader who does not trust its operator can check
 it. This page is that check, end to end, with nothing but the log's public key.
 
+> The format itself — leaf input, tree, signed head, verification rule — is specified in
+> [`docs/spec/transparency-log.md`](spec/transparency-log.md) (`histor-tlog/1`), with normative test
+> vectors in [`test-vectors/`](../test-vectors/).
+
 ## The tree
 
 HISTOR's log is a Merkle tree exactly as [RFC 9162](https://www.rfc-editor.org/rfc/rfc9162)
