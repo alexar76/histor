@@ -228,3 +228,83 @@ def test_known_logs_file_is_validated(tmp_path):
     with pytest.raises(ValueError):
         load_known_logs(path)
     assert load_known_logs(None) == {}
+
+
+@pytest.mark.parametrize("size", ["²", "١", "9" * 5000, "9223372036854775808"])
+def test_untrusted_sizes_fail_closed(size):
+    from histor.witness import _parse_request
+    with pytest.raises(NoteError):
+        parse_checkpoint_text(f"{ORIGIN}\n{size}\n{base64.b64encode(ROOT).decode()}\n")
+    with pytest.raises(NoteError):
+        _parse_request(f"old {size}\n\n" + sign_checkpoint(LOG_KEY, ORIGIN, 1, ROOT))
+
+
+# -- witness-submit: the log side, against a real tlog-witness (this app, witnessing itself) --
+
+def _grow(services, n: int, start: int) -> None:
+    with services.store.db.transaction() as tx:
+        tx.lock_log()
+        for i in range(start, start + n):
+            services.store.append_leaf(tx, merkle.leaf_hash(f"leaf-{i}".encode()))
+    services.logbook.publish_sth()
+
+
+def test_witness_submit_verifies_cosignatures_before_keeping_them(witness_app, tmp_path):
+    from histor.cosign_cli import WitnessTarget, load_witnesses, submit_one
+    from histor.witness import WitnessReply
+
+    client, services = witness_app
+    issuer = client.get("/api/v1/issuer").json()
+    # the instance witnesses its own log, which is enough to drive the protocol end to end
+    log_key = VerifierKey.parse(issuer["checkpoint"]["vkey"])
+    services.witness.known = {log_key.name: (log_key,)}
+    wkey = VerifierKey.parse(issuer["witness"]["vkey"])
+    target = WitnessTarget(url="http://testserver/witness/v1", name=wkey.name, vkey=wkey)
+
+    _grow(services, 2, 0)
+    note = client.get("/checkpoint").text
+    size, kept, problem = submit_one(client, "http://testserver", note, target, 0)
+    assert (size, problem) == (2, "") and len(kept) == 1
+    assert verify_cosignature(parse_note(note).text, parse_signature_line(kept[0]), wkey) is not None
+
+    # the log grows; the second submission carries a consistency proof from 2 to 5
+    _grow(services, 3, 2)
+    note = client.get("/checkpoint").text
+    size, kept, problem = submit_one(client, "http://testserver", note, target, 2)
+    assert (size, problem) == (5, "") and len(kept) == 1
+
+    # a stale local state is corrected by the witness's 409 and the retry succeeds
+    _grow(services, 1, 5)
+    note = client.get("/checkpoint").text
+    size, kept, problem = submit_one(client, "http://testserver", note, target, 0)
+    assert (size, problem) == (6, "") and len(kept) == 1
+
+    # configured with another key under the same name: nothing is kept, and it is reported
+    other = SigningKey.from_seed(hashlib.sha256(b"impostor").digest())
+    wrong = WitnessTarget(url=target.url, name=wkey.name,
+                          vkey=VerifierKey(wkey.name, COSIGNATURE_V1_TYPE, other.public_key_bytes))
+    _grow(services, 1, 6)
+    note = client.get("/checkpoint").text
+    _, kept, problem = submit_one(client, "http://testserver", note, wrong, 6)
+    assert kept == [] and "no cosignature under the configured key" in problem
+
+    # a witness that answers with a line under its own name and key id but a bad signature
+    bad = SignatureLine(wkey.name, wkey.key_id, struct.pack(">Q", 1) + b"\x00" * 64).render()
+    original = services.witness.add_checkpoint
+    services.witness.add_checkpoint = lambda body, now=None: WitnessReply(200, bad)
+    try:
+        _, kept, problem = submit_one(client, "http://testserver", note, target, 6)
+    finally:
+        services.witness.add_checkpoint = original
+    assert kept == [] and "does not verify" in problem
+
+    # the witnesses file refuses a log-type key and a name that disagrees with its vkey
+    path = tmp_path / "w.json"
+    path.write_text(json.dumps([{"name": wkey.name, "vkey": issuer["witness"]["vkey"], "url": "https://w.example/"}]))
+    assert load_witnesses(path)[0].url == "https://w.example"
+    path.write_text(json.dumps([{"name": "x", "vkey": issuer["witness"]["vkey"], "url": "https://w.example"}]))
+    with pytest.raises(ValueError):
+        load_witnesses(path)
+    path.write_text(json.dumps([{"vkey": issuer["checkpoint"]["vkey"], "url": "https://w.example"}]))
+    with pytest.raises(ValueError):
+        load_witnesses(path)

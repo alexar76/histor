@@ -62,6 +62,7 @@ SQLite and PostgreSQL. On the code before this change it fails.
 | `HISTOR_LOG_ORIGIN` | checkpoint origin (histor-tlog/2 §4.3); default = public host + `/log`. Set it once and never change it |
 | `HISTOR_WITNESS_NAME` | this instance's cosigner name; default = public host + `/witness` |
 | `HISTOR_WITNESS_LOGS` | JSON file `[{"origin": …, "vkey": …}]` of logs this instance witnesses; unset = witness answers 404 to every origin |
+| `/etc/histor/witnesses.json` (host file, not an env var) | the witnesses `histor-witness-push` pushes the checkpoint to; absent = the push does nothing. Template: `deploy/witnesses.staging.json`. Install: `deploy/witness_push.sh` → `/usr/local/sbin/histor-witness-push`, `histor/cosign_cli.py` → `/usr/local/lib/histor-witness/cosign_cli.py` (mounted into images that predate `--witnesses-file`), the two units → `/etc/systemd/system/`, then `systemctl enable --now histor-witness-push.timer`. State: `/var/lib/histor-witness/` |
 | `HISTOR_DATABASE_URL` | empty (SQLite) | prod: `postgresql://…` — required |
 | `HISTOR_OPERATOR_TOKEN` | empty | prod: ≥ 24 characters; guards `/api/v1/admin/*` |
 | `HISTOR_PUBLIC_BASE` | `http://127.0.0.1:9490` | prod: `https://…`; used in badges, feed, federation |

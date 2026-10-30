@@ -1,0 +1,9 @@
+# /etc/systemd/system/histor-witness-push.timer
+[Unit]
+Description=Push HISTOR's checkpoint to its witnesses every 10 minutes (qpd 144 per witness)
+[Timer]
+OnCalendar=*:0/10
+RandomizedDelaySec=60
+Persistent=false
+[Install]
+WantedBy=timers.target

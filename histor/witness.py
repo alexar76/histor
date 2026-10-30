@@ -169,7 +169,9 @@ def _parse_request(body: str) -> tuple[int, list[bytes], Note]:
     head, note_text = body[:split], body[split + 2:]
     lines = head.split("\n")
     size_text = lines[0][4:]
-    if not size_text.isdigit() or (size_text != "0" and size_text.startswith("0")):
+    if (not size_text.isascii() or not size_text.isdigit() or len(size_text) > 19
+            or (len(size_text) == 19 and size_text > "9223372036854775807")
+            or (size_text != "0" and size_text.startswith("0"))):
         raise NoteError("old size is an ASCII decimal without leading zeros")
     proof_lines = lines[1:]
     if len(proof_lines) > MAX_PROOF_LINES:

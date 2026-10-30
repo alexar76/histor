@@ -1,0 +1,10 @@
+# /etc/systemd/system/histor-witness-push.service — runs deploy/witness_push.sh (installed as
+# /usr/local/sbin/histor-witness-push): push the log's checkpoint to its witnesses, store their cosignatures.
+[Unit]
+Description=HISTOR checkpoint push to transparency-log witnesses (c2sp.org/tlog-witness)
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/histor-witness-push
+TimeoutStartSec=300
+Nice=10

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "witness.stagemole.eu",
+    "operator": "Mullvad VPN AB",
+    "vkey": "witness.stagemole.eu+67f7aea0+BEqSG3yu9YrmcM3BHvQYTxwFj3uSWakQepafafpUqklv",
+    "url": "https://witness.stagemole.eu",
+    "source": "https://witness.stagemole.eu/about (read 2026-10-30)"
+  },
+  {
+    "name": "markovianprotocol.com/witness",
+    "operator": "Markovian Protocol",
+    "vkey": "markovianprotocol.com/witness+41b8827f+BJKLl8rBYM0oUxSaWh9rjTldTprEpYj/SWVIGgacA9XC",
+    "url": "https://witness.markovianprotocol.com",
+    "source": "https://witness.markovianprotocol.com/about (read 2026-10-30)"
+  },
+  {
+    "name": "witness.gdbsecurity.com",
+    "operator": "GDB Security",
+    "vkey": "witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf",
+    "url": "https://witness.gdbsecurity.com",
+    "source": "https://witness.gdbsecurity.com/about (read 2026-10-30); configures only the 10qps staging list"
+  },
+  {
+    "name": "staging.witness.transparency.goog/ring-any-bells",
+    "operator": "TrustFabric",
+    "vkey": "staging.witness.transparency.goog/ring-any-bells+2e1a8dc9+BG5JTpLc3FJtwzgh1Uv+Qelz9qeOH2bfWjS1s0s+y4rL",
+    "url": "https://staging.witness.transparency.goog/ring-any-bells",
+    "source": "https://transparency.dev/witnesses (read 2026-10-30); also signs with ML-DSA-44, that line is ignored here"
+  }
+]

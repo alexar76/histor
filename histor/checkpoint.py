@@ -137,7 +137,9 @@ def parse_checkpoint_text(text: str) -> Checkpoint:
         raise NoteError("a checkpoint is at least three non-empty lines")
     origin, size_text, root_b64, *ext = lines
     check_name(origin)
-    if not size_text.isdigit() or (size_text != "0" and size_text.startswith("0")):
+    if (not size_text.isascii() or not size_text.isdigit() or len(size_text) > 19
+            or (len(size_text) == 19 and size_text > "9223372036854775807")
+            or (size_text != "0" and size_text.startswith("0"))):
         raise NoteError("tree size is an ASCII decimal without leading zeros")
     root = b64decode_strict(root_b64)
     if len(root) != 32:

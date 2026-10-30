@@ -174,7 +174,9 @@ The witness signs with a key of its own (`witness.key`), never the log key: the 
 
 ### 8.2 Getting this log witnessed
 
-`python -m histor witness-submit --log <log> --witness <submission prefix> [--submit-to-log]` takes a log's checkpoint and consistency proof to any witness that speaks the protocol, and stores the returned line in the log so that `/checkpoint` carries it. A monitor (§5) that also keeps the cosigned checkpoints of two independent witnesses has, for the first time, evidence that the log shows them the same tree.
+`python -m histor witness-submit --log <log> --witness <submission prefix> [--submit-to-log]` takes a log's checkpoint and consistency proof to any witness that speaks the protocol, and stores the returned line in the log so that `/checkpoint` carries it. With `--witnesses-file` (a JSON list of `{name, vkey, url}`) it pushes to several witnesses and keeps a line only after verifying it under that witness's `vkey`; the log's own `POST /api/v1/log/cosignatures` checks shape only, so this verification is the one that matters.
+
+The public instance pushes to the staging witnesses of [witness-network.org](https://witness-network.org) once it is listed there: `deploy/witness_push.sh` with `histor-witness-push.{service,timer}` (every 10 minutes, 144 requests per witness per day — the `qpd` of the listing), witnesses in `deploy/witnesses.staging.json`. A monitor (§5) that also keeps the cosigned checkpoints of two independent witnesses has, for the first time, evidence that the log shows them the same tree.
 
 ## 9. What is not specified, and why
 

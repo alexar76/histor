@@ -44,6 +44,18 @@ from histor.untrusted import TooDeep, loads_limited
 
 PRODUCT_ID = "histor"
 MAX_CHECK_BYTES = 2 * 1024 * 1024
+
+
+async def read_bounded_body(request: Request, limit: int) -> bytes:
+    """Stop reading an untrusted stream as soon as it exceeds its budget."""
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > limit:
+            raise HTTPException(status_code=413, detail=f"body larger than {limit} bytes")
+        body.extend(chunk)
+    return bytes(body)
+
+
 SPA_ROUTES = ("/", "/servers", "/changes", "/log", "/check", "/about", "/stats")
 VC_MEDIA = "application/vc"
 
@@ -832,9 +844,7 @@ def create_app(services: Services) -> FastAPI:
     async def witness_add_checkpoint(request: Request) -> Response:
         if services.witness is None:
             raise HTTPException(status_code=404, detail="unknown log origin")
-        raw = await request.body()
-        if len(raw) > 16384:
-            raise HTTPException(status_code=413, detail="request too large")
+        raw = await read_bounded_body(request, 16384)
         try:
             body = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -877,9 +887,7 @@ def create_app(services: Services) -> FastAPI:
     # -- check ----------------------------------------------------------------------
 
     async def read_json(request: Request) -> dict[str, Any]:
-        raw = await request.body()
-        if len(raw) > MAX_CHECK_BYTES:
-            raise HTTPException(status_code=413, detail=f"body larger than {MAX_CHECK_BYTES} bytes")
+        raw = await read_bounded_body(request, MAX_CHECK_BYTES)
         try:
             body = await run_in_threadpool(loads_limited, raw or b"{}")
         except TooDeep as exc:
