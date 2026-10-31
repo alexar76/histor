@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.2 — 2026-10-30
+
+- Publish C2SP checkpoints and witness support (`histor-tlog/2`), including consistency-proof
+  verification, dedicated witness keys, cosignature storage and migration 017.
+- Add `witness-submit`, verified multi-witness submission and per-witness state.
+- Reject non-ASCII or out-of-range checkpoint sizes and stop reading oversized HTTP request
+  bodies at the configured limit instead of buffering the complete request first.
+- Keep distribution, runtime, citation and MCP registry descriptor versions aligned so these
+  changes can ship as a new release rather than diverging at the published 0.5.1 version.
+
 ## 0.5.1 — 2026-10-29
 
 - `histor mcp --remote [URL]` and the new console script `aimarket-histor` (what an MCP registry
