@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge, toolcost
+from histor import __version__, badge, fingerprints, toolcost
 from histor.check import MAX_MATCHES, CheckError
 from histor.checkpoint import (
     COSIGNATURE_V1_TYPE,
@@ -731,6 +731,32 @@ def create_app(services: Services) -> FastAPI:
                             "cost": f"/api/v1/changes/{row['id']}/cost"})
         return {"server": target_summary(t), "toolSetDigest": t["current_toolset"],
                 "current": current, "changes": history}
+
+    @app.get("/api/v1/servers/{target_id}/fingerprints")
+    def server_fingerprints(target_id: str, format: str = Query("vercel-ai", max_length=20)) -> dict[str, Any]:
+        """The current tool set as per-tool fingerprints in a client's or another record's format
+        (histor.fingerprints), so a client compares what it was served without converting anything."""
+        if format not in fingerprints.FORMATS:
+            raise HTTPException(status_code=400, detail=f"format is one of {', '.join(fingerprints.FORMATS)}")
+        t = store.target(target_id)
+        if t is None:
+            raise HTTPException(status_code=404, detail="unknown server")
+        tools = store.get_blob(t["current_toolset"], "toolset") if t["current_toolset"] else None
+        if tools is None:
+            raise HTTPException(status_code=404, detail="no tool set observed for this server")
+        # "" is "observed, no extra members"; None is "observed before HISTOR kept them", when the
+        # title and annotations these formats hash are unknown.
+        extras_digest = t.get("current_extras")
+        extras = store.get_blob(extras_digest, "toolextras") if extras_digest else None
+        merged, over_caps = fingerprints.merged_tools(tools, extras)
+        complete = [tool for tool in merged if tool.get("name") not in over_caps]
+        return {"server": {"id": t["id"], "name": t["name"], "endpoint": t["endpoint"]},
+                "format": format, "toolSetDigest": t["current_toolset"], "toolExtrasDigest": extras_digest,
+                "lastObserved": t["last_ok"], "unchangedSince": t["unchanged_since"],
+                "extrasRecorded": extras_digest is not None,
+                "fingerprints": fingerprints.fingerprint_map(complete, format),
+                # Tools whose extra members exceeded the storage caps: no fingerprint rather than a wrong one.
+                "incomplete": over_caps}
 
     @app.get("/feed.xml")
     def feed(watch: str | None = Query(None, max_length=1800)) -> Response:

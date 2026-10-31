@@ -117,7 +117,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> Unseen
     Unseen --> Pinned: tools/list 返回 ok<br/>观测 + 扫描 + 名称标签
-    Unseen --> Undigestible: MTL-SUBJ-001/002/003<br/>一个 inconclusive 观测标签
+    Unseen --> Undigestible: MTL-SUBJ-001<br/>一个 inconclusive 观测标签
     Pinned --> Pinned: 摘要相同，距上一环 ≥ 20 小时<br/>连续性 pass（unchangedSince）
     Pinned --> Changed: 摘要不同<br/>连续性 fail + 新的观测/扫描标签 + 差异
     Changed --> Pinned: 下次抓取，摘要相同<br/>连续性 pass

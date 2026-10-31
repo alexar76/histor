@@ -27,13 +27,15 @@ flowchart LR
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved`; `q` matches name, endpoint, title |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (no tool list read), `undigested` (a list read, no digest); `q` matches name, endpoint, title |
 | GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | README badge: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
 
 For a package, each `timeline` row carries `packageVersion`, the version that run was about (`serverVersion` is what the server said in `initialize`, often not the package version), and two versions are two rows even when they served the same list. Recorded since 2026-10-26; older rows have `null`. `launch` says how that run was started: `observer`, `image`, `entry`, `network` (`no route out`) and, when HISTOR supplied configuration, `supplied` with the env variable names (never values), args and pins. The same version can list other tools under other launch args or with the network.
+
+`/fingerprints` lets a client compare what it was served with what HISTOR observed, in the client's own format. With the Vercel AI SDK: `detectToolDrift(await fingerprintTools(await mcpClient.tools()), (await (await fetch(url)).json()).fingerprints)`; anything in `changed` or `added` differs from the public observation. The formats cover different members (Vercel's leaves out `outputSchema` and annotation hints), and a server can serve other definitions to another client: other protocol version, launch environment or configuration. `lastObserved` says when HISTOR last saw the set.
 
 ## Changes
 
@@ -43,6 +45,7 @@ For a package, each `timeline` row carries `packageVersion`, the version that ru
 | GET | `/api/v1/changes/<id>` | one change |
 | GET | `/api/v1/changes/<id>/cost` | what the change did to the tool list's token cost: every total before and after (`sent`, split into `names`, `descriptions`, `inputSchemas` and `structure`; `outputSchemas` and `listed` beside it), tools added and removed, and each tool whose count moved, with its description, its input schema and each top-level property of that schema apart |
 | GET | `/api/v1/servers/<id>/cost?limit=` | the current list's cost per tool, and the totals of its last changes (up to 50) |
+| GET | `/api/v1/servers/<id>/fingerprints?format=` | the current tool set as one fingerprint per tool in another format: `vercel-ai` (Vercel AI SDK `fingerprintTools`, the default), `heldfast` (heldfast lockfile digest) or `agentavow-v1` (`agentavow.mcp-tool-definition.v1`); tools whose extra members exceeded the storage caps are listed in `incomplete` instead |
 | GET | `/api/v1/cost/toolsets/<digest>` | the cost of one stored tool set |
 | GET | `/feed.xml` | Atom feed of the latest 50 changes; `?watch=<id>,<id>,…` (up to 100 target ids, as `/check` and the server pages give them) keeps only those servers and packages — a subscription in any feed reader |
 

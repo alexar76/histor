@@ -39,16 +39,20 @@ flowchart LR
     D --> J2["RFC 8785"] --> H2["SHA-256 → empreinte du sujet<br/>= verifiedWork.digestSRI"]
 ```
 
-Un ensemble d’outils qui contient un nombre fractionnaire où que ce soit dans ses schémas n’a **pas
-d’empreinte calculable** sous MTL/1 : deux implémentations pourraient le sérialiser différemment.
-L’étiquette ne porte alors aucune empreinte et indique `inconclusive` avec `MTL-NUM-001`, plutôt que
-de s’engager sur des octets que personne d’autre ne peut reproduire.
+Les nombres sont lus comme des doubles IEEE 754 et écrits comme le prescrit RFC 8785, c’est-à-dire
+comme les écrit `JSON.stringify` : `0.5`, `1e+21`, `5` pour `5.0`. Jusqu’à MTL/1.1 (31 octobre 2026),
+un ensemble contenant un nombre fractionnaire dans ses schémas n’avait pas d’empreinte (`MTL-NUM-001`),
+pas plus qu’un ensemble vide ou qui répète un nom ; ce jour-là, 5 159 serveurs lus par HISTOR
+étaient dans ce cas, dont 4 941 à cause d’une fraction. Désormais seule une entrée sans nom
+(`MTL-SUBJ-001`) ou un nombre sans double (`1e400`, `MTL-NUM-001`) laisse un ensemble sans empreinte,
+et un ensemble qui ne contient que des entiers garde les mêmes octets et la même empreinte qu’avant.
+Un ensemble qui reçoit sa première empreinte n’est pas compté comme un changement.
 
 ## Les quatre méthodes
 
 | Méthode | Émise | `pass` | `fail` | `inconclusive` |
 |---|---|---|---|---|
-| `tool-set-observation` | la première fois qu’une cible présente un ensemble d’outils | ensemble d’outils parcouru en entier, non vide, empreinte calculée | **jamais** | ensemble vide, noms en double, entrée malformée, nombre non entier |
+| `tool-set-observation` | la première fois qu’une cible présente un ensemble d’outils | ensemble d’outils parcouru en entier, empreinte calculée | **jamais** | une entrée sans nom ; un nombre sans double |
 | `tool-def-pattern-scan` | à chaque nouvelle observation, et de nouveau quand l’ensemble de motifs de WARDEN change | aucun motif ne correspond | **jamais** | une ou plusieurs correspondances, chacune listée avec son niveau |
 | `tool-set-continuity` | à chaque exploration (crawl), à ≥ 20 h d’écart, dès qu’une étiquette antérieure existe | même empreinte de sujet que l’étiquette antérieure | les empreintes diffèrent | pas d’empreinte d’un des deux côtés ; l’observation actuelle a échoué |
 | `name-threat-match` | à chaque nouvelle observation | nom et point de terminaison (endpoint) ne figurent dans aucun enregistrement | **jamais** | un enregistrement correspond (un signal de nommage, pas une preuve concernant le code) |

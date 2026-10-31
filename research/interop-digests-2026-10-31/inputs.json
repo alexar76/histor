@@ -1,0 +1,53 @@
+{
+ "histor_snapshot": {
+  "url": "https://histor.modelmarket.dev/datasets/2026-10-26/",
+  "treeHead": {
+   "type": "histor.sth/v1",
+   "log": "did:key:z6Mkw1CVxsPj9utYp7VXWEbuuGM9Ev47itwKu1UfKd5ByxR9",
+   "treeSize": 1074932,
+   "rootHash": "a1ca3b6abeb57d240d91949a5e719813beaf4bb0eab625c8289de062972508cb",
+   "timestamp": "2026-10-26T13:49:50Z",
+   "signature": {
+    "alg": "Ed25519",
+    "verificationMethod": "did:key:z6Mkw1CVxsPj9utYp7VXWEbuuGM9Ev47itwKu1UfKd5ByxR9#z6Mkw1CVxsPj9utYp7VXWEbuuGM9Ev47itwKu1UfKd5ByxR9",
+    "value": "UkzNWQgkHJqUEnf2ahBFAzEshOwdxG0lRuxJb5ytVhuk3t_SgIT4VcrP49q-rfcoEC4U5OVgIGmM0CltFqL1BQ"
+   }
+  },
+  "files": {
+   "servers.jsonl.gz": "0c86bcf338ecb95994458e0637923804c948df11b1d8668394c3d68798ca9158",
+   "toolsets.jsonl.gz": "88d6f4edee1b69bd55830b4f468a2f493e4bdedeb07fcd6ec564d6318f8f10ec",
+   "tool_extras.jsonl.gz": "edc6203dc5a8054bad895043172c4c50c56038629461b2aabd53ff7c7519e055",
+   "changes.jsonl.gz": "f2f71dfaa9c89cef379e1d2a6b00e69d5387d24c0a4b128292e3ff4c76ca9ed1",
+   "extras_changes.jsonl.gz": "237cc036e67f862169609e9b1f5d17225a64ae08d0691ced4db216f2b05867b1",
+   "package_observations.jsonl.gz": "cb04627856d9eee0f757b7664f78ddbbc19da5280986fea3096d7af9d35e6d9c"
+  },
+  "mirror": "https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions/tree/snapshot-2026-10-26"
+ },
+ "heldfast_feed": {
+  "repo": "https://github.com/rufat325/heldfast-feed",
+  "commit": "273682b40d1d018cde2e1d01c3f39fa713226110",
+  "note": "feed: checkpoint 2026-10-26 (13:48:36Z); state/ and lookup/all.json.gz",
+  "lookup_all_json_gz_sha256": "79892251179fe2c8b085198bffc720670e60954c9bf590af2f02ab6e71e2e3f8"
+ },
+ "heldfast_code": {
+  "repo": "https://github.com/rufat325/heldfast",
+  "commit": "bfb70ebee498acd7efdbb6450e68061d97782cdb"
+ },
+ "agentavow_vectors": {
+  "repo": "https://github.com/AgentAvow/AgentAvow",
+  "commit": "474f34ab316058f26778302fadebdaded2470d2b",
+  "path": "docs/standards/tool-manifest-digest-vectors-v1/tool-manifest-digest-v1-vectors.json",
+  "sha256": "48cf831840fc81db4e242ce5d2230a99fd41c890e5aa8b00dd6edef24098e9d3"
+ },
+ "rugsnare": {
+  "repo": "https://github.com/Paraphern/rugsnare",
+  "commit": "04dccb25d1874cbd11983865815e67587a9823df",
+  "path": "audits/drift-watch/pins/"
+ },
+ "vercel_ai": {
+  "npm": "ai@7.0.159 (fingerprintTools unchanged since 7.0.19)",
+  "mcp_client": "@ai-sdk/mcp@2.0.88",
+  "tarball_integrity_7_0_19": "sha512-7kxMNiy6JqCvruCY2qGMNzeqEt9Ey3XqrtYGHWyipDJTXHFN7gOyO1UR2UIXhw112vAUkrO+OJJzemKJD8P3bA=="
+ },
+ "canonicalizer": "rfc8785==0.1.4 (PyPI)"
+}

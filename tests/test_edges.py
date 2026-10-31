@@ -228,8 +228,10 @@ def test_check_edge_inputs(world):
         c.check({"endpoint": 5}, allow_scan=False)
     with pytest.raises(CheckError):
         c.check({"name": 5}, allow_scan=False)
+    res = c.check({"name": "x", "tools": [{"name": "a"}, {"description": "no name"}]}, allow_scan=False)
+    assert res["query"]["digestError"]["code"] == "MTL-SUBJ-001" and res["match"] == "not-listed"
     res = c.check({"name": "x", "tools": [{"name": "a"}, {"name": "a"}]}, allow_scan=False)
-    assert res["query"]["digestError"]["code"] == "MTL-SUBJ-003" and res["match"] == "not-listed"
+    assert "digestError" not in res["query"] and res["match"] == "not-listed"  # MTL/1.1 digests duplicates
 
 
 def test_config_rejects_bad_values(monkeypatch):

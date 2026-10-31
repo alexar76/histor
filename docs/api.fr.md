@@ -27,7 +27,7 @@ flowchart LR
 
 | Méthode | Chemin | Renvoie |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | des points de terminaison (endpoints) ; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` ; `q` cherche dans le nom, le point de terminaison et le titre |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | des points de terminaison (endpoints) ; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (aucune liste d’outils lue), `undigested` (liste lue, sans empreinte) ; `q` cherche dans le nom, le point de terminaison et le titre |
 | GET | `/api/v1/servers/<id>` | un point de terminaison : ensemble d’outils actuel, correspondances WARDEN avec leurs positions, étiquettes, chronologie condensée, changements, signalements de clients sur 30 jours, ensembles que déclare l’éditeur (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | badge pour README : `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
@@ -35,6 +35,8 @@ flowchart LR
 stable, un par entrée distante.
 
 Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version exécutée lors de cette observation (`serverVersion` est ce que le serveur a annoncé dans `initialize`, souvent différent de la version du paquet), et deux versions font deux lignes même si elles servaient la même liste. Enregistré depuis le 2026-10-26 ; les lignes plus anciennes ont `null`. `launch` indique comment cette exécution a été lancée : `observer`, `image`, `entry`, `network` (`no route out`) et, quand HISTOR a fourni une configuration, `supplied` avec les noms des variables d’environnement (jamais leurs valeurs), les arguments et les pins. La même version peut lister d’autres outils avec d’autres arguments de lancement ou avec le réseau.
+
+`/fingerprints` permet à un client de comparer ce qu’on lui a servi avec ce que HISTOR a observé, dans le format du client. Avec le Vercel AI SDK : `detectToolDrift(await fingerprintTools(await mcpClient.tools()), (await (await fetch(url)).json()).fingerprints)` ; ce qui apparaît dans `changed` ou `added` diffère de l’observation publique. Les formats couvrent des membres différents (celui de Vercel ignore `outputSchema` et les indications d’annotation), et un serveur peut servir d’autres définitions à un autre client : autre version du protocole, autre environnement de lancement ou autre configuration. `lastObserved` indique quand HISTOR a vu le jeu pour la dernière fois.
 
 ## Changements
 
@@ -44,6 +46,7 @@ Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version ex
 | GET | `/api/v1/changes/<id>` | un changement |
 | GET | `/api/v1/changes/<id>/cost` | ce que le changement a fait au coût en tokens de la liste d’outils : chaque total avant et après (`sent`, réparti en `names`, `descriptions`, `inputSchemas` et `structure` ; à côté, `outputSchemas` et `listed`), les outils ajoutés et retirés, et chaque outil dont le compte a bougé, description, schéma d’entrée et chaque propriété de premier niveau de ce schéma à part |
 | GET | `/api/v1/servers/<id>/cost?limit=` | le coût de la liste actuelle par outil, et les totaux de ses derniers changements (jusqu’à 50) |
+| GET | `/api/v1/servers/<id>/fingerprints?format=` | le jeu d’outils actuel sous forme d’une empreinte par outil dans un autre format : `vercel-ai` (`fingerprintTools` du Vercel AI SDK, par défaut), `heldfast` (empreinte du fichier de verrouillage de heldfast) ou `agentavow-v1` (`agentavow.mcp-tool-definition.v1`) ; les outils dont les membres supplémentaires ont dépassé les limites de stockage sont listés dans `incomplete` au lieu d’une empreinte |
 | GET | `/api/v1/cost/toolsets/<digest>` | le coût d’un ensemble d’outils enregistré |
 | GET | `/feed.xml` | flux Atom des 50 derniers changements ; `?watch=<id>,<id>,…` (jusqu’à 100 identifiants de cible, tels que `/check` et les pages de serveur les donnent) ne garde que ces serveurs et paquets — un abonnement dans n’importe quel lecteur de flux |
 

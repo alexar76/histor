@@ -1,0 +1,200 @@
+[
+ {
+  "endpoint": "https://www.dolphinamp.xyz/api/v1/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "18/18",
+  "liveMatchesHistor": "16/18"
+ },
+ {
+  "endpoint": "https://mcp.reqbeat.com/mcp",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "0/15",
+  "liveMatchesHistor": "15/15"
+ },
+ {
+  "endpoint": "https://cubicle.algotrada.com/deck/api/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "40/48",
+  "liveMatchesHistor": "41/48"
+ },
+ {
+  "endpoint": "https://mcp.rco-a2a.ai/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/6",
+  "liveMatchesHistor": "0/6"
+ },
+ {
+  "endpoint": "https://bot.chronokey.workers.dev/mcp",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "0/11",
+  "liveMatchesHistor": "7/7"
+ },
+ {
+  "endpoint": "https://mcp-statcan.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "14/17",
+  "liveMatchesHistor": "3/17"
+ },
+ {
+  "endpoint": "https://www.rycrentals.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "11/15",
+  "liveMatchesHistor": "0/15"
+ },
+ {
+  "endpoint": "https://comontel.fr/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "14/18",
+  "liveMatchesHistor": "15/18"
+ },
+ {
+  "endpoint": "https://fork.zone/api/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "4/19",
+  "liveMatchesHistor": "4/19"
+ },
+ {
+  "endpoint": "https://mcp.durabilitycurve.com/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "6/6",
+  "liveMatchesHistor": "0/6"
+ },
+ {
+  "endpoint": "https://1gateway.dev/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "47/83",
+  "liveMatchesHistor": "49/83"
+ },
+ {
+  "endpoint": "https://ithy.com/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "2/2",
+  "liveMatchesHistor": "1/2"
+ },
+ {
+  "endpoint": "https://drint.io/mcp",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "8/10",
+  "liveMatchesHistor": "10/10"
+ },
+ {
+  "endpoint": "https://bridges.morningbrief.link/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/10",
+  "liveMatchesHistor": "0/10"
+ },
+ {
+  "endpoint": "https://state.1court.ai/api/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "4/6",
+  "liveMatchesHistor": "4/6"
+ },
+ {
+  "endpoint": "https://api.tradingzones.app/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "8/13",
+  "liveMatchesHistor": "8/13"
+ },
+ {
+  "endpoint": "https://mcp.bykaranteli.com/",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "0/68",
+  "liveMatchesHistor": "68/68"
+ },
+ {
+  "endpoint": "https://market.nythosx.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "8/11",
+  "liveMatchesHistor": "3/11"
+ },
+ {
+  "endpoint": "https://yappman-grocery-mcp.blue-bar-ca29.workers.dev/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "3/5",
+  "liveMatchesHistor": "3/5"
+ },
+ {
+  "endpoint": "https://foldlaundry.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/34",
+  "liveMatchesHistor": "11/34"
+ },
+ {
+  "endpoint": "https://mcp.layero.ru/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "32/38",
+  "liveMatchesHistor": "32/38"
+ },
+ {
+  "endpoint": "https://api.agoranome.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "12/27",
+  "liveMatchesHistor": "6/27"
+ },
+ {
+  "endpoint": "https://mcp.walkably.org/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/3",
+  "liveMatchesHistor": "0/3"
+ },
+ {
+  "endpoint": "https://mcp.praegant.net/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/11",
+  "liveMatchesHistor": "10/11"
+ },
+ {
+  "endpoint": "https://mcp.supplementscanner.eu",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/4",
+  "liveMatchesHistor": "0/4"
+ },
+ {
+  "endpoint": "https://cristiandesivo.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "0/6",
+  "liveMatchesHistor": "0/6"
+ },
+ {
+  "endpoint": "https://celestio.ai/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "7/7",
+  "liveMatchesHistor": "5/7"
+ },
+ {
+  "endpoint": "https://www.defi.garden/api/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "5/5",
+  "liveMatchesHistor": "4/5"
+ },
+ {
+  "endpoint": "https://japaneseskills.com/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "4/4",
+  "liveMatchesHistor": "0/4"
+ },
+ {
+  "endpoint": "https://pakbus.app/mcp",
+  "verdict": "live = heldfast",
+  "liveMatchesHeldfast": "6/6",
+  "liveMatchesHistor": "3/6"
+ },
+ {
+  "endpoint": "https://api.limitguard.ai/mcp",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "0/10",
+  "liveMatchesHistor": "10/10"
+ },
+ {
+  "endpoint": "https://api.mcpanalytics.ai/mcp/api-key",
+  "verdict": "live = HISTOR",
+  "liveMatchesHeldfast": "22/27",
+  "liveMatchesHistor": "27/27"
+ },
+ {
+  "endpoint": "https://api.captapi.com/mcp",
+  "verdict": "neither (edited again)",
+  "liveMatchesHeldfast": "161/178",
+  "liveMatchesHistor": "175/178"
+ }
+]

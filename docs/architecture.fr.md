@@ -141,7 +141,7 @@ donc pas réémis chaque jour.
 stateDiagram-v2
     [*] --> Unseen
     Unseen --> Pinned: tools/list ok<br/>étiquettes observation + analyse + nom
-    Unseen --> Undigestible: MTL-SUBJ-001/002/003<br/>une observation inconclusive
+    Unseen --> Undigestible: MTL-SUBJ-001<br/>une observation inconclusive
     Pinned --> Pinned: même empreinte, ≥ 20 h depuis le dernier maillon<br/>continuité pass (unchangedSince)
     Pinned --> Changed: empreinte différente<br/>continuité fail + nouvelles étiquettes observation/analyse + diff
     Changed --> Pinned: exploration suivante, même empreinte<br/>continuité pass

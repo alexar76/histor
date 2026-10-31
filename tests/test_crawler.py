@@ -220,21 +220,22 @@ def test_an_outage_is_one_inconclusive_label_never_a_fail(world):
     assert t["changes"] == 0
 
 
-def test_duplicate_tool_names_are_an_inconclusive_observation_once(world):
+def test_duplicate_tool_names_are_digested_whatever_the_order(world):
+    # MTL/1.1 digests a set that repeats a name; listing order still does not move the digest.
     s, mcp, clock = world["services"], world["mcp"], world["clock"]
     mcp.tools["/a"] = [tool("dup", "one"), tool("dup", "two")]
     world["targets"].append(make_target("io.example/dup", "/a"))
     s.crawler.run()
+    first = s.store.all_targets()[0]
+    assert first["current_toolset"] and first["current_count"] == 2
+    mcp.tools["/a"] = [tool("dup", "two"), tool("dup", "one")]
     clock.advance(days=1)
     s.crawler.run()
-    docs = all_label_docs(s)
-    assert len(docs) == 1
-    reason = docs[0]["credentialSubject"]["mcpTrustLabel"]["reasons"][0]["code"]
-    assert reason == "MTL-SUBJ-003"
-    assert "digestSRI" not in docs[0]["credentialSubject"]["mcpTrustLabel"]["toolSet"]
+    again = s.store.all_targets()[0]
+    assert again["current_toolset"] == first["current_toolset"] and again["changes"] == 0
 
 
-def test_a_non_integer_number_withholds_the_digest(world):
+def test_a_non_integer_number_is_digested(world):
     s, mcp = world["services"], world["mcp"]
     weird = tool("price", "Quote a price.")
     weird["inputSchema"]["properties"]["amount"] = {"type": "number", "minimum": 0.5}
@@ -242,10 +243,66 @@ def test_a_non_integer_number_withholds_the_digest(world):
     world["targets"].append(make_target("io.example/price", "/a"))
     s.crawler.run()
     obs = next(d for d in all_label_docs(s) if d["credentialSubject"]["method"]["id"] == OBSERVATION)
-    assert obs["credentialSubject"]["verdict"] == "inconclusive"
-    assert obs["credentialSubject"]["mcpTrustLabel"]["reasons"][0]["code"] == "MTL-NUM-001"
-    # No digest, so nothing to pattern-scan under MTL/1.
-    assert not any(d["credentialSubject"]["method"]["id"] == PATTERN_SCAN for d in all_label_docs(s))
+    assert obs["credentialSubject"]["verdict"] == "pass"
+    assert obs["credentialSubject"]["mcpTrustLabel"]["toolSet"]["digestSRI"] == s.store.all_targets()[0]["current_toolset"]
+    assert any(d["credentialSubject"]["method"]["id"] == PATTERN_SCAN for d in all_label_docs(s))
+
+
+def test_a_set_first_digested_is_not_recorded_as_a_change(world, monkeypatch):
+    """A server whose set MTL/1.0 could not digest gets its first digest under 1.1: no change is
+    claimed, and the continuity label names the prior side's reason, not a default."""
+    from histor import subject as subject_module
+
+    s, mcp, clock = world["services"], world["mcp"], world["clock"]
+    weird = tool("price", "Quote a price.")
+    weird["inputSchema"]["properties"]["amount"] = {"type": "number", "minimum": 0.5}
+    mcp.tools["/a"] = [weird]
+    world["targets"].append(make_target("io.example/price", "/a"))
+
+    def refuse(value):  # what MTL/1.0 did with 0.5
+        raise ValueError("MTL/1.0 refused fractions")
+
+    monkeypatch.setattr(subject_module, "canonical_tool_bytes", refuse)
+    s.crawler.run()
+    before = s.store.all_targets()[0]
+    assert before["current_subject"] and before["current_toolset"] is None
+    monkeypatch.undo()
+
+    clock.advance(days=1)
+    s.crawler.run()
+    after = s.store.all_targets()[0]
+    assert after["current_toolset"] and after["changes"] == 0
+    assert s.store.changes(target_id=after["id"]) == []
+    cont = [d for d in all_label_docs(s) if d["credentialSubject"]["method"]["id"] == CONTINUITY][-1]
+    assert cont["credentialSubject"]["verdict"] == "inconclusive"
+    assert cont["credentialSubject"]["mcpTrustLabel"]["reasons"] == [
+        {"code": "MTL-NUM-001", "detail": "the prior tool set had no digest"}]
+
+    # A real change after that is recorded as usual.
+    mcp.tools["/a"] = [weird, tool("extra", "Another.")]
+    clock.advance(days=1)
+    s.crawler.run()
+    assert s.store.all_targets()[0]["changes"] == 1
+
+
+def test_an_unknown_prior_reason_is_not_invented(world, monkeypatch):
+    from histor import crawler as crawler_module
+    from histor import subject as subject_module
+
+    s, mcp, clock = world["services"], world["mcp"], world["clock"]
+    weird = tool("price", "Quote a price.")
+    weird["inputSchema"]["properties"]["amount"] = {"type": "number", "minimum": 0.5}
+    mcp.tools["/a"] = [weird]
+    world["targets"].append(make_target("io.example/price", "/a"))
+    monkeypatch.setattr(subject_module, "canonical_tool_bytes", lambda value: (_ for _ in ()).throw(ValueError()))
+    s.crawler.run()
+    monkeypatch.undo()
+    monkeypatch.setattr(crawler_module.Crawler, "_no_digest_reason", staticmethod(lambda *a, **k: None))
+    clock.advance(days=1)
+    s.crawler.run()
+    cont = [d for d in all_label_docs(s) if d["credentialSubject"]["method"]["id"] == CONTINUITY][-1]
+    assert cont["credentialSubject"]["verdict"] == "inconclusive"
+    assert "reasons" not in cont["credentialSubject"]["mcpTrustLabel"]
 
 
 def test_skipped_endpoints_are_recorded_not_dialled(world):
@@ -458,3 +515,23 @@ def test_a_curated_server_is_observed_counted_apart_and_handed_to_the_registry_w
     live = [t for t in s.store.targets_by(endpoint=curated.endpoint) if not t["delisted"]]
     assert [t["id"] for t in live] == [target_id("io.github.wiki/wiki", curated.endpoint)]
     assert s.checker.check({"endpoint": curated.endpoint}, allow_scan=False)["target"]["name"] == "io.github.wiki/wiki"
+
+
+def test_unobserved_and_undigested_are_separate_filters(world):
+    # agent-control-standard#38: `unobserved` held servers never read AND servers read without a digest.
+    s, mcp = world["services"], world["mcp"]
+    mcp.tools["/ok"] = [tool("a", "A tool.")]
+    mcp.tools["/bad"] = [tool("a", "A tool."), {"description": "no name", "inputSchema": {}}]
+    mcp.status["/down"] = 401
+    for name, path in (("io.example/ok", "/ok"), ("io.example/bad", "/bad"), ("io.example/down", "/down")):
+        world["targets"].append(make_target(name, path))
+    s.crawler.run()
+
+    def names(state):
+        return sorted(r["name"] for r in s.store.search_targets("", state=state, limit=10, offset=0)[1])
+
+    assert names("pinned") == ["io.example/ok"]
+    assert names("undigested") == ["io.example/bad"]
+    assert names("unobserved") == ["io.example/down"]
+    counts = s.store.target_counts()
+    assert (counts["listed"], counts["pinned"], counts["undigested"]) == (3, 1, 1)

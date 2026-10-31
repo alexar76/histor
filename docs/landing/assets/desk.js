@@ -345,7 +345,8 @@ function serversView(done) {
   api("/api/v1/stats").then((st) => {
     const c = st.targets || {};
     const counts = { pinned: c.pinned, changed: c.ever_changed, flagged: (c.block_tier || 0) + (c.advise_only || 0) + (c.name_records || 0),
-      unobserved: c.listed != null && c.pinned != null ? c.listed - c.pinned : null, all: c.listed };
+      // `unobserved` is no tool list read; a list read but not digested is `undigested` (API only).
+      unobserved: c.listed != null && c.pinned != null ? c.listed - c.pinned - (c.undigested || 0) : null, all: c.listed };
     chips.forEach((chip) => {
       const n = counts[chip.dataset.state];
       if (n != null) chip.append(el("span", { class: "cnt", text: num(n) }));

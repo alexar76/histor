@@ -179,11 +179,14 @@ class Store:
             args += [needle, needle, needle]
         state_sql = {
             # Pinned = a tool-set digest on record. A set HISTOR could not digest has a names-only
-            # descriptor (current_subject) but nothing a client could be compared with.
+            # descriptor (current_subject) but nothing a client could be compared with: that is
+            # `undigested`, kept apart from `unobserved` (no tool list read at all), which until
+            # 2026-10-31 held both (agent-control-standard#38).
             "pinned": "current_toolset IS NOT NULL",
             "changed": "changes > 0",
             "flagged": "(block_matches > 0 OR advise_matches > 0 OR record_matches > 0)",
-            "unobserved": "current_toolset IS NULL",
+            "unobserved": "current_subject IS NULL",
+            "undigested": "current_subject IS NOT NULL AND current_toolset IS NULL",
         }.get(state)
         if state_sql:
             where.append(state_sql)
@@ -711,6 +714,7 @@ class Store:
             row = tx.one(
                 "SELECT COUNT(*) AS listed, "
                 "SUM(CASE WHEN current_toolset IS NOT NULL THEN 1 ELSE 0 END) AS pinned, "
+                "SUM(CASE WHEN current_subject IS NOT NULL AND current_toolset IS NULL THEN 1 ELSE 0 END) AS undigested, "
                 "SUM(CASE WHEN changes > 0 THEN 1 ELSE 0 END) AS ever_changed, "
                 "SUM(CASE WHEN block_matches > 0 THEN 1 ELSE 0 END) AS block_tier, "
                 "SUM(CASE WHEN COALESCE(block_matches, 0) = 0 AND advise_matches > 0 THEN 1 ELSE 0 END) AS advise_only, "

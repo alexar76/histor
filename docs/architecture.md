@@ -138,7 +138,7 @@ The log should record facts, not noise, so identical deterministic results are n
 stateDiagram-v2
     [*] --> Unseen
     Unseen --> Pinned: tools/list ok<br/>observation + scan + name labels
-    Unseen --> Undigestible: MTL-SUBJ-001/002/003<br/>one inconclusive observation
+    Unseen --> Undigestible: MTL-SUBJ-001<br/>one inconclusive observation
     Pinned --> Pinned: same digest, ≥ 20 h since last link<br/>continuity pass (unchangedSince)
     Pinned --> Changed: different digest<br/>continuity fail + new observation/scan labels + diff
     Changed --> Pinned: next crawl, same digest<br/>continuity pass

@@ -6,6 +6,7 @@ import json
 from dataclasses import replace
 
 import pytest
+from awr import canonical_sri
 
 from histor.exit_reasons import classify, declared_needs
 from histor.mcpclient import Observation
@@ -196,7 +197,7 @@ def test_a_server_broken_by_mcp_2_is_also_read_with_mcp_1_beside_the_record(worl
 
 
 def test_a_pinned_run_that_lists_no_tools_still_says_how_many(world):
-    """An empty tool set cannot be a subject (MTL-SUBJ-002); the record said nothing where 0 was the finding."""
+    """The record said nothing where 0 was the finding. Since MTL/1.1 an empty set is digested too."""
     s = world["services"]
     fake = SdkPackages()
     s.crawler.packages = fake
@@ -210,8 +211,8 @@ def test_a_pinned_run_that_lists_no_tools_still_says_how_many(world):
     legacy = json.loads(s.store.target(t.id)["package_signals"])["legacy"]
     assert legacy["status"] == "ok"
     assert legacy["toolCount"] == 0 and legacy["tools"] == []
-    assert legacy["subjectError"] == "MTL-SUBJ-002"
-    assert "toolSetDigest" not in legacy
+    assert "subjectError" not in legacy
+    assert legacy["toolSetDigest"] == canonical_sri([])
 
 
 def test_a_rerun_with_what_it_asked_for_goes_before_never_observed_packages(world, monkeypatch):

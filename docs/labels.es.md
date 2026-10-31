@@ -38,16 +38,19 @@ flowchart LR
     D --> J2["RFC 8785"] --> H2["SHA-256 → resumen del sujeto<br/>= verifiedWork.digestSRI"]
 ```
 
-Un conjunto de herramientas con un número fraccionario en cualquier parte de sus esquemas **no tiene
-resumen calculable** según MTL/1: dos implementaciones podrían serializarlo de forma distinta. En
-ese caso la etiqueta no lleva resumen y dice `inconclusive` con `MTL-NUM-001`, en lugar de fijar
-unos bytes que nadie más puede reproducir.
+Los números se leen como dobles IEEE 754 y se escriben como manda RFC 8785, que es como los escribe
+`JSON.stringify`: `0.5`, `1e+21`, `5` para `5.0`. Hasta MTL/1.1 (31 de octubre de 2026) un conjunto
+con un número fraccionario en sus esquemas no recibía resumen (`MTL-NUM-001`), y tampoco un conjunto
+vacío ni uno con nombres repetidos; ese día 5.159 servidores leídos por HISTOR estaban así, 4.941
+por una fracción. Ahora solo una entrada sin nombre (`MTL-SUBJ-001`) o un número sin doble (`1e400`,
+`MTL-NUM-001`) deja un conjunto sin resumen, y un conjunto con solo enteros conserva los mismos bytes
+y el mismo resumen que antes. Un conjunto que recibe su primer resumen no cuenta como cambio.
 
 ## Los cuatro métodos
 
 | Método | Se emite | `pass` | `fail` | `inconclusive` |
 |---|---|---|---|---|
-| `tool-set-observation` | la primera vez que un destino muestra un conjunto de herramientas | conjunto recorrido por completo, no vacío, con resumen | **nunca** | conjunto vacío, nombres duplicados, entrada malformada, número no entero |
+| `tool-set-observation` | la primera vez que un destino muestra un conjunto de herramientas | conjunto recorrido por completo, con resumen | **nunca** | una entrada sin nombre; un número sin doble |
 | `tool-def-pattern-scan` | con cada observación nueva, y de nuevo cuando cambia el conjunto de patrones de WARDEN | ningún patrón coincidió | **nunca** | una o más coincidencias, cada una listada con su nivel |
 | `tool-set-continuity` | en cada rastreo (con ≥ 20 h de separación) una vez que existe una etiqueta previa | el mismo resumen del sujeto que la etiqueta previa | los resúmenes difieren | falta el resumen en uno de los lados; la observación actual falló |
 | `name-threat-match` | con cada observación nueva | el nombre y el endpoint no figuran en ningún registro | **nunca** | coincidió un registro (una señal sobre el nombre, no evidencia sobre el código) |

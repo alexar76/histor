@@ -1,0 +1,32 @@
+{
+ "joined_servers": 23190,
+ "joined_npm": 6456,
+ "joined_remote": 16734,
+ "servers_all_fields_known": 21215,
+ "servers_identical": 20771,
+ "tools_compared": 318389,
+ "tools_identical": 315605,
+ "reasons_non_identical": {
+  "different npm versions": 218,
+  "same definitions, read at different moments": 65,
+  "heldfast's later reads failed, its copy is older": 50,
+  "hosted server edited between the two reads": 33,
+  "definition contains the reader's launch environment": 24,
+  "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without": 24,
+  "server sent no outputSchema/title to heldfast's request (old handshake or no version header)": 15,
+  "heldfast read the first tools/list page only": 10,
+  "npm, same version, offline on both sides: unexplained": 5
+ },
+ "differing_tools_by_class": {
+  "text/schema edit": 1734,
+  "outputSchema/title absent at heldfast": 413,
+  "heldfast kept no copy": 324,
+  "annotations only": 101,
+  "outputSchema content": 89,
+  "launch environment in text": 85,
+  "icons only": 34,
+  "date/uuid default": 4
+ },
+ "paginated_servers_heldfast_first_page": 11,
+ "paginated_tools_missing_at_heldfast": 976
+}

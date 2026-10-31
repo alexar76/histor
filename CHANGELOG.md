@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+- MTL/1.1 digests (awr/adoption/mcp-trust-label/PROFILE.md, Revision 1.1): every number in a tool
+  schema is read as an IEEE 754 double and written as RFC 8785 says (`0.5`, `1e+21`, `5` for `5.0`),
+  an empty set is digested, and tools that share a name are ordered by their canonical bytes. Before,
+  5,162 servers HISTOR had read had no tool-set digest: 4,941 for a fraction or exponent, 21 for a
+  large integer, 140 empty, 57 repeating a name (prod census 2026-10-31); only the 3 with a nameless
+  entry, or a number with no double (`1e400`), stay without one. Integers-only sets keep their bytes
+  and digests. A set that only gains its first digest is not recorded as a change.
+- A continuity label after a set with no digest names that set's own reason, or none when it is not
+  known. It used to say `MTL-NUM-001` whatever the reason was (GenAI-Security-Project/agent-control-
+  standard#38).
+- `/api/v1/servers?state=unobserved` now means no tool list read; a list read without a digest is
+  `state=undigested`, and `/api/v1/stats` counts it as `undigested`. `unobserved` used to hold both.
+
+- `GET /api/v1/servers/<id>/fingerprints?format=vercel-ai|heldfast|agentavow-v1`: the current tool
+  set as one fingerprint per tool in the Vercel AI SDK's `fingerprintTools` format, heldfast's
+  lockfile digest or AgentAvow's `agentavow.mcp-tool-definition.v1`, computed from the stored tool
+  set and its extra members (`histor.fingerprints`). A Vercel AI SDK app compares what it was served
+  with `detectToolDrift(fingerprints, …)`. Checked against each project's own implementation and
+  vectors; `tests/fingerprint-vectors.json` holds values those implementations produced.
+
 ## 0.5.2 — 2026-10-30
 
 - Publish C2SP checkpoints and witness support (`histor-tlog/2`), including consistency-proof

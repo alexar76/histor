@@ -206,11 +206,14 @@ class LabelIssuer:
 
     def continuity(self, *, current: Subject | None, prior_label: dict[str, Any], prior_subject_ref: dict[str, str],
                    prior_tool_digest: str | None, unchanged_since: str | None, observed_at: str, issued_at: str,
-                   failure: dict[str, str] | None = None, no_digest_code: str | None = None) -> dict[str, Any]:
+                   failure: dict[str, str] | None = None, no_digest_code: str | None = None,
+                   prior_no_digest_code: str | None = None) -> dict[str, Any]:
         """Continuity against the latest label in this target's chain.
 
         *current* is None when this observation failed; the label then references the prior
         subject and says so, rather than inventing a descriptor for a server we could not read.
+        *no_digest_code* is why the current set has no digest, *prior_no_digest_code* why the
+        prior one had none; a side with no known reason is named without a code.
         """
         prior_digest = canonical_sri(prior_label)
         prior_ref = {
@@ -233,10 +236,20 @@ class LabelIssuer:
             subject_ref = current.reference()
             detail["toolSet"] = self._tool_set(current)
             if current.tool_set_digest is None or prior_tool_digest is None:
-                code = no_digest_code or (current.hazard.code if current.hazard else "MTL-NUM-001")
+                # The reason belongs to the side that has no digest. Until 2026-10-31 a digested
+                # current set after an undigested prior one was labelled MTL-NUM-001 whatever the
+                # prior's reason was: a default, not a finding (agent-control-standard#38).
+                if current.tool_set_digest is None:
+                    code = no_digest_code or (current.hazard.code if current.hazard else None)
+                    side = "the current tool set is not digestible"
+                else:
+                    code = prior_no_digest_code
+                    side = "the prior tool set had no digest"
                 verdict = "inconclusive"
-                detail["scope"] = SCOPE_CONTINUITY_INCONCLUSIVE.format(why=f"a side has no tool-set digest ({code})")
-                detail["reasons"] = [{"code": code, "detail": "one of the two tool sets is not digestible"}]
+                why = f"a side has no tool-set digest ({code})" if code else "a side has no tool-set digest"
+                detail["scope"] = SCOPE_CONTINUITY_INCONCLUSIVE.format(why=why)
+                if code:
+                    detail["reasons"] = [{"code": code, "detail": side}]
             elif current.digest == prior_subject_ref["digestSRI"]:
                 verdict = "pass"
                 detail["scope"] = SCOPE_CONTINUITY_PASS

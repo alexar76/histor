@@ -139,7 +139,7 @@ HISTOR передаёт только имена; наблюдатель откл
 stateDiagram-v2
     [*] --> Unseen
     Unseen --> Pinned: tools/list ok<br/>метки наблюдения, сканирования и имени
-    Unseen --> Undigestible: MTL-SUBJ-001/002/003<br/>одно наблюдение inconclusive
+    Unseen --> Undigestible: MTL-SUBJ-001<br/>одно наблюдение inconclusive
     Pinned --> Pinned: тот же дайджест, ≥ 20 ч с последнего звена<br/>непрерывность pass (unchangedSince)
     Pinned --> Changed: другой дайджест<br/>непрерывность fail + новые метки наблюдения/сканирования + дифф
     Changed --> Pinned: следующий обход, тот же дайджест<br/>непрерывность pass

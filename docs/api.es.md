@@ -27,13 +27,15 @@ flowchart LR
 
 | Método | Ruta | Devuelve |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved`; `q` busca en el nombre, el endpoint y el título |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (ninguna lista de herramientas leída), `undigested` (lista leída, sin digest); `q` busca en el nombre, el endpoint y el título |
 | GET | `/api/v1/servers/<id>` | un endpoint: conjunto de herramientas actual, coincidencias de WARDEN con sus fragmentos, etiquetas, cronología compactada, cambios e informes de clientes de 30 días y conjuntos que declara el editor (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | insignia para README: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` son los primeros 16 caracteres hexadecimales de `sha256(name + "\n" + endpoint)`: estable, uno por remoto.
 
 Para un paquete, cada fila de `timeline` lleva `packageVersion`, la versión que se ejecutó en esa observación (`serverVersion` es lo que el servidor dijo en `initialize`, a menudo distinto de la versión del paquete), y dos versiones son dos filas aunque sirvieran la misma lista. Se registra desde el 2026-10-26; las filas anteriores tienen `null`. `launch` indica cómo se inició esa ejecución: `observer`, `image`, `entry`, `network` (`no route out`) y, cuando HISTOR aportó configuración, `supplied` con los nombres de las variables de entorno (nunca sus valores), los argumentos y los pins. La misma versión puede listar otras herramientas con otros argumentos de arranque o con red.
+
+`/fingerprints` permite a un cliente comparar lo que recibió con lo que HISTOR observó, en el formato del propio cliente. Con el Vercel AI SDK: `detectToolDrift(await fingerprintTools(await mcpClient.tools()), (await (await fetch(url)).json()).fingerprints)`; lo que aparezca en `changed` o `added` difiere de la observación pública. Los formatos cubren miembros distintos (el de Vercel no incluye `outputSchema` ni las pistas de anotación), y un servidor puede servir otras definiciones a otro cliente: con otra versión del protocolo, otro entorno de arranque u otra configuración. `lastObserved` indica cuándo HISTOR vio el conjunto por última vez.
 
 ## Cambios
 
@@ -43,6 +45,7 @@ Para un paquete, cada fila de `timeline` lleva `packageVersion`, la versión que
 | GET | `/api/v1/changes/<id>` | un cambio |
 | GET | `/api/v1/changes/<id>/cost` | qué hizo el cambio con el coste en tokens de la lista de herramientas: cada total antes y después (`sent`, desglosado en `names`, `descriptions`, `inputSchemas` y `structure`; al lado `outputSchemas` y `listed`), herramientas añadidas y quitadas, y cada herramienta cuyo recuento se movió, con su descripción, su esquema de entrada y cada propiedad de primer nivel de ese esquema por separado |
 | GET | `/api/v1/servers/<id>/cost?limit=` | el coste de la lista actual por herramienta y los totales de sus últimos cambios (hasta 50) |
+| GET | `/api/v1/servers/<id>/fingerprints?format=` | el conjunto de herramientas actual como una huella por herramienta en otro formato: `vercel-ai` (`fingerprintTools` del Vercel AI SDK, por defecto), `heldfast` (resumen del lockfile de heldfast) o `agentavow-v1` (`agentavow.mcp-tool-definition.v1`); las herramientas cuyos miembros adicionales superaron los límites de almacenamiento aparecen en `incomplete` en lugar de una huella |
 | GET | `/api/v1/cost/toolsets/<digest>` | el coste de un conjunto de herramientas guardado |
 | GET | `/feed.xml` | feed Atom de los últimos 50 cambios; `?watch=<id>,<id>,…` (hasta 100 ids de destino, como los dan `/check` y las páginas de servidor) deja solo esos servidores y paquetes: una suscripción en cualquier lector de feeds |
 

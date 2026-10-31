@@ -1396,19 +1396,26 @@ class Crawler:
             if prior_id and (new_subject or self._continuity_due(state.get("last_continuity_at"), p.observed_at)):
                 prior = self._label_doc(tx, prior_id)
                 prior_detail = prior["credentialSubject"]["mcpTrustLabel"]
+                prior_tool_digest = prior_detail.get("toolSet", {}).get("digestSRI")
+                prior_ref = prior["credentialSubject"]["verifiedWork"]
                 cont = self.issuer.continuity(
-                    current=subject, prior_label=prior,
-                    prior_subject_ref=prior["credentialSubject"]["verifiedWork"],
-                    prior_tool_digest=prior_detail.get("toolSet", {}).get("digestSRI"),
+                    current=subject, prior_label=prior, prior_subject_ref=prior_ref,
+                    prior_tool_digest=prior_tool_digest,
                     unchanged_since=None if new_subject else state.get("unchanged_since"),
                     observed_at=p.observed_at, issued_at=issued_at,
+                    prior_no_digest_code=(self._no_digest_reason(tx, prior, prior_ref)
+                                          if not prior_tool_digest and subject.tool_set_digest else None),
                 )
                 row = append(cont)
                 update.update(chain_label=row["id"], last_continuity_at=p.observed_at)
                 # A new subject after an old one is a change whatever the verdict: `fail` for two
                 # digests that differ, `inconclusive` when one side had none (NUM-001, or the
                 # undigestible set this one replaces) — the diff then compares names only.
-                if new_subject and state.get("current_subject"):
+                # Except when the descriptor only gained its digest: the same names and server,
+                # first digested now (MTL/1.1 digests what 1.0 refused). Nothing is known to have
+                # changed, so no change is recorded; the label above still says the prior had none.
+                if (new_subject and state.get("current_subject")
+                        and not self._only_gains_digest(tx, state, subject)):
                     changed = 1
                     self._record_change(tx, t.id, state, subject, p.observed_at, row["id"], run_id,
                                         p.obs.package_version, _server_version(p), _registry_version(t))
@@ -1443,6 +1450,43 @@ class Crawler:
         if row is None:
             raise RuntimeError(f"chain label {label_id} is missing from the log")
         return json.loads(row["body"])
+
+    @staticmethod
+    def _no_digest_reason(tx, label: dict[str, Any], subject_ref: dict[str, str], steps: int = 64) -> str | None:
+        """The reason code the chain gave for the subject at *subject_ref* having no digest.
+
+        Walks back from *label* through ``priorLabel`` to a label about that subject that carries
+        an ``MTL-NUM`` or ``MTL-SUBJ`` code: the observation or undigestible label that started
+        the chain, or the continuity label issued when that subject became current. A failed
+        observation's label names no such code and is walked past. ``None`` when none is found.
+        """
+        doc: dict[str, Any] | None = label
+        for _ in range(steps):
+            if doc is None:
+                return None
+            mtl = doc["credentialSubject"]["mcpTrustLabel"]
+            if doc["credentialSubject"]["verifiedWork"].get("digestSRI") == subject_ref.get("digestSRI"):
+                for reason in mtl.get("reasons") or []:
+                    code = str(reason.get("code") or "")
+                    if code.startswith(("MTL-NUM-", "MTL-SUBJ-")):
+                        return code
+            prior_id = (mtl.get("priorLabel") or {}).get("id")
+            row = tx.one("SELECT body FROM labels WHERE id=?", (prior_id,)) if prior_id else None
+            doc = json.loads(row["body"]) if row is not None else None
+        return None
+
+    @staticmethod
+    def _only_gains_digest(tx, state: dict[str, Any], subject: Subject) -> bool:
+        """True when the current descriptor had no tool-set digest and this one differs only by having one."""
+        if state.get("current_toolset") or not subject.tool_set_digest:
+            return False
+        row = tx.one("SELECT body FROM blobs WHERE digest=? AND kind='descriptor'", (state["current_subject"],))
+        if row is None:
+            return False
+        prior = json.loads(row["body"])
+        now = json.loads(json.dumps(subject.descriptor))
+        now.get("toolSet", {}).pop("digestSRI", None)
+        return prior == now
 
     def _record_change(self, tx, target_id: str, state: dict[str, Any], subject: Subject, observed_at: str,
                        label_id: str, run_id: int, package_version: str | None = None,

@@ -37,15 +37,19 @@ flowchart LR
     D --> J2["RFC 8785"] --> H2["SHA-256 → subject digest<br/>= verifiedWork.digestSRI"]
 ```
 
-A tool set with a fractional number anywhere in its schemas is **not digestible** under MTL/1:
-two implementations may serialise it differently. The label then carries no digest and says
-`inconclusive` with `MTL-NUM-001`, rather than committing to bytes nobody else can reproduce.
+Numbers are read as IEEE 754 doubles and written the way RFC 8785 says, which is how
+`JSON.stringify` writes them: `0.5`, `1e+21`, `5` for `5.0`. Until MTL/1.1 (31 October 2026) a set
+with a fraction anywhere in its schemas got no digest (`MTL-NUM-001`), and so did an empty set and
+one that repeats a name; on that day 5,159 servers HISTOR had read were in that state, 4,941 of them
+for a fraction. Now only an entry with no name (`MTL-SUBJ-001`) or a number with no double
+(`1e400`, `MTL-NUM-001`) leaves a set without a digest, and a set with integers only gets the same
+bytes, and digest, as before. A set that gains its first digest is not counted as a change.
 
 ## The four methods
 
 | Method | Issued | `pass` | `fail` | `inconclusive` |
 |---|---|---|---|---|
-| `tool-set-observation` | first time a target shows a tool set | tool set drained, non-empty, digested | **never** | empty set, duplicate names, malformed entry, non-integer number |
+| `tool-set-observation` | first time a target shows a tool set | tool set drained and digested | **never** | an entry with no name; a number with no double |
 | `tool-def-pattern-scan` | with every new observation, and again when WARDEN's pattern set changes | no pattern matched | **never** | one or more matches, each listed with its tier |
 | `tool-set-continuity` | each crawl (≥ 20 h apart) once a prior label exists | same subject digest as the prior label | the digests differ | no digest on one side; the current observation failed |
 | `name-threat-match` | with every new observation | name and endpoint on no record | **never** | a record matched (a naming signal, not evidence about code) |

@@ -1,0 +1,444 @@
+{"server": "io.github.airweave-ai/search", "endpoint": "npm:airweave-mcp-search", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.purmemo-ai/purmemo", "endpoint": "npm:purmemo-mcp", "reason": "different npm versions"}
+{"server": "io.github.bibekpdl/uswds-mcp", "endpoint": "npm:uswds-mcp", "reason": "different npm versions"}
+{"server": "io.github.miapre/mimic-ai", "endpoint": "npm:@miapre/mimic-ai", "reason": "different npm versions"}
+{"server": "io.github.calllint/calllint", "endpoint": "npm:calllint-mcp", "reason": "different npm versions"}
+{"server": "com.crosscheckapi/crosscheck", "endpoint": "npm:crosscheckapi", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/eia-energy-mcp-server", "endpoint": "npm:@cyanheads/eia-energy-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.chrischall/workday-mcp", "endpoint": "npm:workday-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.QVerisAI/mcp", "endpoint": "npm:@qverisai/mcp", "reason": "different npm versions"}
+{"server": "io.github.BenAHammond/code-auditor-mcp", "endpoint": "npm:code-auditor-mcp", "reason": "different npm versions"}
+{"server": "io.github.nikolai-vysotskyi/trace-mcp", "endpoint": "npm:trace-mcp", "reason": "different npm versions"}
+{"server": "net.homeschooltools/curriculum", "endpoint": "https://homeschooltools.net/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "app.agentsknow/agentboard", "endpoint": "https://agentsknow.app/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.witanmarkets/witan", "endpoint": "https://witan.markets/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.Leonhest/hivemind", "endpoint": "npm:hivemind-agents", "reason": "different npm versions"}
+{"server": "io.github.junoventures/vilamariana-sampa-br", "endpoint": "https://vilamariana.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.sketchxflow/mcp", "endpoint": "npm:@sketchxflow/mcp", "reason": "different npm versions"}
+{"server": "ch.stratta/mcp", "endpoint": "npm:@stratta/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.chrischall/canvas-parent-mcp", "endpoint": "npm:canvas-parent-mcp", "reason": "npm, same version, offline on both sides: unexplained"}
+{"server": "io.github.perzianhq/mantis", "endpoint": "npm:mantis-browser", "reason": "different npm versions"}
+{"server": "io.github.paulgosnell/accountsos-mcp", "endpoint": "npm:@thriveventurelabs/accountsos-mcp", "reason": "different npm versions"}
+{"server": "io.github.sunkimk/pinterest-mcp", "endpoint": "npm:@sunkimkk/pinterest-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.Alessandro114/scala-score", "endpoint": "npm:scala-mcp-server", "reason": "different npm versions"}
+{"server": "com.brix36/brix36", "endpoint": "https://api.brix36.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.rfdez/pvpc-mcp-server", "endpoint": "npm:@rfdez/pvpc-mcp-server", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.Clipform/mcp-server", "endpoint": "npm:@clipform/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.layergen/eodly-mcp", "endpoint": "https://eodly.io/api/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.assetfare/assetfare-bridge", "endpoint": "https://api.assetfare.dev/mcp/bridge", "reason": "same definitions, read at different moments"}
+{"server": "io.github.cyanheads/open-meteo-mcp-server", "endpoint": "npm:@cyanheads/open-meteo-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.majidkabir/carbonara", "endpoint": "https://carbonara-co2.org/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.Modellix/agent-canvas", "endpoint": "npm:@modellix/agent-canvas", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.Grubbomatic/crawl-readiness", "endpoint": "npm:crawl-readiness-mcp", "reason": "different npm versions"}
+{"server": "tools.engram/engram", "endpoint": "npm:engram-tools", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.kochetkov-ma/brewpage-mcp", "endpoint": "npm:brewpage-mcp", "reason": "different npm versions"}
+{"server": "ai.intodns/scanner", "endpoint": "npm:intodns-mcp", "reason": "different npm versions"}
+{"server": "xyz.dolphinamp/dolphin", "endpoint": "https://www.dolphinamp.xyz/api/v1/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.niyonzimabryan/compete", "endpoint": "npm:compete-mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "ai.pidgeon/mcp", "endpoint": "npm:@pidgeon-ai/mcp", "reason": "different npm versions"}
+{"server": "io.github.nteract/semiotic", "endpoint": "npm:semiotic", "reason": "different npm versions"}
+{"server": "io.github.MohitBansal321/ai-usage-mcp", "endpoint": "npm:ai-usage-mcp", "reason": "different npm versions"}
+{"server": "com.reqbeat/hiring-signals", "endpoint": "https://mcp.reqbeat.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.Invarato/jarroba-tools-calc", "endpoint": "npm:@jarroba/mcp-calc", "reason": "different npm versions"}
+{"server": "io.github.davesheffer/hunch", "endpoint": "npm:@davesheffer/hunch", "reason": "different npm versions"}
+{"server": "io.github.archestack/mcp", "endpoint": "npm:@archestack/mcp", "reason": "different npm versions"}
+{"server": "com.cuevr/mcp", "endpoint": "https://www.cuevr.com/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.paivapiovesan/next-finance", "endpoint": "npm:next-finance-mcp", "reason": "different npm versions"}
+{"server": "io.github.lakpriya1s/looktap", "endpoint": "npm:@looktap/mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/pubchem-mcp-server", "endpoint": "npm:@cyanheads/pubchem-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.pressa-dev/pressa", "endpoint": "npm:@pressa/mcp", "reason": "different npm versions"}
+{"server": "io.github.Gameye/gameye-mcp", "endpoint": "npm:gameye-mcp", "reason": "different npm versions"}
+{"server": "io.github.conorbronsdon/gws-mcp-server", "endpoint": "npm:gws-mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.Portaltocoding/second-brain-mcp", "endpoint": "npm:@toportal/second-brain-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.soyeladice-svg/bursia", "endpoint": "https://burs-ia-mcp-adapter-production.up.railway.app/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.getfairquery/company-jobs-feed-mcp", "endpoint": "npm:@fairquery/company-jobs-feed-mcp", "reason": "different npm versions"}
+{"server": "io.github.AnonymousOnyx22/student-citations-mcp", "endpoint": "npm:student-citations-mcp", "reason": "different npm versions"}
+{"server": "io.github.moonspacenow-tech/aicomglobal", "endpoint": "https://aicomglobal.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.isitabizday/bizday", "endpoint": "https://isitabizday.com/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.0rkz/byte-protocol", "endpoint": "npm:byte-mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.vaemail/vaemail", "endpoint": "npm:vaemail", "reason": "different npm versions"}
+{"server": "io.github.j0hanz/filesystem-mcp", "endpoint": "npm:@j0hanz/filesystem-mcp", "reason": "different npm versions"}
+{"server": "io.nowline/nowline", "endpoint": "npm:@nowline/mcp", "reason": "different npm versions"}
+{"server": "io.github.getpapi/papi", "endpoint": "npm:@papi-ai/server", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.cyanheads/usda-mcp-server", "endpoint": "npm:@cyanheads/usda-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/openfda-mcp-server", "endpoint": "npm:@cyanheads/openfda-mcp-server", "reason": "different npm versions"}
+{"server": "chat.suiagent/yui", "endpoint": "https://suiagent.chat/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.forgemeshlabs/seo-authority-mcp", "endpoint": "npm:@forgemeshlabs/seo-authority-mcp", "reason": "different npm versions"}
+{"server": "ai.edgechat/edgepedia", "endpoint": "https://www.edgechat.ai/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.algotrada.cubicle/cubicle", "endpoint": "https://cubicle.algotrada.com/deck/api/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.omniologynow-rgb/mcp-server", "endpoint": "npm:@omniology/mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.taneron/willmehr", "endpoint": "npm:willmehr", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.pavellunev/appmetrica-mcp", "endpoint": "npm:appmetrica-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.gege-mn/ray-mcp", "endpoint": "npm:@gege-mn/ray-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.greencore-solutions/rco-a2a", "endpoint": "https://mcp.rco-a2a.ai/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.antohins/seo-tools-mcp-xmlstock", "endpoint": "npm:seo-tools-mcp-xmlstock", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.Firefloco/chirpie", "endpoint": "npm:@chirpie/mcp", "reason": "different npm versions"}
+{"server": "io.github.hermoso-ai/hermoso", "endpoint": "npm:hermoso", "reason": "different npm versions"}
+{"server": "com.idosgames/sdk", "endpoint": "npm:@idosgames/mcp", "reason": "different npm versions"}
+{"server": "io.github.TwitterAPIs/twitterapis-mcp", "endpoint": "npm:@twitterapis/mcp", "reason": "different npm versions"}
+{"server": "io.github.castiquark/mercadopleis", "endpoint": "npm:@mercadopleis/mcp-server", "reason": "different npm versions"}
+{"server": "com.llmotions.farm/opus-4-8-agent", "endpoint": "https://farm.llmotions.com/mcp/agents/opus-4-8-agent", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.cybersmurf/stalwart-mail-mcp", "endpoint": "npm:stalwart-mail-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "au.com.alpineai/factstamp", "endpoint": "https://agents.factstamp.dev/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.iris-eval/mcp-server", "endpoint": "npm:@iris-eval/mcp-server", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.henfrydls/actual-budget-mcp", "endpoint": "npm:actual-budget-mcp", "reason": "different npm versions"}
+{"server": "io.github.jaupin94/lassocut-mcp", "endpoint": "npm:lassocut-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/eurostat-mcp-server", "endpoint": "npm:@cyanheads/eurostat-mcp-server", "reason": "different npm versions"}
+{"server": "com.promptot/mcp", "endpoint": "npm:@prompt-ot/mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "app.devglow/devglow", "endpoint": "npm:devglow-mcp", "reason": "different npm versions"}
+{"server": "io.github.antohins/seo-tools-mcp-ywm", "endpoint": "npm:seo-tools-mcp-ywm", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.dahshanlabs/klypix-mcp", "endpoint": "npm:klypix-mcp", "reason": "different npm versions"}
+{"server": "io.github.junoventures/vilabuarque-sampa-br", "endpoint": "https://vilabuarque.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.unravel-team/thing", "endpoint": "npm:@unravel-tech/thing", "reason": "different npm versions"}
+{"server": "io.sifting/mcp", "endpoint": "npm:siftingio-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.ArmorNGlory/armornglory-mcp-server", "endpoint": "npm:armornglory-mcp-server", "reason": "different npm versions"}
+{"server": "in.co.yogamag/yogamag", "endpoint": "https://yogamag.co.in/api/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.JoeSRQ/mcp-server", "endpoint": "npm:@synmerco/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.junoventures/filipe-coffee", "endpoint": "https://www.filipe.coffee/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.speechweave/mcp", "endpoint": "npm:@speechweave/mcp", "reason": "different npm versions"}
+{"server": "io.github.a-church-ai/magnifica-family", "endpoint": "npm:mcp-magnifica-family", "reason": "different npm versions"}
+{"server": "io.github.configcat/mcp-server", "endpoint": "npm:@configcat/mcp-server", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.kompressr/kompressr", "endpoint": "npm:@kompressr/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.junoventures/paraiso-sampa-br", "endpoint": "https://paraiso.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.deedglass/deedglass", "endpoint": "npm:deedglass", "reason": "different npm versions"}
+{"server": "io.github.Keesan12/martin-loop", "endpoint": "npm:@martinloop/mcp", "reason": "different npm versions"}
+{"server": "io.github.electron-stagewright/core", "endpoint": "npm:@electron-stagewright/core", "reason": "different npm versions"}
+{"server": "io.github.markup-carve/carve-mcp", "endpoint": "npm:@markup-carve/carve-mcp", "reason": "different npm versions"}
+{"server": "io.github.junoventures/vilamadalena-sampa-br", "endpoint": "https://vilamadalena.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.transloadit/mcp-server", "endpoint": "npm:@transloadit/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.marlinjai/email-mcp", "endpoint": "npm:@marlinjai/email-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "com.rbxinvest/market-data", "endpoint": "https://rbxinvest.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.coffeecoproject/layermap", "endpoint": "npm:layermap", "reason": "different npm versions"}
+{"server": "io.github.barneywohl/hugging-bay", "endpoint": "npm:hugging-bay-mcp", "reason": "different npm versions"}
+{"server": "io.github.AnonymousOnyx22/study-planner-mcp", "endpoint": "npm:study-planner-mcp", "reason": "different npm versions"}
+{"server": "tech.flocore/flocore", "endpoint": "https://fo.flocore.tech/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.omitly/omitly-mcp", "endpoint": "npm:omitly-mcp", "reason": "different npm versions"}
+{"server": "io.github.Dyln01/chronokey", "endpoint": "https://bot.chronokey.workers.dev/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "com.bykaranteli/mcp", "endpoint": "npm:bykaranteli-mcp", "reason": "different npm versions"}
+{"server": "io.github.iambashar/agent-intercom", "endpoint": "npm:agent-intercom", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.holistis/capacity-attest", "endpoint": "npm:capacity-attest", "reason": "different npm versions"}
+{"server": "io.github.razzant/claudexor", "endpoint": "npm:claudexor", "reason": "different npm versions"}
+{"server": "com.autoview/mcp", "endpoint": "https://api.autoview.com/mcp/", "reason": "same definitions, read at different moments"}
+{"server": "io.github.ulasarslan6262-ui/speedbot", "endpoint": "https://speedbot.dev/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.CloudCorpRecords/depguard", "endpoint": "npm:@reneturcios/depguard", "reason": "different npm versions"}
+{"server": "io.github.rodvan/viralhunt-mcp", "endpoint": "npm:viralhunt-mcp", "reason": "different npm versions"}
+{"server": "xyz.unfee/mcp", "endpoint": "https://unfee.xyz/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.FelixWaweru/code-fundi-mcp", "endpoint": "npm:@codefundi/code-fundi-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.imkath/gmail-tidy-mcp", "endpoint": "npm:gmail-tidy-mcp", "reason": "different npm versions"}
+{"server": "io.github.localstack/localstack-mcp-server", "endpoint": "npm:@localstack/localstack-mcp-server", "reason": "different npm versions"}
+{"server": "com.perfboarddesigner/mcp", "endpoint": "npm:perfboard-designer-mcp", "reason": "different npm versions"}
+{"server": "xyz.unfee/mcp", "endpoint": "https://unfee-gateway.unfee.workers.dev/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.daleweaver1981/tariffmonitor-mcp", "endpoint": "npm:tariffmonitor-mcp", "reason": "different npm versions"}
+{"server": "io.github.junoventures/pinheiros-sampa-br", "endpoint": "https://pinheiros.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.reevol.source/supplier-search", "endpoint": "https://source.reevol.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.CSOAI-ORG/gspc", "endpoint": "https://councilof.ai/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.ce-net/ce-net", "endpoint": "https://ce-net.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.afsozer/doktor-mcp", "endpoint": "npm:doktor-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.codespar/mcp-ap2", "endpoint": "npm:@codespar/mcp-ap2", "reason": "different npm versions"}
+{"server": "io.github.tickerbot/mcp-server", "endpoint": "npm:@tickerbot/mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "ai.ekwo/mcp", "endpoint": "npm:@ekwo-ai/mcp", "reason": "different npm versions"}
+{"server": "io.github.dfmi-app/dfmi-market", "endpoint": "npm:dfmi-market-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "com.verirouteintel/lookup", "endpoint": "npm:veriroute-intel-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.conciergeprotocol/mcp", "endpoint": "npm:@conciergeprotocol/mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/gnomad-genetics-mcp-server", "endpoint": "npm:@cyanheads/gnomad-genetics-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.adelinamart/robrain", "endpoint": "npm:robrain", "reason": "different npm versions"}
+{"server": "com.gojinko.mcp/jinko", "endpoint": "https://mcp.gojinko.com", "reason": "same definitions, read at different moments"}
+{"server": "io.github.Aryan-Jhaveri/mcp-statcan", "endpoint": "https://mcp-statcan.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.applyra/mcp-server", "endpoint": "npm:@applyra/mcp-server", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "npm/@mehmoodqureshi/chrome-mcp", "endpoint": "npm:@mehmoodqureshi/chrome-mcp", "reason": "different npm versions"}
+{"server": "io.github.agentsearchhq-coder/agentsearch-mcp", "endpoint": "npm:@agentsearchhq/agentsearch-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/usaspending-mcp-server", "endpoint": "npm:@cyanheads/usaspending-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.bugfender/mcp", "endpoint": "npm:@bugfender/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.reflowpdf/reflowpdf", "endpoint": "https://app.reflowpdf.com/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.AliKarami/mikromcp", "endpoint": "npm:mikromcp", "reason": "different npm versions"}
+{"server": "io.github.kvoltmer/audionaut", "endpoint": "npm:audionaut-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/gbif-biodiversity-mcp-server", "endpoint": "npm:@cyanheads/gbif-biodiversity-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.RedHold/diagrams-so-mcp", "endpoint": "npm:@diagrams-so/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "dev.pages.nonsynthetic/apex-edge", "endpoint": "https://apex-edge-coral.vercel.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.payperfax/fax", "endpoint": "https://fax.payperfax.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.RohanMuppa/brightspace", "endpoint": "npm:brightspace-mcp-server", "reason": "different npm versions"}
+{"server": "com.hireahelper/mcp", "endpoint": "https://mcp.hireahelper.com", "reason": "same definitions, read at different moments"}
+{"server": "io.github.serkan-ozal/browser-devtools-mcp", "endpoint": "npm:browser-devtools-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.TeamDzX/workflow-companion", "endpoint": "npm:@opticell/workflow-companion", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-andreani", "endpoint": "npm:@codespar/mcp-andreani", "reason": "different npm versions"}
+{"server": "io.github.stevemilton/buyforme-mcp", "endpoint": "npm:buyforme-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.kandahk/shiped", "endpoint": "https://shiped.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "dev.svelte/mcp", "endpoint": "npm:@sveltejs/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.antohins/seo-tools-mcp-metrika", "endpoint": "npm:seo-tools-mcp-metrika", "reason": "definition contains the reader's launch environment"}
+{"server": "com.rycrentals/deals", "endpoint": "https://www.rycrentals.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.morluto/rea", "endpoint": "npm:rea-agents", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.oneuedu.mcp/oneu-education", "endpoint": "https://mcp.oneuedu.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.shuffle-works/sparkforensics-mcp", "endpoint": "npm:sparkforensics-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/uk-parliament-mcp-server", "endpoint": "npm:@cyanheads/uk-parliament-mcp-server", "reason": "different npm versions"}
+{"server": "dev.exit1/exit1-mcp", "endpoint": "npm:exit1-mcp", "reason": "npm, same version, offline on both sides: unexplained"}
+{"server": "io.github.antohins/seo-tools-mcp-wordstat", "endpoint": "npm:seo-tools-mcp-wordstat", "reason": "definition contains the reader's launch environment"}
+{"server": "org.jam-jam/convert-mcp", "endpoint": "npm:@jam-jam/convert-mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.ismalicious/mcp-server", "endpoint": "npm:@ismalicious/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.Hashlock-Tech/hashlock", "endpoint": "npm:@hashlock-tech/mcp", "reason": "different npm versions"}
+{"server": "io.github.talonicdev/talonic-mcp", "endpoint": "npm:@talonic/mcp", "reason": "npm, same version, offline on both sides: unexplained"}
+{"server": "com.openshopgraph/mcp", "endpoint": "https://api.openshopgraph.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.AtlaSent/mcp-server", "endpoint": "npm:@atlasent/mcp-server", "reason": "same definitions, read at different moments"}
+{"server": "io.github.wegravel/zensei-mcp", "endpoint": "https://www.zensei.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.Vortx-AI/eudr", "endpoint": "https://eudr.dev/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.cyanheads/exchange-rates-mcp-server", "endpoint": "npm:@cyanheads/exchange-rates-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.Gliana-Labs/gliana-ai-mcp", "endpoint": "npm:gliana-ai-mcp", "reason": "different npm versions"}
+{"server": "app.insightsocial/insightsocial", "endpoint": "npm:insightsocial", "reason": "different npm versions"}
+{"server": "sh.fettle/mcp", "endpoint": "npm:fettle-mcp", "reason": "different npm versions"}
+{"server": "com.agenttrafficlab/atl", "endpoint": "https://mcp.agenttrafficlab.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "fr.comontel/forfaits", "endpoint": "https://comontel.fr/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.securecoders/opengraph-io-mcp", "endpoint": "npm:opengraph-io-mcp", "reason": "different npm versions"}
+{"server": "io.github.kawal393/apex-psi-mcp", "endpoint": "npm:apex-psi-mcp", "reason": "different npm versions"}
+{"server": "io.github.pournasserian/mcp-my-site", "endpoint": "https://ai.pournasserian.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.ChiR24/unreal-engine-mcp", "endpoint": "npm:unreal-engine-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.askads/mcp-yandex-direct", "endpoint": "npm:mcp-yandex-direct", "reason": "different npm versions"}
+{"server": "ai.aquex/reasonbook", "endpoint": "npm:@aquex/reasonbook", "reason": "different npm versions"}
+{"server": "io.github.j-east/pixel-surgeon", "endpoint": "npm:pixel-surgeon-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.jblaz6335/ai-data-marketplace", "endpoint": "npm:dopaminedesk-ai-data-marketplace-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.noteflowai/dsh-skills-anywhere", "endpoint": "npm:dsh-skills-anywhere", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.antohins/seo-tools-mcp-xmlriver", "endpoint": "npm:seo-tools-mcp-xmlriver", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.dgesteves/onsystem", "endpoint": "npm:onsystem", "reason": "different npm versions"}
+{"server": "com.getmcpads/meta-ads", "endpoint": "npm:@getmcpads/meta-ads-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.atabekdemurtaza/papyrio-mcp", "endpoint": "npm:papyrio-mcp", "reason": "different npm versions"}
+{"server": "app.vercel.fork-for-agents/fork", "endpoint": "https://fork.zone/api/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.yifancong/rsdoctor", "endpoint": "npm:@rsdoctor/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.openvancamp/openvan-travel", "endpoint": "npm:@openvancamp/mcp-server", "reason": "different npm versions"}
+{"server": "xyz.twzrd.intel/twzrd-agent-intel", "endpoint": "https://intel.twzrd.xyz/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.ddx.pg/archive", "endpoint": "https://pg.ddx.io/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.OrderlyNetwork/orderly-mcp", "endpoint": "npm:@orderly.network/mcp-server", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "au.com.arthr/mcp", "endpoint": "https://www.arthr.com.au/api/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.mozilla/firefox-devtools-mcp", "endpoint": "npm:@mozilla/firefox-devtools-mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.kitepon-rgb/aiterm-mcp", "endpoint": "npm:aiterm-mcp", "reason": "different npm versions"}
+{"server": "io.github.itcustomsolution/approval-gate-mcp", "endpoint": "npm:@itcustomsolution/approval-gate-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/ris-austria-mcp-server", "endpoint": "npm:@cyanheads/ris-austria-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.timesheetIO/timesheet-mcp", "endpoint": "npm:@timesheet/mcp", "reason": "npm, same version, offline on both sides: unexplained"}
+{"server": "io.github.olostep/olostep-mcp-server", "endpoint": "npm:olostep-mcp", "reason": "different npm versions"}
+{"server": "io.github.MinaProtocol/mina-mcp-server", "endpoint": "npm:@o1-labs/mina-mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "net.effecthub/catalog", "endpoint": "https://effecthub.net/api/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.Yuuqq/jules-dispatch", "endpoint": "npm:@yuuqq/jules-dispatch", "reason": "npm, same version, offline on both sides: unexplained"}
+{"server": "io.github.rchanllc/picdefenseio-mcp-server", "endpoint": "npm:@picdefenseio/mcp-server", "reason": "different npm versions"}
+{"server": "dev.imagestep/mcp", "endpoint": "npm:@imagestep/mcp", "reason": "different npm versions"}
+{"server": "io.github.duttkunal101-lab/token-lens", "endpoint": "npm:@kunal_dutt/token-lens", "reason": "different npm versions"}
+{"server": "io.github.lightningfaucet/lightning-wallet-mcp", "endpoint": "npm:lightning-wallet-mcp", "reason": "different npm versions"}
+{"server": "com.datasparc/dbhawk", "endpoint": "npm:@dbhawk/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "app.agentbit/mcp", "endpoint": "https://agentbit.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "sh.openpath/openpath", "endpoint": "https://openpath.sh/mcp/search", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.durabilitycurve/archive", "endpoint": "https://mcp.durabilitycurve.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.junoventures/campobelo-sampa-br", "endpoint": "https://campobelo.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "blue.core/memory", "endpoint": "https://mcp.core.blue/", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.layervai/qurl-mcp", "endpoint": "npm:@layervai/qurl-mcp", "reason": "different npm versions"}
+{"server": "io.github.PhilflowIO/dav-mcp", "endpoint": "npm:dav-mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.chemodun/x4-script-mcp", "endpoint": "npm:x4-script-mcp", "reason": "different npm versions"}
+{"server": "com.walletbureau/mcp", "endpoint": "npm:@walletbureau/mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "com.parcelgps/catastro-gps", "endpoint": "npm:catastro-gps-mcp", "reason": "different npm versions"}
+{"server": "com.signupbouncer/checker", "endpoint": "https://signupbouncer.com/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.arhancanli/canli-mcp", "endpoint": "npm:canli-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/noaa-climate-mcp-server", "endpoint": "npm:@cyanheads/noaa-climate-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.junoventures/jardins-sampa-br", "endpoint": "https://jardins.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "app.framezone/framezone", "endpoint": "https://framezone.app/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.code0xff/1gateway", "endpoint": "https://1gateway.dev/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.cyanheads/orcid-mcp-server", "endpoint": "npm:@cyanheads/orcid-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.Rakesh1002/namemyapp", "endpoint": "npm:@namemyapp/mcp", "reason": "different npm versions"}
+{"server": "com.ithy/research-library", "endpoint": "https://ithy.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "com.overlayqa/mcp", "endpoint": "npm:@overlayqa/mcp", "reason": "different npm versions"}
+{"server": "io.drint/drint", "endpoint": "https://drint.io/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.AnonymousOnyx22/paper-finder-student-mcp", "endpoint": "npm:paper-finder-student-mcp", "reason": "different npm versions"}
+{"server": "dev.usetrail/trail", "endpoint": "npm:usetrail", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.NVIDIA/elements", "endpoint": "npm:@nvidia-elements/cli", "reason": "different npm versions"}
+{"server": "com.codestringers/mcp", "endpoint": "https://www.codestringers.com/_api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.junoventures/mono-juno-ventures", "endpoint": "https://mono.juno.ventures/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.mcp-dir/eleicoes-mcp", "endpoint": "https://api.mcp.ai/p_eleicoes", "reason": "same definitions, read at different moments"}
+{"server": "link.morningbrief/bridges", "endpoint": "https://bridges.morningbrief.link/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.vuluu2k/webcake-landing-mcp", "endpoint": "npm:webcake-landing-mcp", "reason": "different npm versions"}
+{"server": "com.dogslifeapp/dogslife", "endpoint": "https://dogslifeapp.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.ecomdly/ecomdly", "endpoint": "https://ecomdly.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.chrisryugj/kordoc", "endpoint": "npm:kordoc", "reason": "different npm versions"}
+{"server": "ai.1court.state/court-directory", "endpoint": "https://state.1court.ai/api/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "dev.seoskill/seo", "endpoint": "npm:seo", "reason": "different npm versions"}
+{"server": "com.fulfiller/agentic-commerce-api", "endpoint": "https://www.fulfiller.com/agenticopenapi/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.cyanheads/macos-mcp-server", "endpoint": "npm:@cyanheads/macos-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.arhancanli/canli-fundamentals-mcp", "endpoint": "npm:canli-fundamentals-mcp", "reason": "different npm versions"}
+{"server": "io.qt.qt-docs-mcp/qt-documentation", "endpoint": "https://qt-docs-mcp.qt.io/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.tradepilotusa.www/agent-commerce", "endpoint": "https://www.tradepilotusa.com/api/agent-commerce/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.jannks/handbook", "endpoint": "npm:@ah-oh/handbook-mcp-server", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "dev.workers.shopttyass-85f.upgrade-brief/upgrade-brief", "endpoint": "https://upgrade-brief.shopttyass-85f.workers.dev/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.pablo-albaladejo/kaiord", "endpoint": "npm:@kaiord/mcp", "reason": "different npm versions"}
+{"server": "io.github.lucrummediacompany/trading-zones", "endpoint": "https://api.tradingzones.app/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.arminazimi/evergreen", "endpoint": "npm:evergreen-deprecation", "reason": "different npm versions"}
+{"server": "com.bykaranteli/mcp", "endpoint": "https://mcp.bykaranteli.com/", "reason": "hosted server edited between the two reads"}
+{"server": "com.nythosx.market/market-data", "endpoint": "https://market.nythosx.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.promptwheel-ai/logbook", "endpoint": "npm:@promptwheel/logbook-mcp", "reason": "different npm versions"}
+{"server": "io.github.yappmaniac/grocery-price-snapshots", "endpoint": "https://yappman-grocery-mcp.blue-bar-ca29.workers.dev/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.intoApex/tradingagentstack", "endpoint": "npm:tradingagentstack-mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/pixoo-mcp-server", "endpoint": "npm:@cyanheads/pixoo-mcp-server", "reason": "different npm versions"}
+{"server": "com.foldlaundry/fold-laundry", "endpoint": "https://foldlaundry.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "ru.layero/layero", "endpoint": "https://mcp.layero.ru/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.hashchecked/crypto-derivatives-mcp", "endpoint": "npm:crypto-derivatives-mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.AKzar1el/god-prompt-mcp", "endpoint": "npm:god-prompt-mcp", "reason": "different npm versions"}
+{"server": "io.github.vuluu2k/sbuilder-mcp", "endpoint": "npm:sbuilder-mcp", "reason": "different npm versions"}
+{"server": "io.echelongraph/echelongraph-mcp", "endpoint": "npm:echelongraph-mcp", "reason": "different npm versions"}
+{"server": "io.github.murilojrpereira/mcp-graphql-bridge", "endpoint": "npm:mcp-graphql-bridge", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "com.gocushy/mcp", "endpoint": "npm:@gocushy/mcp", "reason": "different npm versions"}
+{"server": "ai.eshmere/tenda", "endpoint": "https://mcp.tenda.eshmere.ai/mcp", "reason": "same definitions, read at different moments"}
+{"server": "app.percher/percher", "endpoint": "npm:@percher/mcp", "reason": "different npm versions"}
+{"server": "io.github.ip2k/rarefaction-lsp-mcp", "endpoint": "npm:rarefaction-lsp-mcp", "reason": "different npm versions"}
+{"server": "com.freelanceclearing/marketplace", "endpoint": "https://freelanceclearing.com/api/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.starecz/karea-mcp", "endpoint": "npm:karea-mcp", "reason": "different npm versions"}
+{"server": "io.github.alexar76/warden", "endpoint": "npm:@aimarket/warden", "reason": "different npm versions"}
+{"server": "io.github.Webb-Ventures/autorouter", "endpoint": "npm:autorouter-mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.ofershap/real-browser", "endpoint": "npm:real-browser-mcp", "reason": "different npm versions"}
+{"server": "io.github.csigelo/sigelo", "endpoint": "npm:sigelo-mcp", "reason": "different npm versions"}
+{"server": "io.github.Shoberman2/clipswarm", "endpoint": "npm:clipswarm", "reason": "definition contains the reader's launch environment"}
+{"server": "com.threadlinqs/intelthreadlinqs-mcp", "endpoint": "npm:intelthreadlinqs-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.snenenenenenene/transita-mcp-server", "endpoint": "npm:@transita/mcp-server", "reason": "different npm versions"}
+{"server": "com.allratestoday/central-bank-mcp", "endpoint": "npm:@allratestoday/central-bank-mcp", "reason": "different npm versions"}
+{"server": "com.spacexploration/listings", "endpoint": "https://spacexploration.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.shariar-k/agoranome", "endpoint": "https://api.agoranome.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.antohins/seo-tools-mcp-ga4", "endpoint": "npm:seo-tools-mcp-ga4", "reason": "definition contains the reader's launch environment"}
+{"server": "app.faqai/mcp-server", "endpoint": "npm:@faqai/mcp-server", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/who-gho-mcp-server", "endpoint": "npm:@cyanheads/who-gho-mcp-server", "reason": "different npm versions"}
+{"server": "npm/@dangamsoft/cafe-mcp", "endpoint": "npm:@dangamsoft/cafe-mcp", "reason": "different npm versions"}
+{"server": "dev.zerodrop/zerodrop-mcp", "endpoint": "npm:zerodrop-mcp", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-coordinadora", "endpoint": "npm:@codespar/mcp-coordinadora", "reason": "different npm versions"}
+{"server": "org.walkably/walkably", "endpoint": "https://mcp.walkably.org/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.mcp-z/mcp-drive", "endpoint": "npm:@mcp-z/mcp-drive", "reason": "different npm versions"}
+{"server": "com.regiabi/chart-mcp", "endpoint": "npm:@bicharts/chart-mcp", "reason": "different npm versions"}
+{"server": "net.praegant/landhaus", "endpoint": "https://mcp.praegant.net/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "net.apppage/app-data", "endpoint": "https://apppage.net/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.leonardomso/luca-mcp", "endpoint": "npm:@setluca/mcp", "reason": "different npm versions"}
+{"server": "io.github.Dempty-glitch/z-zero-mcp", "endpoint": "npm:z-zero-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/crossref-mcp-server", "endpoint": "npm:@cyanheads/crossref-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.apollographql/graphos-mcp-server", "endpoint": "https://mcp.apollographql.com", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "co.civai.nova/google-docs-agent", "endpoint": "https://nova.civai.co/mcp/agents/google-docs-agent", "reason": "same definitions, read at different moments"}
+{"server": "io.github.supplementscanner/scanner", "endpoint": "https://mcp.supplementscanner.eu", "reason": "hosted server edited between the two reads"}
+{"server": "com.parseapi/mcp", "endpoint": "npm:parseapi-mcp", "reason": "different npm versions"}
+{"server": "io.github.structured-world/gitlab-mcp", "endpoint": "npm:@structured-world/gitlab-mcp", "reason": "different npm versions"}
+{"server": "io.github.Softeria/ms-365-mcp-server", "endpoint": "npm:@softeria/ms-365-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.dongdongbh/mindwtr", "endpoint": "npm:mindwtr-mcp", "reason": "different npm versions"}
+{"server": "io.github.makash/feedmyagent", "endpoint": "npm:feedmyagent-mcp", "reason": "different npm versions"}
+{"server": "com.insumermodel/insumer", "endpoint": "npm:mcp-server-insumer", "reason": "different npm versions"}
+{"server": "io.github.mushitaro/matrix-tsunagi-mapping", "endpoint": "npm:matrix-tsunagi", "reason": "different npm versions"}
+{"server": "io.github.imprezahost/impreza-mcp", "endpoint": "https://mcp.imprezahost.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.codespar/mcp-correios", "endpoint": "npm:@codespar/mcp-correios", "reason": "different npm versions"}
+{"server": "ai.councilof/gspc", "endpoint": "https://councilof.ai/mcp/", "reason": "same definitions, read at different moments"}
+{"server": "io.github.cyanheads/us-lobbying-mcp-server", "endpoint": "npm:@cyanheads/us-lobbying-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.antohins/seo-tools-mcp-gsc", "endpoint": "npm:seo-tools-mcp-gsc", "reason": "definition contains the reader's launch environment"}
+{"server": "es.eslahoradelaverdad/congreso", "endpoint": "https://eslahoradelaverdad.es/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.itcustomsolution/sam-gov-mcp", "endpoint": "npm:@itcustomsolution/sam-gov-mcp", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-colppy", "endpoint": "npm:@codespar/mcp-colppy", "reason": "different npm versions"}
+{"server": "io.github.edtool79-collab/hirepulse-gateway", "endpoint": "https://gethirepulse.xyz/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.OpenTrain-AI/opentrain", "endpoint": "npm:@opentrain-ai/mcp", "reason": "different npm versions"}
+{"server": "io.github.flukeatzerocool/holonovel", "endpoint": "npm:holonovel", "reason": "different npm versions"}
+{"server": "io.github.jalcodev/gridhub", "endpoint": "https://api.grid-hub.app/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.codespar/mcp-transbank", "endpoint": "npm:@codespar/mcp-transbank", "reason": "different npm versions"}
+{"server": "io.github.antohins/seo-tools-mcp-aparser", "endpoint": "npm:seo-tools-mcp-aparser", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "io.github.awpthorp/posterly", "endpoint": "npm:posterly-mcp-server", "reason": "different npm versions"}
+{"server": "com.cristiandesivo/ask-a-human", "endpoint": "https://cristiandesivo.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.Xerolo44/rpgmaker-mv-mcp", "endpoint": "npm:@xerolo44/rpgmaker-mv-mcp", "reason": "different npm versions"}
+{"server": "io.github.chrischall/office-outlook-mcp", "endpoint": "npm:@chrischall/office-outlook-mcp", "reason": "different npm versions"}
+{"server": "ai.neuralverge/neuralverge", "endpoint": "https://mcp.neuralverge.ai/mcp", "reason": "same definitions, read at different moments"}
+{"server": "dev.redirx/redirx", "endpoint": "https://redirx-mcp-server.onrender.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "live.max4/max4live", "endpoint": "https://mcp.max4.live/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.emdly/emdly", "endpoint": "https://emdly.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.fmadore/iwac-mcp-server", "endpoint": "https://islam.zmo.de/mcp/", "reason": "same definitions, read at different moments"}
+{"server": "ai.celestio/celestio", "endpoint": "https://celestio.ai/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.TychiWallet/tyi-mcp", "endpoint": "npm:@tychilabs/tyi-mcp", "reason": "different npm versions"}
+{"server": "com.saraoia/sarao", "endpoint": "https://saraoia.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.asokore/statcite", "endpoint": "https://statcite.com/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.Brunovncs/texel-mcp", "endpoint": "npm:texel-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "com.aditus.developers/developer-portal", "endpoint": "https://developers.aditus.com/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.pipeshub-ai/mcp", "endpoint": "npm:@pipeshub-ai/mcp", "reason": "different npm versions"}
+{"server": "ru.zavod-stanki/cnc-catalog", "endpoint": "https://zavod-stanki.ru/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.codespar/mcp-khipu", "endpoint": "npm:@codespar/mcp-khipu", "reason": "different npm versions"}
+{"server": "io.github.abuzerasr/asrai", "endpoint": "npm:asrai-mcp", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-afip", "endpoint": "npm:@codespar/mcp-afip", "reason": "different npm versions"}
+{"server": "io.github.alex0xhodler/defi-garden", "endpoint": "https://www.defi.garden/api/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.RegistrumUK/uk-companies-house-mcp", "endpoint": "https://registrum.co.uk/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "dev.true402/mcp-server", "endpoint": "npm:@true402.dev/mcp-server", "reason": "same definitions, read at different moments"}
+{"server": "io.github.brightdata/brightdata-mcp", "endpoint": "npm:@brightdata/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.delega-dev/delega", "endpoint": "npm:@delega-dev/mcp", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-nequi", "endpoint": "npm:@codespar/mcp-nequi", "reason": "different npm versions"}
+{"server": "io.github.mirzaabubakr/uae-einvoice-mcp", "endpoint": "npm:uae-einvoice-mcp", "reason": "different npm versions"}
+{"server": "io.github.BitmapAsset/block-genomics-mcp", "endpoint": "npm:block-genomics-mcp", "reason": "different npm versions"}
+{"server": "io.github.0xinsider/mcp", "endpoint": "npm:@0xinsider/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "com.codexguild/codexguild", "endpoint": "npm:@codexguild/mcp", "reason": "different npm versions"}
+{"server": "io.github.caelum29/calibre-mcp", "endpoint": "npm:calibre-mcp", "reason": "different npm versions"}
+{"server": "com.anthonyhunts/shaart-agency", "endpoint": "https://www.anthonyhunts.com/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.junoventures/bogeyland-golf", "endpoint": "https://www.bogeyland.golf/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.followontours/cricket-travel", "endpoint": "https://www.followontours.com/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.noncelogic/mcp", "endpoint": "npm:@roveapi/mcp", "reason": "different npm versions"}
+{"server": "io.github.matiasmaquieira96/risk-mcp", "endpoint": "npm:prometiam-risk-mcp", "reason": "different npm versions"}
+{"server": "io.github.getambr/ambr-mcp-server", "endpoint": "https://getamber.dev/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.getfairquery/agent-trust-mcp", "endpoint": "npm:@fairquery/agent-trust-mcp", "reason": "different npm versions"}
+{"server": "app.deepsearch/deepsearch", "endpoint": "https://deepsearch.app/api/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "surf.insight/domain-radar", "endpoint": "npm:domain-radar", "reason": "different npm versions"}
+{"server": "com.trustverum/public-reading", "endpoint": "https://api.trustverum.com/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.KyleClouthier/secondstrike", "endpoint": "https://secondstrike-server-zgqvqzdrta-uc.a.run.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.imharikumaran/altimateguide", "endpoint": "npm:altimateguide-agent-mcp", "reason": "different npm versions"}
+{"server": "dev.spatialpack/mcp", "endpoint": "npm:@spatialpack/mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "com.a2aorbit/orbit", "endpoint": "https://a2aorbit.com/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "io.github.UI5/webcomponents-react-mcp-server", "endpoint": "npm:@ui5/webcomponents-react-mcp", "reason": "different npm versions"}
+{"server": "dev.dnsdoctor/dns-doctor", "endpoint": "npm:@dnsdoctor/mcp", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/musicbrainz-mcp-server", "endpoint": "npm:@cyanheads/musicbrainz-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.Keith-CY/japaneseskills-mcp", "endpoint": "https://japaneseskills.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.chrischall/untappd-mcp", "endpoint": "npm:untappd-mcp", "reason": "different npm versions"}
+{"server": "io.github.IGELHARINE/cdpm", "endpoint": "npm:cdpm-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "com.payram/mcp", "endpoint": "https://mcp.payram.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.andezdev/tokenlite-mysql-mcp", "endpoint": "npm:@andezdev/tokenlite-mysql-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "app.pakbus/pakbus", "endpoint": "https://pakbus.app/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.runapi-builder/grok-imagine-mcp", "endpoint": "npm:@runapi.ai/grok-imagine-mcp", "reason": "different npm versions"}
+{"server": "pl.oleba/remonty", "endpoint": "https://oleba.pl/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "com.dealsurface/dealsurface", "endpoint": "npm:@dealsurface/mcp-server", "reason": "different npm versions"}
+{"server": "ai.limitguard.api/limitguard", "endpoint": "https://api.limitguard.ai/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.error-path/opendrs", "endpoint": "npm:@error-path/opendrs", "reason": "different npm versions"}
+{"server": "io.github.cyanheads/socrata-mcp-server", "endpoint": "npm:@cyanheads/socrata-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.yuvlero/mark", "endpoint": "npm:@yuvlero/mark", "reason": "different npm versions"}
+{"server": "io.github.junoventures/moema-sampa-br", "endpoint": "https://moema.sampa.br/mcp", "reason": "same definitions, read at different moments"}
+{"server": "xyz.groundtruths/groundtruth", "endpoint": "https://api.groundtruths.xyz/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.kansei-link/kansei-mcp-server", "endpoint": "https://kansei-link-mcp-production.up.railway.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.toggl/toggl-mcp", "endpoint": "npm:@togglhq/mcp", "reason": "different npm versions"}
+{"server": "io.github.kevinastuhuaman/trackly", "endpoint": "npm:trackly-cli", "reason": "different npm versions"}
+{"server": "finance.marx/marx-finance", "endpoint": "https://marx.finance/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.cyanheads/reliefweb-mcp-server", "endpoint": "npm:@cyanheads/reliefweb-mcp-server", "reason": "different npm versions"}
+{"server": "co.civai.nova/support-agent-admin", "endpoint": "https://nova.civai.co/mcp/agents/support-agent-admin", "reason": "same definitions, read at different moments"}
+{"server": "io.github.nubo-db/dynoxide", "endpoint": "npm:dynoxide", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "wiki.agenticweb/probe", "endpoint": "https://agenticweb.wiki/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.AtticStandard/atom-mcp-server", "endpoint": "https://mcp.atticstandard.com/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.cyanheads/oecd-mcp-server", "endpoint": "npm:@cyanheads/oecd-mcp-server", "reason": "different npm versions"}
+{"server": "org.tansolutions.railcrossingatlas/crossings", "endpoint": "https://railcrossingatlas.tansolutions.org/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.up2itnow0822/agentpay", "endpoint": "npm:agentpay-mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.allchemylabs/aether-wcag-scanner", "endpoint": "npm:@allchemylabs/aether-wcag-scanner", "reason": "different npm versions"}
+{"server": "ar.com.consignatarias/cattle-market", "endpoint": "https://www.consignatarias.com.ar/api/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.cyanheads/chembl-mcp-server", "endpoint": "npm:@cyanheads/chembl-mcp-server", "reason": "different npm versions"}
+{"server": "dev.zhiyong/uniuni-tracking", "endpoint": "https://delivery.zhiyong.dev/mcp", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.junoventures/graciebarrajiujitsu-site", "endpoint": "https://www.graciebarrajiujitsu.site/mcp", "reason": "same definitions, read at different moments"}
+{"server": "com.blixtworks.www/tools", "endpoint": "npm:blixtworks-mcp", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.lokal-id/lokal", "endpoint": "npm:@lokal-id/mcp", "reason": "different npm versions"}
+{"server": "io.github.SylphxAI/locus", "endpoint": "npm:@sylphx/locus", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "be.co-legal/legal-lookup", "endpoint": "https://agent.co-legal.be/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.cyanheads/nws-weather-mcp-server", "endpoint": "npm:@cyanheads/nws-weather-mcp-server", "reason": "different npm versions"}
+{"server": "com.caller-kit/callerkit-mcp", "endpoint": "npm:callerkit-mcp", "reason": "different npm versions"}
+{"server": "io.github.Invarato/jarroba-tools-tests", "endpoint": "npm:@jarroba/mcp-tests", "reason": "different npm versions"}
+{"server": "io.github.LuxAlgo/luxalgo-mcp-server", "endpoint": "npm:@luxalgo/mcp", "reason": "different npm versions"}
+{"server": "io.github.babelize/mcp", "endpoint": "npm:@babelize/mcp", "reason": "different npm versions"}
+{"server": "hr.svijet-beba/products", "endpoint": "https://www.svijet-beba.hr/mcp.php", "reason": "server sent no outputSchema/title to heldfast's request (old handshake or no version header)"}
+{"server": "io.github.mercuryx402/mercury-x402-mcp", "endpoint": "npm:mercury-x402-mcp", "reason": "npm, same version: heldfast ran it with network (before 29 Sep), HISTOR without"}
+{"server": "co.civai.nova/research-agent", "endpoint": "https://nova.civai.co/mcp/agents/research-agent", "reason": "same definitions, read at different moments"}
+{"server": "dev.farmjs/docs", "endpoint": "https://mcp.farmjs.dev/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "app.fanzero/fanzero", "endpoint": "https://fanzero.app/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.cyanheads/eur-lex-mcp-server", "endpoint": "npm:@cyanheads/eur-lex-mcp-server", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-nubank", "endpoint": "npm:@codespar/mcp-nubank", "reason": "different npm versions"}
+{"server": "io.github.ContentWriterco/compabase", "endpoint": "https://compabase.com/api/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.junoventures/genesis-social", "endpoint": "https://www.genesis.social/mcp", "reason": "same definitions, read at different moments"}
+{"server": "io.github.emailens/mcp", "endpoint": "npm:@emailens/mcp", "reason": "different npm versions"}
+{"server": "io.github.codespar/mcp-stp-spei", "endpoint": "npm:@codespar/mcp-stp-spei", "reason": "different npm versions"}
+{"server": "io.github.formhaus-dev/formhaus", "endpoint": "npm:@formhaus/mcp", "reason": "different npm versions"}
+{"server": "io.github.wonderwhy-er/desktop-commander", "endpoint": "npm:@wonderwhy-er/desktop-commander", "reason": "definition contains the reader's launch environment"}
+{"server": "io.github.JovieInc/jovie", "endpoint": "npm:@jovie/cli", "reason": "different npm versions"}
+{"server": "io.blockchainanalysis/mcp", "endpoint": "https://blockchainanalysis.io/api/mcp", "reason": "heldfast's later reads failed, its copy is older"}
+{"server": "io.github.igorsaevets/page2ai-mcp", "endpoint": "npm:@page2ai/mcp", "reason": "different npm versions"}
+{"server": "online.jinero/jinero", "endpoint": "https://jinero.online/mcp", "reason": "heldfast read the first tools/list page only"}
+{"server": "ai.mcpanalytics/analytics", "endpoint": "https://api.mcpanalytics.ai/mcp/api-key", "reason": "hosted server edited between the two reads"}
+{"server": "io.github.CDCStream/captapi", "endpoint": "https://api.captapi.com/mcp", "reason": "hosted server edited between the two reads"}
+{"server": "run.dropto/drop2run", "endpoint": "npm:@drop2run/mcp", "reason": "different npm versions"}
+{"server": "io.github.cryptoduke01/gloam", "endpoint": "npm:@gloamtrade/mcp", "reason": "different npm versions"}
+{"server": "com.growsurf/growsurf", "endpoint": "npm:@growsurfteam/growsurf-mcp", "reason": "different npm versions"}

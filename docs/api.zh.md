@@ -27,13 +27,15 @@ flowchart LR
 
 | 方法 | 路径 | 返回 |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | 端点列表；`state` ∈ `all`、`pinned`、`changed`、`flagged`、`unobserved`；`q` 匹配名称、端点、标题 |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | 端点列表；`state` ∈ `all`、`pinned`、`changed`、`flagged`、`unobserved`（未读到工具列表）、`undigested`（已读到列表但没有摘要）；`q` 匹配名称、端点、标题 |
 | GET | `/api/v1/servers/<id>` | 单个端点：当前工具集、带匹配区间的 WARDEN 匹配项、标签、折叠后的时间线、变更、30 天内的客户端报告、发布者声明的工具集（`declaredToolSets`） |
 | GET | `/badge/<id>.svg` | README 徽章：`pinned ‹date›`、`unchanged Nd`、`changed ‹date›`、`not observed`、`not listed` |
 
 `<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符——稳定不变，每个远程端点一个。
 
 对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。`launch` 说明该次运行如何启动：`observer`、`image`、`entry`、`network`（`no route out`），以及 HISTOR 提供配置时的 `supplied`：环境变量名（从不包含值）、参数和 pins。同一版本在不同启动参数下或有网络时，可能列出不同的工具。
+
+`/fingerprints` 让客户端以自己的格式比较它收到的定义与 HISTOR 观察到的定义。使用 Vercel AI SDK：`detectToolDrift(await fingerprintTools(await mcpClient.tools()), (await (await fetch(url)).json()).fingerprints)`；出现在 `changed` 或 `added` 中的工具与公开观察不同。各格式覆盖的成员不同（Vercel 的不含 `outputSchema` 和注解提示），而且服务器可能向另一个客户端提供不同的定义：协议版本、启动环境或配置不同时都会如此。`lastObserved` 表示 HISTOR 最后一次看到该集合的时间。
 
 ## 变更
 
@@ -43,6 +45,7 @@ flowchart LR
 | GET | `/api/v1/changes/<id>` | 单条变更 |
 | GET | `/api/v1/changes/<id>/cost` | 该变更对工具列表 token 成本的影响：前后各项合计（`sent`，拆分为 `names`、`descriptions`、`inputSchemas` 和 `structure`；另列 `outputSchemas` 和 `listed`），新增和移除的工具，以及每个计数有变化的工具（描述、输入 schema 以及该 schema 的每个顶层属性分开列出） |
 | GET | `/api/v1/servers/<id>/cost?limit=` | 当前列表按工具的成本，以及最近几次变更（最多 50 次）的合计 |
+| GET | `/api/v1/servers/<id>/fingerprints?format=` | 以其他格式给出当前工具集中每个工具的指纹：`vercel-ai`（Vercel AI SDK 的 `fingerprintTools`，默认）、`heldfast`（heldfast 锁文件摘要）或 `agentavow-v1`（`agentavow.mcp-tool-definition.v1`）；额外成员超出存储上限的工具列在 `incomplete` 中，不给指纹 |
 | GET | `/api/v1/cost/toolsets/<digest>` | 一个已存储工具集的成本 |
 | GET | `/feed.xml` | 最近 50 条变更的 Atom 订阅源；`?watch=<id>,<id>,…`（最多 100 个目标 id，即 `/check` 和服务器页面给出的 id）只保留这些服务器和软件包——可在任意订阅阅读器中订阅 |
 

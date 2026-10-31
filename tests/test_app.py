@@ -330,9 +330,10 @@ def test_discovery_documents_are_signed_once_not_per_request(api):
 def test_check_says_undigestible_and_never_scans_another_set(api):
     client, world = api
     endpoint = make_target("io.example/weather", "/a").endpoint
-    dup = [tool("get_weather", "a"), tool("get_weather", "b")]
-    answer = check(client, endpoint=endpoint, tools=dup).json()
-    assert answer["match"] == "undigestible" and answer["query"]["digestError"]["code"] == "MTL-SUBJ-003"
+    # MTL/1.1 digests duplicate names and fractions; an entry with no name is still undigestible.
+    nameless = [tool("get_weather", "a"), {"description": "no name", "inputSchema": {}}]
+    answer = check(client, endpoint=endpoint, tools=nameless).json()
+    assert answer["match"] == "undigestible" and answer["query"]["digestError"]["code"] == "MTL-SUBJ-001"
     assert "No tool set was sent" not in answer["note"]
     assert "patternScan" not in answer
     assert "classifier" not in answer  # never another set's verdict presented as theirs

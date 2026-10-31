@@ -141,7 +141,7 @@ vuelven a emitir cada día.
 stateDiagram-v2
     [*] --> Unseen
     Unseen --> Pinned: tools/list ok<br/>etiquetas de observación + escaneo + nombre
-    Unseen --> Undigestible: MTL-SUBJ-001/002/003<br/>una observación inconclusive
+    Unseen --> Undigestible: MTL-SUBJ-001<br/>una observación inconclusive
     Pinned --> Pinned: mismo resumen, ≥ 20 h desde el último eslabón<br/>continuidad pass (unchangedSince)
     Pinned --> Changed: resumen distinto<br/>continuidad fail + nuevas etiquetas de observación/escaneo + diff
     Changed --> Pinned: siguiente rastreo, mismo resumen<br/>continuidad pass

@@ -34,7 +34,7 @@ The key is published at `GET /api/v1/issuer` as `did` and `publicKeyHex`. A veri
 
 Wherever this document says "the canonical bytes of" a JSON value, it means the JSON Canonicalization Scheme, **RFC 8785**, applied to that value, encoded as UTF-8. There is no other serialisation anywhere in this format.
 
-A document containing a JSON number that is not an integer MUST NOT be signed or hashed under this format; see MTL/1 §5.4 for why, and `MTL-NUM-001` for what an issuer reports instead.
+A document this format signs MUST NOT contain a JSON number other than an integer within ±(2^53−1) (AWR/2 SPEC §4.3). A tool set is not signed: its digest follows MTL/1.1 §5.4, which reads every number as an IEEE 754 double and reports `MTL-NUM-001` only for a number that has none. Until 2026-10-31 (MTL/1.0) a tool set with any non-integer number got no digest.
 
 ### 2.3 Signature rule for `histor.*` documents
 

@@ -1,0 +1,302 @@
+{
+ "source": "Expected values from independent implementations, not histor.fingerprints: vercel-ai from fingerprintTools in the npm package ai@7.0.159 (tools built as @ai-sdk/mcp tools() builds them); heldfast and agentavow-v1 from the rules in heldfast docs/LOCK.md and AgentAvow tool-manifest-digest-vectors-v1 over rfc8785 0.1.4. The last three tools are DeepWiki's, as AgentAvow's attestation of 2026-10-01 recorded them; signedAgentavow is what AgentAvow signed.",
+ "cases": [
+  {
+   "tool": {
+    "name": "plain",
+    "description": "Read a file.",
+    "inputSchema": {
+     "type": "object",
+     "properties": {
+      "path": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "path"
+     ]
+    }
+   },
+   "vercel-ai": "EtHEyOW265pTc3VzjL43Jv69QWWRBSdQTMOivK1ouhI",
+   "heldfast": "c50137e27eec59a5f831a2b49c376b8a9832da7cb989f4ff17dffbce301d2739",
+   "agentavow-v1": "sha256:f485b2df423a8c25113c5a7c67b5db5fd7e60864855ea4bf73dffa9acd2e49cc",
+   "agentavowKey": "tool:plain"
+  },
+  {
+   "tool": {
+    "name": "titled",
+    "title": "Top title",
+    "description": "Has both titles.",
+    "inputSchema": {
+     "type": "object",
+     "properties": {}
+    },
+    "annotations": {
+     "title": "Annotation title",
+     "readOnlyHint": true
+    }
+   },
+   "vercel-ai": "qi3inj9rh9dUu6G3tzu0DOxtkl0NIe9Jr2LO5Zd_S-0",
+   "heldfast": "89f0cd2b88350852f6f5ef79083b493323eb3f8b65aba019447871c20713f509",
+   "agentavow-v1": "sha256:e03f4ca4d6b9981cb6b47d690da34d56a2bbd1ea2f88c12292981c8e49b6fcf8",
+   "agentavowKey": "tool:titled"
+  },
+  {
+   "tool": {
+    "name": "annotation_title_only",
+    "description": "Title only in annotations.",
+    "inputSchema": {
+     "type": "object"
+    },
+    "annotations": {
+     "title": "From annotations",
+     "destructiveHint": false
+    }
+   },
+   "vercel-ai": "awQNPcr8RS_Xl_NA6WHWhm-JR1FHJky1fO6P0FykaqE",
+   "heldfast": "5c119893e6d1edf198d70be68793104d1d3973b083780ea8db883d236a1cd140",
+   "agentavow-v1": "sha256:f3b57de26582aea23d47a7bda6e26348f0de65bc91851e6b8ffaf96a98237f6b",
+   "agentavowKey": "tool:annotation_title_only"
+  },
+  {
+   "tool": {
+    "name": "bare",
+    "inputSchema": {
+     "type": "object"
+    },
+    "outputSchema": {}
+   },
+   "vercel-ai": "v29KzmkWF_EIz7n-T4SipiZj5DZz-TTxJzVFwrgQ4ng",
+   "heldfast": "2a6dd5e8dc85e375a7b8d0e5bada9354423ae119620ee899e9a9624a49fb09d4",
+   "agentavow-v1": "sha256:4d9d5855881dece2d659e235f3dc7032e8a1ce8c877bbf54c42b0ba65f190c5a",
+   "agentavowKey": "tool:bare"
+  },
+  {
+   "tool": {
+    "name": "numbers",
+    "description": "Numbers as JSON.parse reads them.",
+    "inputSchema": {
+     "type": "object",
+     "properties": {
+      "n": {
+       "type": "number",
+       "minimum": 0.0,
+       "maximum": 1e+21,
+       "multipleOf": 1e-07,
+       "default": -0.0,
+       "examples": [
+        1.5,
+        0.1,
+        1.2345678901234568e+20,
+        2.5e-08,
+        9007199254740993
+       ]
+      }
+     }
+    }
+   },
+   "vercel-ai": "2xXwHA2ViP_o3RDWnkdyMipIVD2Y790EAa58100BtwI",
+   "heldfast": "234c0871ea27beba811e58f6fee1ee15a9bd766063baf02a5b8b6b190e477be8",
+   "agentavow-v1": "sha256:b98c6305b20639a794fe49c7ae6376c888224f346690e9843d401d5a2dcd7a21",
+   "agentavowKey": "tool:numbers"
+  },
+  {
+   "tool": {
+    "name": "unicode",
+    "description": "Quote \" backslash \\ line sep tab\t emoji 😀 é",
+    "inputSchema": {
+     "type": "object",
+     "properties": {
+      "": {
+       "type": "string"
+      },
+      "😀": {
+       "type": "string"
+      },
+      "a": {
+       "type": "string"
+      },
+      "10": {
+       "type": "string"
+      },
+      "2": {
+       "type": "string"
+      }
+     }
+    }
+   },
+   "vercel-ai": "SkAa6ItXLfTWeAf11zFZxgtjUMrXqL8AfrFvt7E1SZs",
+   "heldfast": "d70b7f113c0590f39a2dc579a1657b7d5bc3d6264f3b9a581e3bf8a374b94937",
+   "agentavow-v1": "sha256:8f2911a3c849b19d8d90b7e446734162d092061ec4a2a2a4e522e1af2c9ee96d",
+   "agentavowKey": "tool:unicode"
+  },
+  {
+   "tool": {
+    "name": "with output and icons",
+    "description": "Space in the name.",
+    "inputSchema": {
+     "type": "object",
+     "properties": {
+      "q": {
+       "type": "string"
+      }
+     },
+     "additionalProperties": true
+    },
+    "outputSchema": {
+     "type": "object",
+     "properties": {
+      "ok": {
+       "type": "boolean"
+      }
+     }
+    },
+    "icons": [
+     {
+      "src": "https://example.org/i.png",
+      "mimeType": "image/png"
+     }
+    ]
+   },
+   "vercel-ai": "jlDYzavwsOXgx3h48jbYALTTRb1zOTUSHFJWRtBvzXc",
+   "heldfast": "0e23d152862059b3bd32feb3f69a8c4cf632de9495cf7fb55ff02fdd4eae5b2c",
+   "agentavow-v1": "sha256:5c89d6e797058cf04b055e0c328d090ceafaa3e8ecced68774d5a32f124b41cf",
+   "agentavowKey": "tool:with%20output%20and%20icons"
+  },
+  {
+   "tool": {
+    "name": "ask_wiki_question",
+    "description": "Ask any question about a GitHub repository's codebase and get an AI-powered answer\ngrounded in its DeepWiki.",
+    "inputSchema": {
+     "properties": {
+      "repoName": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       ],
+       "description": "GitHub repository or list of repositories (max 10) in owner/repo format."
+      },
+      "question": {
+       "description": "The question to ask about the repository.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "repoName",
+      "question"
+     ],
+     "type": "object"
+    },
+    "outputSchema": {
+     "properties": {
+      "result": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "result"
+     ],
+     "type": "object",
+     "x-fastmcp-wrap-result": true
+    },
+    "_meta": {
+     "_fastmcp": {
+      "tags": []
+     }
+    }
+   },
+   "vercel-ai": "k11EyaOxeaA02e1k4XnAsR2-Om-NuIDrk8ocXERCSaI",
+   "heldfast": "e766d72443a1f5f7162188e07c27c41dac274f836a1d59fbf90bf3b1ca61f719",
+   "agentavow-v1": "sha256:171a53c9725874258b0b1125bc1d1c517e1b02f91a236096a37f53cc3a763dc9",
+   "agentavowKey": "tool:ask_wiki_question",
+   "signedAgentavow": "sha256:171a53c9725874258b0b1125bc1d1c517e1b02f91a236096a37f53cc3a763dc9"
+  },
+  {
+   "tool": {
+    "name": "read_wiki_contents",
+    "description": "View documentation about a GitHub repository.",
+    "inputSchema": {
+     "properties": {
+      "repoName": {
+       "description": "GitHub repository in owner/repo format (e.g. \"facebook/react\").",
+       "type": "string"
+      }
+     },
+     "required": [
+      "repoName"
+     ],
+     "type": "object"
+    },
+    "outputSchema": {
+     "properties": {
+      "result": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "result"
+     ],
+     "type": "object",
+     "x-fastmcp-wrap-result": true
+    },
+    "_meta": {
+     "_fastmcp": {
+      "tags": []
+     }
+    }
+   },
+   "vercel-ai": "eYYSxsDw5mfpY5tFX5NfZMGWhHf8btvpwJYj1HSg7C0",
+   "heldfast": "14843d77b108e7aff0829659d1a3509fdede52f4ec5b2ba2e9605943eea4654e",
+   "agentavow-v1": "sha256:3582a81089d120634d681ccf94e9ab7f15f471ddd48f4a82e06b05d10905d9c4",
+   "agentavowKey": "tool:read_wiki_contents",
+   "signedAgentavow": "sha256:3582a81089d120634d681ccf94e9ab7f15f471ddd48f4a82e06b05d10905d9c4"
+  },
+  {
+   "tool": {
+    "name": "read_wiki_structure",
+    "description": "Get a list of documentation topics for a GitHub repository.",
+    "inputSchema": {
+     "properties": {
+      "repoName": {
+       "description": "GitHub repository in owner/repo format (e.g. \"facebook/react\").",
+       "type": "string"
+      }
+     },
+     "required": [
+      "repoName"
+     ],
+     "type": "object"
+    },
+    "outputSchema": {
+     "properties": {
+      "result": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "result"
+     ],
+     "type": "object",
+     "x-fastmcp-wrap-result": true
+    },
+    "_meta": {
+     "_fastmcp": {
+      "tags": []
+     }
+    }
+   },
+   "vercel-ai": "G-btBMkVcU38gB01OJN7QhJBE5DKK2H4M--KhWTbDUc",
+   "heldfast": "45c1be5abb1ac2df539699d0162f108db7afc7837676d32b2d7fb4e9d9f742f5",
+   "agentavow-v1": "sha256:9bd57ff3e9534bbed54167ef1a74b2bc0e4b46128db28218767f0eed6e8f79a8",
+   "agentavowKey": "tool:read_wiki_structure",
+   "signedAgentavow": "sha256:9bd57ff3e9534bbed54167ef1a74b2bc0e4b46128db28218767f0eed6e8f79a8"
+  }
+ ]
+}

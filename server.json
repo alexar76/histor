@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.alexar76/histor",
   "title": "HISTOR — MCP tool-definition transparency log",
-  "description": "Is what your client received what 88k+ MCP servers really advertise? Check, diff and history from a public signed log.",
+  "description": "Check, diff and history of MCP tool definitions, from a public signed log of 88k+ servers.",
   "repository": {
     "url": "https://github.com/alexar76/histor",
     "source": "github"
