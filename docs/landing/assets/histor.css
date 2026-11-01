@@ -62,6 +62,8 @@ h1 em{font-style:italic;color:var(--seal)}
 .btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:999px;font-weight:600;font-size:14px;text-decoration:none;border:1px solid transparent;cursor:pointer}
 .btn-primary{background:var(--seal);color:#1a1206}
 .btn-primary:hover{background:#ffe2a8}
+.btn:disabled,.btn:disabled:hover{opacity:.45;cursor:not-allowed;background:var(--seal)}
+.btn-ghost:disabled,.btn-ghost:disabled:hover{background:transparent}
 .btn-ghost{border-color:var(--line);color:var(--ink);background:transparent}
 .btn-ghost:hover{border-color:var(--obs)}
 .lookup{display:flex;gap:8px;max-width:560px}

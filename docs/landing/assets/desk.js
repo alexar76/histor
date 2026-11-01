@@ -764,7 +764,7 @@ async function watchView(done) {
 
 function watchBuy(plan) {
   const ids = el("textarea", { placeholder: "3f2a…c91e", spellcheck: "false", "aria-label": t("js_w_servers") });
-  const url = el("input", { type: "url", placeholder: "https://hooks.slack.com/services/…", "aria-label": t("js_w_url") });
+  const url = el("input", { type: "text", inputmode: "url", autocomplete: "off", placeholder: "https://hooks.slack.com/services/…", "aria-label": t("js_w_url") });
   const out = el("div", {});
   const open = plan.card.enabled;
   const buy = el("button", { class: "btn btn-primary", type: "button", disabled: !open, text: t("js_w_buy", { price: plan.priceUsd }), onclick: async () => {
@@ -779,7 +779,7 @@ function watchBuy(plan) {
   } });
   const box = el("div", { class: "result" },
     el("label", { class: "faint", text: t("js_w_servers") }), ids,
-    el("label", { class: "faint", text: t("js_w_url") }), url,
+    el("label", { class: "faint", text: t("js_w_url") }), el("div", { class: "toolbar" }, url),
     el("p", {}, buy), out);
   if (!open && !plan.demo) box.append(el("p", { class: "warn-t", text: t("js_w_closed", { reason: plan.card.closedReason }) }));
   if (plan.card.testMode) box.append(el("p", { class: "warn-t", text: t("js_w_testmode") }));
