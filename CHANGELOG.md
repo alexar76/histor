@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **HISTOR Watch for teams is for sale: $29 for 30 days, by card.** `/watch` and
+  `/api/v1/watch/*`: a team names up to 100 servers and an HTTPS endpoint, pays on Stripe
+  Checkout, and gets each change pushed, signed, from the moment it paid; a manage link (token
+  kept only as its hash, no account, no e-mail) shows the period and the secret, edits the list,
+  sends a test event and renews. Amounts are checked against the payment row HISTOR wrote, never
+  the event; refunds take back their period, disputes end the subscription; a test key is
+  refused in production and a live key elsewhere. `HISTOR_WATCH_DEMO=1` shows the plan with
+  payment closed, which is how histor.modelmarket.dev runs for now. Migration 018. Tested end to
+  end against the Stripe sandbox on Postgres ([docs/watch.md](docs/watch.md)).
+- Change events carry `text`, one line a Slack incoming webhook posts, with names escaped.
+
 - **HISTOR Watch for teams.** A webhook subscription may set `"source": "changes"` and
   `"watch": [server ids]`; it then receives each recorded definition change of those servers
   (`histor.change/v1`: added/removed/modified tools, new outside addresses, label id, links to

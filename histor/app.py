@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge, fingerprints, toolcost
+from histor import __version__, badge, fingerprints, toolcost, watch_paid
 from histor.check import MAX_MATCHES, CheckError
 from histor.checkpoint import (
     COSIGNATURE_V1_TYPE,
@@ -60,7 +60,7 @@ async def read_bounded_body(request: Request, limit: int) -> bytes:
     return bytes(body)
 
 
-SPA_ROUTES = ("/", "/servers", "/changes", "/log", "/check", "/about", "/stats")
+SPA_ROUTES = ("/", "/servers", "/changes", "/log", "/check", "/about", "/stats", "/watch")
 VC_MEDIA = "application/vc"
 
 CAPS = (
@@ -228,6 +228,7 @@ def create_app(services: Services) -> FastAPI:
     async def lifespan(_app: FastAPI):
         thread = threading.Thread(target=scheduler, args=(services,), name="histor-scheduler", daemon=True)
         thread.start()
+        threading.Thread(target=watch_paid.worker, args=(services,), name="histor-watch", daemon=True).start()
         yield
         services.stop.set()
 
@@ -247,9 +248,10 @@ def create_app(services: Services) -> FastAPI:
             # week's desk against this week's API; fonts and the pinned three.js never change.
             immutable = path.startswith(("/assets/fonts/", "/assets/vendor/"))
             response.headers["Cache-Control"] = "public, max-age=604800" if immutable else "no-cache"
-        if path.startswith(("/api/", "/badge/", "/.well-known/", "/ai-market/", "/feed.xml")):
+        if path.startswith(("/api/", "/badge/", "/.well-known/", "/ai-market/", "/feed.xml")) and not path.startswith("/api/v1/watch/"):
             # Public, unauthenticated, read-only data: any origin may read it (the GitHub Pages
-            # landing reads the live counters from here).
+            # landing reads the live counters from here). Not the paid Watch: it answers only its
+            # own page, with a token, so no other origin gets to read a subscription's secret.
             response.headers.setdefault("Access-Control-Allow-Origin", "*")
         return response
 
@@ -1266,5 +1268,73 @@ def create_app(services: Services) -> FastAPI:
         payload = await read_json(request)
         # Digesting, the WARDEN subprocess and the ML-DSA receipt signature all block: threadpool.
         return await run_in_threadpool(do_invoke, payload, limit_key(request))
+
+    # -- HISTOR Watch for teams (histor.watch_paid) ---------------------------------------
+
+    def bearer(request: Request) -> str:
+        value = request.headers.get("authorization", "")
+        return value[7:].strip() if value[:7].lower() == "bearer " else ""
+
+    def watch_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except watch_paid.NotFound:
+            raise HTTPException(status_code=404, detail="no such subscription, or that is not its token") from None
+        except watch_paid.WatchError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        except watch_paid.Unavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from None
+
+    def watch_limit(request: Request, bucket: str, limit: int, window_s: float) -> None:
+        if not limiter.allow(f"watch-{bucket}:{client_ip(request)}", limit, window_s):
+            raise HTTPException(status_code=429, detail="too many requests; try again later")
+
+    @app.get("/api/v1/watch/plan")
+    def watch_plan() -> dict[str, Any]:
+        return watch_paid.plan(settings)
+
+    @app.post("/api/v1/watch/subscriptions", status_code=201)
+    async def watch_open(request: Request) -> dict[str, Any]:
+        watch_limit(request, "open", 10, 3600)
+        body = await read_json(request)
+        return await run_in_threadpool(watch_call, watch_paid.open_subscription, store, settings,
+                                       watch=body.get("watch"), url=body.get("url"), stripe=services.stripe)
+
+    @app.get("/api/v1/watch/subscriptions/{sub_id}")
+    def watch_view(sub_id: str, request: Request) -> dict[str, Any]:
+        watch_limit(request, "view", 120, 60)
+        return watch_call(watch_paid.view, store, settings, sub_id, bearer(request), stripe=services.stripe)
+
+    @app.post("/api/v1/watch/subscriptions/{sub_id}/renew")
+    def watch_renew(sub_id: str, request: Request) -> dict[str, Any]:
+        watch_limit(request, "open", 10, 3600)
+        return watch_call(watch_paid.renew, store, settings, sub_id, bearer(request), stripe=services.stripe)
+
+    @app.put("/api/v1/watch/subscriptions/{sub_id}/servers")
+    async def watch_servers(sub_id: str, request: Request) -> dict[str, Any]:
+        watch_limit(request, "view", 120, 60)
+        body = await read_json(request)
+        token = bearer(request)
+        await run_in_threadpool(watch_call, watch_paid.set_servers, store, sub_id, token, body.get("watch"))
+        return await run_in_threadpool(watch_call, watch_paid.view, store, settings, sub_id, token, stripe=services.stripe)
+
+    @app.post("/api/v1/watch/subscriptions/{sub_id}/test")
+    def watch_test(sub_id: str, request: Request) -> dict[str, Any]:
+        watch_limit(request, "test", 3, 60)
+        return watch_call(watch_paid.send_test, store, settings, sub_id, bearer(request))
+
+    @app.post("/api/v1/watch/stripe", include_in_schema=False)
+    async def watch_stripe(request: Request) -> dict[str, Any]:
+        if not settings.stripe_webhook_secret:
+            raise HTTPException(status_code=404, detail="card payment is not configured")
+        payload = await read_bounded_body(request, 1_000_000)
+        try:
+            return await run_in_threadpool(watch_paid.handle_event, store, settings, payload,
+                                           request.headers.get("stripe-signature", ""), stripe=services.stripe)
+        except watch_paid.Refused as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        except watch_paid.Unavailable as exc:
+            # 5xx: Stripe retries the event, by when the reversal can be matched.
+            raise HTTPException(status_code=503, detail=str(exc)) from None
 
     return app

@@ -255,6 +255,7 @@ function render() {
   if (route === "/log") return logView(done);
   if (route === "/check") return checkView(done);
   if (route === "/stats") return statsView(done);
+  if (route === "/watch") return watchView(done);
   return serversView(done);
 }
 
@@ -715,6 +716,133 @@ function parseTools(text) {
   if (Array.isArray(v?.tools)) return v.tools;
   if (Array.isArray(v?.result?.tools)) return v.result.tools;
   throw new Error("no tools array");
+}
+
+// ---------------------------------------------------------------------------------------
+// HISTOR Watch for teams: price, card checkout, and the team's own subscription page.
+// The manage token travels only in the URL fragment (never sent to a server, never to Stripe)
+// and in this browser's storage; the service keeps only its hash.
+// ---------------------------------------------------------------------------------------
+const WATCH_STORE = "histor-watch";
+function watchKeys() {
+  try { return JSON.parse(localStorage.getItem(WATCH_STORE) || "{}") || {}; } catch { return {}; }
+}
+function rememberWatch(id, token) {
+  const keys = watchKeys();
+  keys[id] = token;
+  try { localStorage.setItem(WATCH_STORE, JSON.stringify(keys)); } catch { /* storage may be blocked */ }
+}
+function watchFromUrl() {
+  const m = location.hash.match(/^#(w[0-9a-f]{16})\.([A-Za-z0-9_-]{20,})$/);
+  if (m) { rememberWatch(m[1], m[2]); return { id: m[1], token: m[2] }; }
+  const id = new URLSearchParams(location.search).get("subscription");
+  if (id && /^w[0-9a-f]{16}$/.test(id) && watchKeys()[id]) return { id, token: watchKeys()[id] };
+  return null;
+}
+const watchApi = (path, token, opts = {}) => api(path, { ...opts, headers: { accept: "application/json", "content-type": "application/json", Authorization: `Bearer ${token}` } });
+const errText = (e) => (e && e.body && e.body.detail) || (e && e.message) || String(e);
+
+async function watchView(done) {
+  if (!SERVED) {
+    return done(el("div", { class: "result" }, el("h3", { class: "block-h", text: t("js_w_title") }),
+      el("p", {}, el("a", { href: "https://histor.modelmarket.dev/watch", text: t("js_w_pages_only") }))));
+  }
+  let plan;
+  try { plan = await api("/api/v1/watch/plan"); } catch (e) { return unreachable(done, e); }
+  const root = el("div", {});
+  if (plan.demo) root.append(el("div", { class: "result" }, el("p", { class: "warn-t", text: t("js_w_demo") })));
+  root.append(el("h3", { class: "block-h", text: t("js_w_title") }),
+    el("p", {}, t("js_w_lead")),
+    el("p", {}, el("b", { text: t("js_w_price", { price: plan.priceUsd, days: plan.days, n: plan.maxServers }) })),
+    el("p", { class: "muted" }, t("js_w_free"), " ",
+      el("a", { href: "https://github.com/alexar76/histor/blob/main/docs/watch.md", text: "docs/watch.md" })));
+  const mine = watchFromUrl();
+  if (mine) root.append(await watchManage(mine, plan));
+  root.append(watchBuy(plan));
+  done(root);
+}
+
+function watchBuy(plan) {
+  const ids = el("textarea", { placeholder: "3f2a…c91e", spellcheck: "false", "aria-label": t("js_w_servers") });
+  const url = el("input", { type: "url", placeholder: "https://hooks.slack.com/services/…", "aria-label": t("js_w_url") });
+  const out = el("div", {});
+  const open = plan.card.enabled;
+  const buy = el("button", { class: "btn btn-primary", type: "button", disabled: !open, text: t("js_w_buy", { price: plan.priceUsd }), onclick: async () => {
+    out.replaceChildren(el("p", { class: "muted", text: t("js_w_opening") }));
+    try {
+      const res = await api("/api/v1/watch/subscriptions", { method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ watch: ids.value, url: url.value.trim() }) });
+      rememberWatch(res.id, res.manageToken);
+      history.replaceState({}, "", `/watch?subscription=${res.id}#${res.id}.${res.manageToken}`);
+      location.assign(res.checkoutUrl);
+    } catch (e) { out.replaceChildren(el("p", { class: "bad-t", text: errText(e) })); }
+  } });
+  const box = el("div", { class: "result" },
+    el("label", { class: "faint", text: t("js_w_servers") }), ids,
+    el("label", { class: "faint", text: t("js_w_url") }), url,
+    el("p", {}, buy), out);
+  if (!open && !plan.demo) box.append(el("p", { class: "warn-t", text: t("js_w_closed", { reason: plan.card.closedReason }) }));
+  if (plan.card.testMode) box.append(el("p", { class: "warn-t", text: t("js_w_testmode") }));
+  return box;
+}
+
+async function watchManage(mine, plan, attempt = 0) {
+  const box = el("div", { class: "result" });
+  let v;
+  try { v = await watchApi(`/api/v1/watch/subscriptions/${mine.id}`, mine.token); }
+  catch (e) { box.append(el("p", { class: "bad-t", text: e.status === 404 ? t("js_w_not_yours") : errText(e) })); return box; }
+  const paidReturn = new URLSearchParams(location.search).get("paid") === "1";
+  if (v.state === "pending" && paidReturn && attempt < 20) {
+    box.append(el("p", { class: "muted", text: t("js_w_waiting") }));
+    setTimeout(async () => box.replaceWith(await watchManage(mine, plan, attempt + 1)), 3000);
+    return box;
+  }
+  const stateKey = { pending: "js_w_state_pending", active: "js_w_state_active", lapsed: "js_w_state_lapsed", ended: "js_w_state_ended" }[v.state];
+  box.append(el("h3", { class: "block-h", text: t(stateKey, { until: fmt(v.activeUntil) }) }));
+  const link = `${location.origin}/watch#${mine.id}.${mine.token}`;
+  box.append(el("p", { class: "warn-t", text: t("js_w_save") }), el("p", { class: "mono" }, el("a", { href: link, text: link })));
+  box.append(el("p", {}, el("b", { text: t("js_w_endpoint") }), " · ", el("span", { class: "mono", text: v.endpoint })));
+  const secret = el("span", { class: "mono", text: "••••••••" });
+  box.append(el("p", {}, el("b", { text: t("js_w_secret") }), " · ", secret, " ",
+    el("button", { class: "btn btn-ghost", type: "button", text: t("js_w_show"), onclick: () => { secret.textContent = v.secret; } })),
+    el("p", { class: "faint", text: t("js_w_verify") }));
+  const d = v.delivery || {};
+  box.append(el("p", { class: d.failedAttempts ? "warn-t" : "muted",
+    text: d.failedAttempts ? t("js_w_delivery_failing", { n: d.failedAttempts, at: fmt(d.nextAttemptAt) }) : t("js_w_delivery_ok") }));
+  const list = el("textarea", { spellcheck: "false", "aria-label": t("js_w_servers") });
+  list.value = v.servers.map((x) => x.id).join("\n");
+  const note = el("span", { class: "faint" });
+  box.append(el("label", { class: "faint", text: t("js_w_servers") }), list,
+    el("p", {}, el("button", { class: "btn btn-ghost", type: "button", text: t("js_w_save_servers"), onclick: async () => {
+      try { await watchApi(`/api/v1/watch/subscriptions/${mine.id}/servers`, mine.token, { method: "PUT", body: JSON.stringify({ watch: list.value }) }); note.textContent = t("js_w_saved"); note.className = "ok-t"; }
+      catch (e) { note.textContent = errText(e); note.className = "bad-t"; }
+    } }), " ", note));
+  box.append(el("ul", {}, ...v.servers.map((x) => el("li", {}, el("a", { href: href(`/s/${x.id}`), "data-route": `/s/${x.id}`, text: x.name || x.id })))));
+  const actions = el("p", {});
+  const said = el("span", {});
+  if (v.state === "active") {
+    actions.append(el("button", { class: "btn btn-ghost", type: "button", text: t("js_w_test"), onclick: async () => {
+      try {
+        const r = await watchApi(`/api/v1/watch/subscriptions/${mine.id}/test`, mine.token, { method: "POST" });
+        said.textContent = r.ok ? t("js_w_test_ok", { status: r.endpointStatus }) : t("js_w_test_bad", { status: r.endpointStatus ?? "—" });
+        said.className = r.ok ? "ok-t" : "bad-t";
+      } catch (e) { said.textContent = errText(e); said.className = "bad-t"; }
+    } }), " ");
+  }
+  // Pending has its open checkout in the payments table; renewal is for a period that ran or runs.
+  if (v.state === "active" || v.state === "lapsed") {
+    actions.append(el("button", { class: "btn btn-primary", type: "button", disabled: !plan.card.enabled, text: t("js_w_renew", { days: plan.days }), onclick: async () => {
+      try { const r = await watchApi(`/api/v1/watch/subscriptions/${mine.id}/renew`, mine.token, { method: "POST" }); location.assign(r.checkoutUrl); }
+      catch (e) { said.textContent = errText(e); said.className = "bad-t"; }
+    } }), " ");
+  }
+  box.append(actions, said);
+  if (v.payments.length) {
+    box.append(el("h4", { text: t("js_w_payments") }), el("table", {}, el("tbody", {}, ...v.payments.map((p) => el("tr", {},
+      el("td", { class: "mono", text: fmt(p.paidAt || p.createdAt) }), el("td", { text: `$${p.amountUsd}` }), el("td", { text: p.status }),
+      el("td", {}, p.checkoutUrl ? el("a", { href: p.checkoutUrl, text: t("js_w_pay_open") }) : ""))))));
+  }
+  return box;
 }
 
 async function checkView(done) {

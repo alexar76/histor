@@ -430,6 +430,48 @@ MIGRATION_017: tuple[str, ...] = (
     """,
 )
 
+MIGRATION_018: tuple[str, ...] = (
+    # HISTOR Watch for teams (histor.watch_paid). A subscription is one HTTPS destination fed the
+    # changes of the servers in `watch` (a JSON list) while `active_until` is ahead; the team
+    # proves it is theirs with a manage token kept only as its SHA-256.
+    """
+    CREATE TABLE watch_subscriptions (
+        id TEXT PRIMARY KEY,
+        token_sha256 TEXT NOT NULL,
+        url TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        watch TEXT NOT NULL,
+        status TEXT NOT NULL,
+        active_until TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        note TEXT
+    )
+    """,
+    # One row per Checkout Session. Every figure a payment is checked against lives here,
+    # written before Stripe is asked, never taken from an event.
+    """
+    CREATE TABLE watch_payments (
+        id TEXT PRIMARY KEY,
+        subscription_id TEXT NOT NULL REFERENCES watch_subscriptions(id),
+        session_id TEXT UNIQUE,
+        checkout_url TEXT,
+        amount_cents BIGINT NOT NULL,
+        days INTEGER NOT NULL,
+        livemode INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL,
+        payment_intent TEXT,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        checked_at TEXT,
+        paid_at TEXT,
+        note TEXT
+    )
+    """,
+    "CREATE INDEX watch_payments_subscription ON watch_payments(subscription_id)",
+    "CREATE INDEX watch_payments_intent ON watch_payments(payment_intent)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -449,6 +491,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (15, "015_observation_launch", MIGRATION_015),
     (16, "016_change_versions", MIGRATION_016),
     (17, "017_checkpoints_and_witness", MIGRATION_017),
+    (18, "018_watch_subscriptions", MIGRATION_018),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

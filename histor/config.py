@@ -139,6 +139,16 @@ class Settings:
     remote_interval_s: int = 21600
     remote_changed_interval_s: int = 1800
     remote_change_window_s: int = 604800
+    # HISTOR Watch for teams (histor.watch_paid): push delivery sold by card through Stripe
+    # Checkout. Closed unless both Stripe values are set; a test key opens only outside the prod
+    # profile and a live key only in it.
+    stripe_secret_key: str = field(default="", repr=False)
+    stripe_webhook_secret: str = field(default="", repr=False)
+    watch_price_cents: int = 2900
+    watch_days: int = 30
+    # Demo mode (HISTOR_WATCH_DEMO=1): the plan, the price and the page are shown, and checkout is
+    # closed whatever keys are set — the way the desks run while sales are not open.
+    watch_demo: bool = False
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -265,6 +275,11 @@ def load_settings() -> Settings:
         sitemap_extra=tuple(
             p.strip() for p in os.environ.get("HISTOR_SITEMAP_EXTRA", "").split(",") if p.strip().startswith("/")
         ),
+        stripe_secret_key=os.environ.get("HISTOR_STRIPE_SECRET_KEY", "").strip(),
+        stripe_webhook_secret=os.environ.get("HISTOR_STRIPE_WEBHOOK_SECRET", "").strip(),
+        watch_price_cents=_int("HISTOR_WATCH_PRICE_CENTS", 2900, minimum=100),
+        watch_days=_int("HISTOR_WATCH_DAYS", 30, minimum=1),
+        watch_demo=_truthy("HISTOR_WATCH_DEMO", "0"),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public

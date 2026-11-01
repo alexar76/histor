@@ -44,7 +44,28 @@ def _change_event(base_url: str, row: dict) -> tuple[str, dict]:
         "diff": f"{base_url}/api/v1/changes/{row['id']}" if base_url else None,
         "page": f"{base_url}/s/{row['target_id']}" if base_url else None,
     }
+    body["text"] = _change_text(body)
     return body["id"], body
+
+
+def _slack_safe(value) -> str:
+    # Names come from registries and servers: escaped the way Slack asks, so a name cannot
+    # become a link or an @channel in the team's channel.
+    return str(value or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")[:120]
+
+
+def _change_text(body: dict) -> str:
+    """One line a chat tool shows as it is: Slack and Teams incoming webhooks read `text`."""
+    parts = []
+    for key in ("added", "removed", "modified"):
+        names = [_slack_safe(n) for n in body[key] if n]
+        if names:
+            parts.append(f"{key} {', '.join(names[:5])}{' …' if len(names) > 5 else ''}")
+    if body["newAddresses"]:
+        parts.append(f"{len(body['newAddresses'])} new outside address(es)")
+    line = f"HISTOR: {_slack_safe(body['server'] or body['target'])} changed its tool definitions"
+    line += f" ({'; '.join(parts)})" if parts else ""
+    return line + (f" {body['page']}" if body["page"] else "")
 
 
 def _stable(value):
@@ -92,15 +113,59 @@ def events(store, *, after=0, limit=100, targets=None):
     return [{"cursor": r["seq"], "event": json.loads(r["body"])} for r in rows]
 
 
+def destination_binding(source: str, url: str) -> str:
+    """What a cursor is bound to. The original feed keeps its binding, so existing cursors stay
+    valid; a changes feed binds its source too, so reusing an id for the other feed cannot resume
+    at a foreign cursor."""
+    return hashlib.sha256((url if source == "security-events" else f"{source}\n{url}").encode()).hexdigest()
+
+
+def post_signed(url, secret, event_id, payload: bytes, *, now, client=None, resolver=socket.getaddrinfo):
+    """POST one signed event to a subscriber; the HTTP status, or None when nothing answered.
+
+    The request goes to the address that was checked to be public (histor.netguard: resolved
+    here, then pinned with Host and SNI), with redirects and environment proxies off.
+    """
+    try:
+        pinned = resolve_public(url, resolver=resolver)
+    except ValueError:
+        return None
+    timestamp = str(int(now))
+    signature = hmac.new(secret.encode(), timestamp.encode() + b"." + payload, hashlib.sha256).hexdigest()
+    own_client = client is None
+    client = client or httpx.Client(timeout=10, follow_redirects=False, trust_env=False)
+    try:
+        with client.stream(
+            "POST",
+            pinned.url,
+            content=payload,
+            headers={
+                "Host": pinned.host_header,
+                "Content-Type": "application/json",
+                "X-Histor-Event-ID": event_id,
+                "X-Histor-Timestamp": timestamp,
+                "X-Histor-Signature": "sha256=" + signature,
+            },
+            follow_redirects=False,
+            extensions={"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {},
+        ) as response:
+            return response.status_code
+    except httpx.HTTPError:
+        return None
+    finally:
+        if own_client:
+            client.close()
+
+
 def deliver(store, subscription, *, client=None, now=None, resolver=socket.getaddrinfo, base_url=""):
     """One ordered delivery per invocation. At least once, stable ID, lease and bounded backoff.
 
-    Subscription URLs and secrets come ONLY from an operator-owned local configuration.
-    Nothing in package metadata or a public API can select a destination. Redirects and
+    Subscription URLs and secrets come from an operator-owned local configuration, or from a
+    team that paid for HISTOR Watch (histor.watch_paid) and named its endpoint at checkout.
+    Nothing in package metadata or a free public API can select a destination. Redirects and
     environment proxies are disabled, and the request goes to the address that was checked
-    to be public (histor.netguard: resolved here, then pinned with Host and SNI), so a
-    subscriber's name that later resolves inward cannot turn the worker into a way in.
-    Callers deduplicate X-Histor-Event-ID.
+    to be public (post_signed), so a subscriber's name that later resolves inward cannot turn
+    the worker into a way in. Callers deduplicate X-Histor-Event-ID.
 
     `source` (default "security-events") and, for "changes", `watch` (server ids) choose what
     the subscription is fed; see SOURCES.
@@ -117,9 +182,7 @@ def deliver(store, subscription, *, client=None, now=None, resolver=socket.getad
     parts = urlsplit(url)
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or len(secret) < 32:
         raise ValueError("webhooks require a fixed HTTPS destination and a 32+ character secret")
-    # The original feed keeps its binding, so existing cursors stay valid; a changes feed binds
-    # its source too, so reusing an id for the other feed cannot resume at a foreign cursor.
-    binding = hashlib.sha256((url if source == "security-events" else f"{source}\n{url}").encode()).hexdigest()
+    binding = destination_binding(source, url)
     token = secrets.token_hex(16)
     with store.db.transaction() as tx:
         tx.execute(
@@ -150,39 +213,9 @@ def deliver(store, subscription, *, client=None, now=None, resolver=socket.getad
             tx.execute("UPDATE webhook_cursors SET lease_until=0 WHERE id=? AND lease_token=?", (name, token))
         return {"status": "idle"}
     item = rows[0]
-    payload = canonicalize(item["event"])
     event_id = item["event"]["id"]
-    try:
-        pinned = resolve_public(url, resolver=resolver)
-    except ValueError:
-        pinned = None
-    timestamp = str(int(now))
-    signature = hmac.new(secret.encode(), timestamp.encode() + b"." + payload, hashlib.sha256).hexdigest()
-    own_client = client is None
-    client = client or httpx.Client(timeout=10, follow_redirects=False, trust_env=False)
-    try:
-        if pinned is None:
-            raise httpx.ConnectError("destination does not resolve to public addresses only")
-        with client.stream(
-            "POST",
-            pinned.url,
-            content=payload,
-            headers={
-                "Host": pinned.host_header,
-                "Content-Type": "application/json",
-                "X-Histor-Event-ID": event_id,
-                "X-Histor-Timestamp": timestamp,
-                "X-Histor-Signature": "sha256=" + signature,
-            },
-            follow_redirects=False,
-            extensions={"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {},
-        ) as response:
-            success = 200 <= response.status_code < 300
-    except httpx.HTTPError:
-        success = False
-    finally:
-        if own_client:
-            client.close()
+    code = post_signed(url, secret, event_id, canonicalize(item["event"]), now=now, client=client, resolver=resolver)
+    success = code is not None and 200 <= code < 300
     attempts = 0 if success else state["attempts"] + 1
     with store.db.transaction() as tx:
         tx.execute(

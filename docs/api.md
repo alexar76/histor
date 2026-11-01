@@ -57,6 +57,21 @@ Every change, remote or package, also carries `from_server_version` and `to_serv
 
 
 `GET /api/v1/changes?after=<id>&limit=…&watch=<id>,<id>` (`limit` 1–200, default 50) reads oldest first from just after a cursor and returns `nextCursor` to resume (on an empty page, the cursor sent) — the incremental read a mirror or feed consumer needs; `watch` (up to 100 server ids) limits it, and the newest-first form, to those servers. `before` and `after` cannot be combined. `/feed.xml?watch=…` is the same list as Atom ([watch.md](watch.md)).
+## HISTOR Watch for teams (paid push)
+
+| Method | Path | Returns |
+|---|---|---|
+| GET | `/api/v1/watch/plan` | price (`priceUsd`, `priceCents`), `days`, `maxServers`, `demo`, and `card.enabled` / `card.closedReason` |
+| POST | `/api/v1/watch/subscriptions` | `{"watch": [ids], "url": "https://…"}` → 201 `id`, `manageToken` (shown once), `checkoutUrl`; 400 on a bad list or endpoint, 503 while card payment is closed (demo, or no keys) |
+| GET | `/api/v1/watch/subscriptions/<id>` | with `Authorization: Bearer <manageToken>`: `state` (`pending`, `active`, `lapsed`, `ended`), `activeUntil`, `endpoint`, `secret`, `servers`, `delivery`, `payments` |
+| PUT | `/api/v1/watch/subscriptions/<id>/servers` | `{"watch": [ids]}` → the subscription |
+| POST | `/api/v1/watch/subscriptions/<id>/renew` | a checkout for one more period (an open one is returned instead of a second) |
+| POST | `/api/v1/watch/subscriptions/<id>/test` | sends one signed `histor.test/v1` → `endpointStatus` |
+| POST | `/api/v1/watch/stripe` | Stripe's webhook (signature-checked); 404 where no webhook secret is set |
+
+A wrong token and an unknown id answer the same 404; these answers carry no CORS header. What a
+subscription receives, and how a payment becomes a period: [watch.md](watch.md).
+
 ## Labels and evidence
 
 | Method | Path | Returns |

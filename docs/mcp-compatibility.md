@@ -10,11 +10,34 @@ been deployed by the local implementation task.
 requests carry `MCP-Protocol-Version`, `Mcp-Method` and matching per-request `_meta` containing
 the version and client capabilities. No modern `initialize` or initialized notification is sent.
 
-A recognizable legacy rejection of discovery selects the existing `initialize` → initialized
-notification → `tools/list` path. Authentication failures, rate limiting, redirects, recognized
-modern errors and malformed modern results do not silently select a different protocol. Version
-negotiation has a fixed attempt limit and uses only implemented revisions. The reader does not
-switch eras halfway through a list.
+The specification's Streamable HTTP rule decides the era: a first modern request refused with a 4xx
+whose body is not a recognized modern JSON-RPC error (−32020, −32021, −32022 under our request id)
+identifies a legacy server, and the reader takes the existing `initialize` → initialized
+notification → `tools/list` path once. The reader falls back in these cases:
+
+- **Statuses.** 400, 404, 405, and also 401 and 403. Legacy servers gate unknown methods behind
+  authentication while leaving `initialize` and `tools/list` open.
+- **Error bodies.**
+  - A legacy code under a foreign id, such as the Python SDK's `"server-error"`.
+  - A body that is not JSON-RPC at all.
+- **Version lists.** An unsupported-version error or discovery result whose versions are all
+  earlier than 2026-07-28.
+- **Not a discovery result.** A `server/discover` reply that is no `DiscoverResult` (no
+  `supportedVersions`).
+- **The first `tools/list`.** A refusal of that page in this legacy way, before anything has been
+  read.
+
+The protocol version the server negotiated in `initialize` records the era that served the list.
+
+Rate limiting, timeouts, server errors, redirects, recognized modern errors and malformed or
+ambiguous bodies (duplicate members, a JSON-RPC envelope with a non-integer code) do not select a
+different protocol. Version negotiation has a fixed attempt limit and uses only implemented
+revisions. The reader does not switch eras after a page has been read.
+
+Until 2026-11-01 the reader also refused to fall back on 401/403, on foreign ids and on legacy-only
+version lists. On 2026-10-28 about 2,000 registry servers had been read; the stricter rule left them
+unread. They were found by comparing HISTOR with ScraperWatch's daily log
+(`artifacts/scraperwatch-xcheck-2026-11-01/` in the monorepo).
 
 The same checked address and Host/SNI binding, overall observation deadline, decompression limits,
 tool/page caps and redirect refusal apply to discovery and fallback. The HTTP reader never calls

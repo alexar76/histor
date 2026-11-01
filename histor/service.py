@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +45,8 @@ class Services:
     receipts: ReceiptLog | None = None
     witness: Witness | None = None
     stop: threading.Event = field(default_factory=threading.Event)
+    # Stripe transport for histor.watch_paid; None = the real API (tests put a fake here).
+    stripe: Callable[..., tuple[int, dict]] | None = None
     last_error: str | None = None
     remote_error: str | None = None
 

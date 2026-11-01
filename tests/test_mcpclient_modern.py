@@ -104,21 +104,176 @@ def test_legacy_http_rejection_allows_only_initial_probe_fallback(status):
     assert observe(handle).status == "ok"
 
 
+def legacy_after(first):
+    """A legacy server (FakeMcp) that answers server/discover with *first*; returns (handler, calls)."""
+    legacy = FakeMcp()
+    legacy.tools["/mcp"] = [tool("old")]
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        calls.append(body["method"])
+        if body["method"] == "server/discover":
+            return first(body)
+        assert "Mcp-Method" not in request.headers
+        return legacy.handle(request)
+    return handle, calls
+
+
+LEGACY_PATH = ["server/discover", "initialize", "notifications/initialized", "tools/list"]
+
+
+@pytest.mark.parametrize("status", [400, 404, 405])
+@pytest.mark.parametrize("request_id", [False, 999, "0", "server-error", None])
+@pytest.mark.parametrize("code", [-32600, -32601, -32602, -32000])
+def test_legacy_error_under_a_foreign_id_falls_back(status, request_id, code):
+    # The Python SDK answers an unsupported version with id "server-error" (mcp.quotewise.io, 2026-11-01).
+    handle, calls = legacy_after(lambda b: httpx.Response(
+        status, json={"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": "Bad Request"}}))
+    obs = observe(handle)
+    assert obs.status == "ok" and [t["name"] for t in obs.tools] == ["old"] and calls == LEGACY_PATH
+
+
 @pytest.mark.parametrize("status", [400, 404, 405])
 @pytest.mark.parametrize("request_id", [False, 999, "0"])
-def test_wrong_id_http_error_does_not_trigger_legacy_initialization(status, request_id):
+@pytest.mark.parametrize("code", [-32020, -32021, -32022])
+def test_modern_error_under_a_foreign_id_does_not_trigger_legacy_initialization(status, request_id, code):
     calls = []
 
     def handle(request):
         calls.append(json.loads(request.content)["method"])
-        return httpx.Response(status, json={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601}})
+        return httpx.Response(status, json={"jsonrpc": "2.0", "id": request_id, "error": {"code": code}})
 
     obs = observe(handle)
     assert obs.status == "protocol" and obs.tools is None
     assert "no downgrade" in obs.detail and calls == ["server/discover"]
 
 
-@pytest.mark.parametrize("status", [401, 403, 407, 408, 429, 500, 503, 307])
+@pytest.mark.parametrize("status", [401, 403])
+def test_auth_refusal_of_discovery_tries_initialize_once(status):
+    # mcp.kaiku.tech: "A Bearer token is required for anything but the introduction (initialize, tools/list)".
+    handle, calls = legacy_after(lambda b: httpx.Response(
+        status, json={"errorMessages": ["A Bearer token is required"], "errors": {}}))
+    obs = observe(handle)
+    assert obs.status == "ok" and calls == LEGACY_PATH
+
+    calls = []
+
+    def closed(request):
+        calls.append(json.loads(request.content)["method"])
+        return httpx.Response(status, text="untrusted text")
+
+    obs = observe(closed)
+    assert obs.status == f"http-{status}" and obs.tools is None and "untrusted" not in obs.detail
+    assert calls == ["server/discover", "initialize"]
+
+
+def test_modern_error_in_an_auth_refusal_is_still_modern():
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        calls.append(body["method"])
+        return error(body, -32021, status=401)
+
+    obs = observe(handle)
+    assert obs.status == "protocol" and "no downgrade" in obs.detail and calls == ["server/discover"]
+
+
+def test_non_json_rpc_error_body_falls_back():
+    # api.xdata.kr: 400 {"error": "Bad Request", "message": "Unsupported MCP-Protocol-Version", ...}
+    handle, calls = legacy_after(lambda b: httpx.Response(400, json={
+        "error": "Bad Request", "message": "Unsupported MCP-Protocol-Version: '2026-07-28'.",
+        "supported_protocol_versions": ["2025-06-18"]}))
+    obs = observe(handle)
+    assert obs.status == "ok" and calls == LEGACY_PATH
+
+
+@pytest.mark.parametrize("status", [200, 400])
+@pytest.mark.parametrize("sse", [False, True])
+def test_unsupported_version_listing_only_legacy_revisions_falls_back(status, sse):
+    # nova.civai.co: 400, an SSE event with -32022 and supported 2024-11-05 .. 2025-11-25.
+    def first(body):
+        if not sse:
+            return error(body, -32022, status=status, supported=["2024-11-05", "2025-06-18", "2025-11-25"])
+        message = {"jsonrpc": "2.0", "id": body["id"], "error": {"code": -32022, "message": "Unsupported protocol version",
+                   "data": {"requested": MODERN, "supported": ["2025-03-26", "2025-11-25"]}}}
+        return httpx.Response(status, text="event: message\ndata: " + json.dumps(message) + "\n\n",
+                              headers={"content-type": "text/event-stream"})
+
+    handle, calls = legacy_after(first)
+    obs = observe(handle)
+    assert obs.status == "ok" and obs.protocol_version == "2025-06-18" and calls == LEGACY_PATH
+
+
+@pytest.mark.parametrize("response", [
+    # crypto.api.trendsapi.ai answers every method with a tool error, server/discover included.
+    lambda b: success(b, {"content": [{"type": "text", "text": "This call needs an API key."}], "isError": True}),
+    lambda b: success(b, {"tools": []}),
+    lambda b: discovery(b, supportedVersions=["2025-11-25"]),
+])
+def test_discovery_result_that_is_not_modern_falls_back(response):
+    handle, calls = legacy_after(response)
+    obs = observe(handle)
+    assert obs.status == "ok" and calls == LEGACY_PATH
+
+
+def test_first_modern_page_refused_like_a_legacy_server_falls_back():
+    # marx.finance: server/discover advertises 2026-07-28, then tools/list at 2026-07-28 is
+    # 400 {"error": {"code": -32000, "message": "Bad Request: Unsupported protocol version"}, "id": null}.
+    legacy = FakeMcp()
+    legacy.tools["/mcp"] = [tool("old")]
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        calls.append(body["method"])
+        if body["method"] == "server/discover":
+            return discovery(body)
+        if request.headers.get("MCP-Protocol-Version") == MODERN and "_meta" in body["params"]:
+            return httpx.Response(400, json={"jsonrpc": "2.0", "id": None,
+                                             "error": {"code": -32000, "message": "Unsupported protocol version"}})
+        return legacy.handle(request)
+
+    obs = observe(handle)
+    assert obs.status == "ok" and obs.protocol_version == "2025-06-18" and obs.pages == 1
+    assert obs.server_info.get("name") != "modern-fixture"
+    assert calls == ["server/discover", "tools/list", "initialize", "notifications/initialized", "tools/list"]
+
+
+@pytest.mark.parametrize("code", [-32020, -32021, -32022])
+def test_first_modern_page_with_a_modern_error_never_falls_back(code):
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        calls.append(body["method"])
+        if body["method"] == "server/discover":
+            return discovery(body)
+        return error(body, code, supported=["2025-06-18"])
+
+    obs = observe(handle)
+    assert obs.status == "protocol" and "no downgrade" in obs.detail and calls == ["server/discover", "tools/list"]
+
+
+def test_later_modern_page_refused_never_switches_era():
+    calls = []
+
+    def handle(request):
+        body = json.loads(request.content)
+        calls.append(body["method"])
+        if body["method"] == "server/discover":
+            return discovery(body)
+        if "cursor" not in body["params"]:
+            return success(body, {"resultType": "complete", "tools": [tool("first")], "nextCursor": "next"})
+        return httpx.Response(400, json={"jsonrpc": "2.0", "id": None, "error": {"code": -32000}})
+
+    obs = observe(handle)
+    assert obs.status == "http-400" and obs.tools is None
+    assert calls == ["server/discover", "tools/list", "tools/list"]
+
+
+@pytest.mark.parametrize("status", [407, 408, 429, 500, 503, 307])
 def test_auth_rate_limit_network_and_redirect_failures_never_downgrade(status):
     calls = []
 
@@ -140,7 +295,7 @@ def test_recognized_modern_errors_never_initialize_or_echo_server_messages(statu
     def handle(request):
         body = json.loads(request.content)
         calls.append(body["method"])
-        return error(body, code, status=status, supported=["2025-11-25"])
+        return error(body, code, status=status, supported=["2099-01-01"])
 
     obs = observe(handle)
     assert obs.status == "protocol" and obs.tools is None
@@ -204,9 +359,9 @@ def test_advertised_version_ping_pong_is_bounded(monkeypatch):
     lambda b: httpx.Response(200, text="not JSON"),
     lambda b: httpx.Response(200, json={"jsonrpc": "2.0", "id": 999, "result": {}}),
     lambda b: httpx.Response(200, json={"jsonrpc": "2.0", "id": False, "result": {}}),
-    lambda b: success(b, {"tools": []}),
     lambda b: discovery(b, capabilities=None),
-    lambda b: discovery(b, supportedVersions=["2025-11-25"]),
+    lambda b: discovery(b, supportedVersions=["2099-01-01"]),
+    lambda b: discovery(b, supportedVersions="2025-11-25"),
     lambda b: discovery(b, _meta=[]),
     lambda b: httpx.Response(200, json=[{"jsonrpc": "2.0", "id": b["id"], "result": {}}]),
     lambda b: httpx.Response(400, json={"jsonrpc": "2.0", "id": b["id"], "error": {"code": "-32022"}}),
