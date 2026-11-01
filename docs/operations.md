@@ -90,6 +90,14 @@ SQLite and PostgreSQL. On the code before this change it fails.
 
 Once an ISO week, `histor-export-dataset` (`deploy/export_dataset.sh`, timer every 10 minutes) copies a finished crawl cycle into `/var/lib/histor-datasets/<date>/`, serves it at `/datasets/` and, with `/etc/histor-hf/` set up, uploads it to Hugging Face (tag `snapshot-<date>`). The eight newest stay on the host (`HISTOR_DATASET_KEEP`); `HISTOR_DATASET_PERIOD=month` brings back one per month. The first snapshot of each month is archived on Zenodo by hand, as a new version of the concept record: when it is written, `histor-notify` sends a Telegram message, and `histor-zenodo-reminder` (daily at 09:00 UTC) repeats it until Zenodo has that snapshot. Both read the bot token and chat from `/etc/histor-notify.env` (0600: `AICOM_ALERT_TELEGRAM_TOKEN`, `AICOM_ALERT_TELEGRAM_CHAT`); without that file nothing is sent. `histor-export-dataset --due` and `histor-zenodo-reminder --dry` say what they would do.
 
+After each snapshot the same script runs the cross-check with ScraperWatch's MCP tool-change log (`histor/peer_xcheck.py`). It runs in the same throw-away container setup: database read-only, the peer's two public files and a few robots.txt fetched. The output goes to `/datasets/peers/scraperwatch/<date>/`, with `latest/` pointing to the newest; the eight newest are kept.
+
+It checks both directions:
+- **Their changes against HISTOR.** Each change in their log, path by path.
+- **HISTOR's changes on their panel that they do not list.** Each one is classified, and likely misses on their side are named in the README.
+
+A failure there never fails the snapshot. `histor-export-dataset --peers` runs only the cross-check, dated today. The module is mounted from `/usr/local/lib/histor-dataset/peer_xcheck.py` while the running image predates it.
+
 Remote polling observes samples, not every transition: A→B→A between checks is invisible. The independent remote queue does not turn package planning into 30-minute reinstallations. Backlog, host limits and failure backoff affect achieved gaps; use `remotePolling` in `/api/v1/stats`. [Interpretation limits](measurement-limits.md) distinguish configured cadence from measured coverage.
 
 ## Migrations
