@@ -1,15 +1,15 @@
 # Node security baseline: 22.23.4 (2026-10-21 security release).
 # HISTOR: the Python service and the WARDEN scanner sidecar in one image. The sidecar is a
-# Node subprocess per batch, so the base is Node and Python comes from Debian (3.11 on bookworm,
-# which pyproject allows): one libc, one libstdc++, no copied binaries.
+# Node subprocess per batch, so the base is Node and Python comes from Debian 13 (3.13):
+# build the venv for that interpreter ABI; one libc, one libstdc++, no copied binaries.
 # The deployment target can retain the accepted live scanner and its complete dependency tree.
 # Ordinary builds use the bundled scanner; they do not need a production image.
-ARG HISTOR_SCANNER_IMAGE=node:22.23.4-bookworm-slim
+ARG HISTOR_SCANNER_IMAGE=node:22.23.4-trixie-slim
 FROM ${HISTOR_SCANNER_IMAGE} AS accepted-scanner
 # Legacy builders also visit unused stages. Give the ordinary Node fallback an empty source.
 USER root
 RUN mkdir -p /app/scanner/node_modules
-FROM node:22.23.4-bookworm-slim AS application
+FROM node:22.23.4-trixie-slim AS application
 RUN apt-get update -qq \
  && apt-get install -y -qq --no-install-recommends python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -23,7 +23,7 @@ COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY histor ./histor
 COPY docs/landing ./docs/landing
 # Installed from uv.lock, the set CI tests — not whatever pip resolves on build day. CI runs the
-# suite on 3.11 as well, the Python this Debian base ships.
+# suite on 3.11 as well; this Debian base builds its own 3.13 venv.
 # The o200k_base table for /api/v1/.../cost is fetched here, at build time, into the image: the
 # running service never downloads it.
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir uv==0.11.17 \

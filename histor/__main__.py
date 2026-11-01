@@ -112,7 +112,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("histor webhooks /operator/owned/subscriptions.json")
             subscriptions = json.loads(Path(args[1]).read_text())
             for subscription in subscriptions:
-                print(json.dumps({"id": subscription["id"], **deliver(services.store, subscription)}))
+                print(json.dumps({"id": subscription["id"],
+                                  **deliver(services.store, subscription, base_url=settings.public_base)}))
             return 0
         if command == "export-dataset":
             from histor.dataset import main as export_dataset

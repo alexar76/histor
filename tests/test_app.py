@@ -667,3 +667,33 @@ def test_server_summary_carries_package_facts(api):
     client, world = api
     summary = client.get("/api/v1/servers").json()["servers"][0]
     assert "packageVersion" in summary and "packageSignals" in summary
+
+
+def test_changes_resume_after_a_cursor_and_can_be_limited_to_watched_servers(api):
+    """The incremental read a mirror, a registry or a feed consumer needs: oldest first from
+    a cursor, `nextCursor` to resume, and `watch` for the servers it follows."""
+    client, world = api
+    world["mcp"].tools["/a"] = [tool("get_weather", "changed once")]
+    world["clock"].advance(days=1)
+    world["services"].crawler.run()
+    world["mcp"].tools["/a"] = [tool("get_weather", "changed twice")]
+    world["clock"].advance(days=1)
+    world["services"].crawler.run()
+    newest_first = client.get("/api/v1/changes").json()["changes"]
+    assert len(newest_first) >= 2
+    first = client.get("/api/v1/changes?after=0&limit=1").json()
+    assert [c["id"] for c in first["changes"]] == [min(c["id"] for c in newest_first)]
+    rest = client.get(f"/api/v1/changes?after={first['nextCursor']}").json()
+    assert [c["id"] for c in rest["changes"]] == sorted(c["id"] for c in newest_first)[1:]
+    assert client.get(f"/api/v1/changes?after={rest['nextCursor']}").json() == {
+        "changes": [], "nextCursor": rest["nextCursor"]}
+    watched = target_id(world, "io.example/weather")
+    only = client.get(f"/api/v1/changes?watch={watched}").json()["changes"]
+    assert only and {c["target_id"] for c in only} == {watched}
+    assert client.get("/api/v1/changes?watch=../etc").status_code == 400
+    assert client.get("/api/v1/changes?before=5&after=1").status_code == 400
+    # Ids are signed 64-bit in both stores; a bigger cursor is refused, not a driver overflow (500).
+    assert client.get(f"/api/v1/changes?after={2**63}").status_code == 422
+    assert client.get(f"/api/v1/changes?before={2**63}").status_code == 422
+    assert client.get(f"/api/v1/changes/{2**63}").status_code == 404
+    assert client.get(f"/api/v1/changes?after={2**63 - 1}").json() == {"changes": [], "nextCursor": 2**63 - 1}

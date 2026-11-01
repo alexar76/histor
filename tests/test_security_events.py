@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 
 import httpx
 import pytest
@@ -8,6 +9,14 @@ from fastapi.testclient import TestClient
 from histor.app import create_app
 from histor.logbook import verify_document
 from histor.security_events import append_event, census, deliver, events
+from tests.conftest import tool
+from tests.test_app import api, target_id  # noqa: F401  (fixture)
+
+PUBLIC = "93.184.215.14"
+
+
+def public_resolver(host, port, *args, **kwargs):
+    return [(2, 1, 6, "", (PUBLIC, port))]
 
 
 def test_signed_events_are_deduplicated_and_cursor_is_lossless(world):
@@ -47,11 +56,15 @@ def test_webhook_retries_same_event_and_signs_exact_bytes(world):
         return httpx.Response(503 if len(calls) == 1 else 204)
 
     client = httpx.Client(transport=httpx.MockTransport(handle))
-    assert deliver(s.store, subscription, client=client, now=100)["status"] == "retry"
-    assert deliver(s.store, subscription, client=client, now=101)["status"] == "waiting"
-    assert deliver(s.store, subscription, client=client, now=200)["status"] == "delivered"
+    r = public_resolver
+    assert deliver(s.store, subscription, client=client, now=100, resolver=r)["status"] == "retry"
+    assert deliver(s.store, subscription, client=client, now=101, resolver=r)["status"] == "waiting"
+    assert deliver(s.store, subscription, client=client, now=200, resolver=r)["status"] == "delivered"
     assert calls[0].content == calls[1].content
-    assert deliver(s.store, subscription, client=client, now=201)["status"] == "idle"
+    # Pinned: the checked address in the URL, the name in Host and as the TLS name.
+    assert calls[0].url.host == PUBLIC and calls[0].headers["host"] == "operator.test"
+    assert calls[0].extensions.get("sni_hostname") == "operator.test"
+    assert deliver(s.store, subscription, client=client, now=201, resolver=r)["status"] == "idle"
     with pytest.raises(ValueError):
         deliver(s.store, {**subscription, "url": "https://changed.test"}, client=client, now=300)
     with pytest.raises(ValueError):
@@ -90,3 +103,46 @@ def test_census_keeps_incomplete_packages_in_denominator(world):
     api = TestClient(create_app(s))
     feed = api.get("/security-feed.xml")
     assert feed.status_code == 200 and "<entry>" in feed.text
+
+
+def test_a_webhook_destination_that_resolves_inward_is_not_called(world):
+    """Check-then-connect-by-name was the class the 2026-10-25 audit fixed elsewhere: a
+    subscriber's name that resolves to a private address gets no request and backs off."""
+    s = world["services"]
+    with s.store.db.transaction() as tx:
+        append_event(tx, s.key, "target", "2026-10-10T00:00:00Z", {}, {"v": 1})
+    calls = []
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: calls.append(req) or httpx.Response(204)))
+    inward = lambda host, port, *a, **k: [(2, 1, 6, "", ("10.0.0.5", port))]
+    sub = {"id": "inward", "url": "https://hooks.customer.example/x", "secret": "s" * 32}
+    assert deliver(s.store, sub, client=client, now=100, resolver=inward)["status"] == "retry"
+    assert calls == []
+
+
+def test_watch_webhooks_deliver_definition_changes_of_watched_servers_only(api):
+    """HISTOR Watch for teams: a `changes` subscription gets each change of the servers it
+    follows, in order, once, with links to the diff and the server page."""
+    client_app, world = api
+    world["mcp"].tools["/a"] = [tool("get_weather", "changed for the watch")]
+    world["clock"].advance(days=1)
+    world["services"].crawler.run()
+    s = world["services"]
+    watched = target_id(world, "io.example/weather")
+    calls = []
+    client = httpx.Client(transport=httpx.MockTransport(lambda req: calls.append(req) or httpx.Response(204)))
+    sub = {"id": "team-a", "url": "https://hooks.team.example/histor", "secret": "t" * 32,
+           "source": "changes", "watch": [watched]}
+    kw = dict(client=client, resolver=public_resolver, base_url="https://histor.example")
+    assert deliver(s.store, sub, now=100, **kw)["status"] == "delivered"
+    body = json.loads(calls[0].content)
+    assert body["type"] == "histor.change/v1" and body["target"] == watched
+    assert body["modified"] == ["get_weather"]
+    assert body["diff"].startswith("https://histor.example/api/v1/changes/")
+    assert calls[0].headers["X-Histor-Event-ID"] == body["id"]
+    assert deliver(s.store, sub, now=101, **kw)["status"] == "idle"
+    other = {**sub, "id": "team-b", "watch": ["0" * 16]}
+    assert deliver(s.store, other, now=102, **kw)["status"] == "idle"
+    with pytest.raises(ValueError, match="watch"):
+        deliver(s.store, {**sub, "id": "bad", "watch": []}, now=103, **kw)
+    with pytest.raises(ValueError, match="source"):
+        deliver(s.store, {**sub, "id": "bad2", "source": "everything"}, now=104, **kw)

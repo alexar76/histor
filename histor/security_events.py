@@ -7,6 +7,7 @@ import hmac
 import json
 import re
 import secrets
+import socket
 import time
 from datetime import UTC, datetime
 from urllib.parse import urlsplit
@@ -15,7 +16,35 @@ import httpx
 from awr import canonicalize
 
 from histor.logbook import sign_document
+from histor.netguard import resolve_public
 from histor.store import dumps
+
+# What a subscription is fed. "security-events": signed package/definition evidence (the
+# original feed, every target). "changes": HISTOR Watch — every recorded change of the tool
+# definitions of the servers in the subscription's `watch` list, the same rows as
+# /api/v1/changes?watch=…, so a team gets the change in its own system as it is recorded.
+SOURCES = ("security-events", "changes")
+
+
+def _change_event(base_url: str, row: dict) -> tuple[str, dict]:
+    summary = row["summary"] if isinstance(row["summary"], dict) else {}
+    body = {
+        "type": "histor.change/v1",
+        "id": f"change-{row['id']}",
+        "change": row["id"],
+        "target": row["target_id"],
+        "server": row.get("name"),
+        "endpoint": row.get("endpoint"),
+        "observedAt": row["observed_at"],
+        "added": summary.get("added") or [],
+        "removed": summary.get("removed") or [],
+        "modified": [m.get("tool") if isinstance(m, dict) else m for m in (summary.get("modified") or [])],
+        "newAddresses": summary.get("newAddresses") or [],
+        "label": row.get("label_id"),
+        "diff": f"{base_url}/api/v1/changes/{row['id']}" if base_url else None,
+        "page": f"{base_url}/s/{row['target_id']}" if base_url else None,
+    }
+    return body["id"], body
 
 
 def _stable(value):
@@ -63,19 +92,34 @@ def events(store, *, after=0, limit=100, targets=None):
     return [{"cursor": r["seq"], "event": json.loads(r["body"])} for r in rows]
 
 
-def deliver(store, subscription, *, client=None, now=None):
+def deliver(store, subscription, *, client=None, now=None, resolver=socket.getaddrinfo, base_url=""):
     """One ordered delivery per invocation. At least once, stable ID, lease and bounded backoff.
 
     Subscription URLs and secrets come ONLY from an operator-owned local configuration.
     Nothing in package metadata or a public API can select a destination. Redirects and
-    environment proxies are disabled. Callers deduplicate X-Histor-Event-ID.
+    environment proxies are disabled, and the request goes to the address that was checked
+    to be public (histor.netguard: resolved here, then pinned with Host and SNI), so a
+    subscriber's name that later resolves inward cannot turn the worker into a way in.
+    Callers deduplicate X-Histor-Event-ID.
+
+    `source` (default "security-events") and, for "changes", `watch` (server ids) choose what
+    the subscription is fed; see SOURCES.
     """
     now = time.time() if now is None else now
     name, url, secret = (subscription[k] for k in ("id", "url", "secret"))
+    source = subscription.get("source") or "security-events"
+    if source not in SOURCES:
+        raise ValueError(f"webhook source must be one of {', '.join(SOURCES)}")
+    watch = subscription.get("watch") or []
+    if source == "changes" and (not isinstance(watch, list) or not watch or len(watch) > 100
+                                or any(not (isinstance(w, str) and re.fullmatch(r"[0-9a-f]{16}", w)) for w in watch)):
+        raise ValueError("a changes subscription needs `watch`: 1-100 server ids")
     parts = urlsplit(url)
     if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or len(secret) < 32:
         raise ValueError("webhooks require a fixed HTTPS destination and a 32+ character secret")
-    binding = hashlib.sha256(url.encode()).hexdigest()
+    # The original feed keeps its binding, so existing cursors stay valid; a changes feed binds
+    # its source too, so reusing an id for the other feed cannot resume at a foreign cursor.
+    binding = hashlib.sha256((url if source == "security-events" else f"{source}\n{url}").encode()).hexdigest()
     token = secrets.token_hex(16)
     with store.db.transaction() as tx:
         tx.execute(
@@ -93,7 +137,14 @@ def deliver(store, subscription, *, client=None, now=None):
         )
         if not lease:
             return {"status": "busy"}
-    rows = events(store, after=state["cursor"], limit=1)
+    if source == "changes":
+        changed = store.changes(limit=1, after_id=state["cursor"], target_ids=watch)
+        rows = []
+        if changed:
+            event_id, body = _change_event(base_url, changed[0])
+            rows = [{"cursor": changed[0]["id"], "event": body}]
+    else:
+        rows = events(store, after=state["cursor"], limit=1)
     if not rows:
         with store.db.transaction() as tx:
             tx.execute("UPDATE webhook_cursors SET lease_until=0 WHERE id=? AND lease_token=?", (name, token))
@@ -101,22 +152,30 @@ def deliver(store, subscription, *, client=None, now=None):
     item = rows[0]
     payload = canonicalize(item["event"])
     event_id = item["event"]["id"]
+    try:
+        pinned = resolve_public(url, resolver=resolver)
+    except ValueError:
+        pinned = None
     timestamp = str(int(now))
     signature = hmac.new(secret.encode(), timestamp.encode() + b"." + payload, hashlib.sha256).hexdigest()
     own_client = client is None
     client = client or httpx.Client(timeout=10, follow_redirects=False, trust_env=False)
     try:
+        if pinned is None:
+            raise httpx.ConnectError("destination does not resolve to public addresses only")
         with client.stream(
             "POST",
-            url,
+            pinned.url,
             content=payload,
             headers={
+                "Host": pinned.host_header,
                 "Content-Type": "application/json",
                 "X-Histor-Event-ID": event_id,
                 "X-Histor-Timestamp": timestamp,
                 "X-Histor-Signature": "sha256=" + signature,
             },
             follow_redirects=False,
+            extensions={"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {},
         ) as response:
             success = 200 <= response.status_code < 300
     except httpx.HTTPError:

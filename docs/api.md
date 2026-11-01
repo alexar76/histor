@@ -55,6 +55,8 @@ For a package, a change also carries `from_package_version` and `to_package_vers
 
 Every change, remote or package, also carries `from_server_version` and `to_server_version` (in `/cost`, `fromServerVersion` and `toServerVersion`): the version the server reported about itself (`serverInfo`) in the last run that served the old list and in the run that saw the new one; and `from_registry_version` and `to_registry_version` (`fromRegistryVersion`, `toRegistryVersion`): the version the MCP registry listed for the entry at those two runs. When both pairs are equal, the list changed at an unchanged version, which a record keyed on the version cannot see. Server versions are filled for every change (`null` when the server reported none); registry versions are recorded since 2026-10-28 and are `null` before that and for curated entries. Each `timeline` row carries `registryVersion` too, and a new server or registry version starts a new row.
 
+
+`GET /api/v1/changes?after=<id>&limit=…&watch=<id>,<id>` (`limit` 1–200, default 50) reads oldest first from just after a cursor and returns `nextCursor` to resume (on an empty page, the cursor sent) — the incremental read a mirror or feed consumer needs; `watch` (up to 100 server ids) limits it, and the newest-first form, to those servers. `before` and `after` cannot be combined. `/feed.xml?watch=…` is the same list as Atom ([watch.md](watch.md)).
 ## Labels and evidence
 
 | Method | Path | Returns |

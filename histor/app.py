@@ -42,6 +42,10 @@ from histor.receipts import AnchorRefused
 from histor.service import Services, crawl_in_background, scheduler
 from histor.untrusted import TooDeep, loads_limited
 
+#: Largest id the store can be asked for: SQLite and Postgres both keep ids in a signed 64-bit
+#: integer, and a bigger value in a query parameter overflowed the SQLite driver (a 500).
+_ID_MAX = 2**63 - 1
+
 PRODUCT_ID = "histor"
 MAX_CHECK_BYTES = 2 * 1024 * 1024
 
@@ -666,13 +670,33 @@ def create_app(services: Services) -> FastAPI:
                 '</id><title>HISTOR security evidence changes</title><updated>' + _xml_text(updated) + '</updated>' + ''.join(entries) + '</feed>')
         return Response(body, media_type="application/atom+xml")
 
+    def _watch_ids(watch: str | None) -> list[str] | None:
+        """`watch=id,id,…` — the servers someone follows, as /feed.xml takes them. Ids only, at
+        most 100; nothing is stored."""
+        if not watch:
+            return None
+        ids = [v for v in watch.split(",") if v]
+        if not ids or len(ids) > 100 or any(not re.fullmatch(r"[0-9a-f]{16}", v) for v in ids):
+            raise HTTPException(status_code=400, detail="watch takes up to 100 server ids (16 hex characters)")
+        return ids
+
     @app.get("/api/v1/changes")
-    def changes(limit: int = Query(50, ge=1, le=200), before: int | None = Query(None, ge=1)) -> dict[str, Any]:
-        return {"changes": store.changes(limit=limit, before_id=before)}
+    def changes(limit: int = Query(50, ge=1, le=200), before: int | None = Query(None, ge=1, le=_ID_MAX),
+                after: int | None = Query(None, ge=0, le=_ID_MAX),
+                watch: str | None = Query(None, max_length=1800)) -> dict[str, Any]:
+        """Newest first, paged back with `before`; or, with `after`, oldest first from that id,
+        with `nextCursor` to resume — the incremental read a mirror or a feed consumer needs.
+        `watch` limits either to the listed servers."""
+        if before is not None and after is not None:
+            raise HTTPException(status_code=400, detail="use before or after, not both")
+        rows = store.changes(limit=limit, before_id=before, after_id=after, target_ids=_watch_ids(watch))
+        if after is None:
+            return {"changes": rows}
+        return {"changes": rows, "nextCursor": rows[-1]["id"] if rows else after}
 
     @app.get("/api/v1/changes/{change_id}")
     def change(change_id: int) -> dict[str, Any]:
-        row = store.change(change_id)
+        row = store.change(change_id) if 0 < change_id <= _ID_MAX else None
         if row is None:
             raise HTTPException(status_code=404, detail="unknown change")
         return row

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- **HISTOR Watch for teams.** A webhook subscription may set `"source": "changes"` and
+  `"watch": [server ids]`; it then receives each recorded definition change of those servers
+  (`histor.change/v1`: added/removed/modified tools, new outside addresses, label id, links to
+  the diff and the page), signed, in order, at least once. The security-event feed stays the
+  default and keeps its cursors. [docs/watch.md](docs/watch.md).
+- **Webhooks connect to a checked public address.** Deliveries used to connect by name; they
+  now resolve the destination with `histor.netguard`, refuse it when any address is not public
+  (IPv4-mapped, 6to4 and NAT64 forms judged by the IPv4 they carry), and connect to the checked
+  address with Host and SNI kept.
+- **`/api/v1/changes?after=<id>`** reads oldest first from a cursor and returns `nextCursor`;
+  `watch=<id>,…` limits it to up to 100 servers — the incremental read for mirrors, registries
+  and feed consumers. [docs/data-feed.md](docs/data-feed.md).
+- `after`, `before` and a change id above 2^63−1 are refused (422/404) instead of overflowing
+  the SQLite driver into a 500; Postgres answered an empty page. The docs now state the
+  `limit` range (1–200, default 50) and what `nextCursor` is on an empty page.
 - MTL/1.1 digests (awr/adoption/mcp-trust-label/PROFILE.md, Revision 1.1): every number in a tool
   schema is read as an IEEE 754 double and written as RFC 8785 says (`0.5`, `1e+21`, `5` for `5.0`),
   an empty set is digested, and tools that share a name are ordered by their canonical bytes. Before,

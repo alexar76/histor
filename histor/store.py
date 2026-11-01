@@ -325,9 +325,14 @@ class Store:
         return row
 
     def changes(self, limit: int = 50, before_id: int | None = None, target_id: str | None = None,
-                target_ids: list[str] | None = None) -> list[dict[str, Any]]:
+                target_ids: list[str] | None = None, after_id: int | None = None) -> list[dict[str, Any]]:
+        """Newest first; with `after_id`, oldest first from just after that id — the order an
+        incremental reader (a feed consumer, a mirror) needs to resume where it stopped."""
         sql = "SELECT c.*, t.name, t.endpoint, t.title FROM changes c JOIN targets t ON t.id = c.target_id WHERE 1=1"
         args: list[Any] = []
+        if after_id is not None:
+            sql += " AND c.id > ?"
+            args.append(after_id)
         if target_ids is not None:
             if not target_ids:
                 return []
@@ -339,7 +344,7 @@ class Store:
         if target_id:
             sql += " AND c.target_id = ?"
             args.append(target_id)
-        sql += " ORDER BY c.id DESC LIMIT ?"
+        sql += " ORDER BY c.id " + ("ASC" if after_id is not None else "DESC") + " LIMIT ?"
         args.append(limit)
         with self.db.read() as tx:
             return [self._change_row(r) for r in tx.execute(sql, args)]
