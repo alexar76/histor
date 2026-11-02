@@ -1,6 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.5.3 — 2026-11-01
+
+- **Legacy MCP servers are read again.** In 0.5.2 the remote reader opened with the 2026-07-28
+  `server/discover` and fell back to `initialize` only for HTTP 400/404/405 with a JSON-RPC
+  −32600/−32601/−32602 under our own request id. Real legacy servers answer otherwise: the Python
+  SDK 1.x sends `"id": "server-error"`, many gate every method except `initialize` and `tools/list`
+  behind 401/403, some list only older versions or answer with a body that is not JSON-RPC. The public
+  log stopped reading 2,195 servers from 2026-10-30. The reader now follows the 2026-07-28 Streamable
+  HTTP rule: a first modern request refused with a 4xx that carries no recognized modern error means a
+  legacy server, and it falls back to `initialize` once, also when the version list holds only
+  pre-2026-07-28 versions, when a discover reply has no `supportedVersions`, or when the first modern
+  `tools/list` page is refused that way. Rate limits, timeouts, 5xx, redirects, recognized modern
+  errors and ambiguous bodies still stop the read. The same reader serves `histor tool-cost`, `/check`
+  and self-hosted crawls ([docs/mcp-compatibility.md](docs/mcp-compatibility.md)).
+- **Cross-check with another public log.** `python -m histor.peer_xcheck OUTDIR` compares HISTOR with
+  ScraperWatch's daily MCP tool-change log in both directions (their changes seen field by field in
+  HISTOR; HISTOR's changes on their panel, with the reason each is missing from their diff, robots.txt
+  read per RFC 9309) and writes README, JSON and CSV; `deploy/export_dataset.sh` runs it after each
+  weekly snapshot or alone with `--peers` ([docs/operations.md](docs/operations.md)).
+- The sandbox scanner vendors WARDEN 0.22.3 (was 0.20.0): MTL/1.1 digests match the log's.
+- The MCP registry descriptor's description is 90 characters; the registry allows at most 100.
 
 - **HISTOR Watch for teams is for sale: $29 for 30 days, by card.** `/watch` and
   `/api/v1/watch/*`: a team names up to 100 servers and an HTTPS endpoint, pays on Stripe

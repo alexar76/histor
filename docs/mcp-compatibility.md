@@ -1,8 +1,9 @@
 # MCP protocol compatibility
 
 The local readers implement modern MCP revision `2026-07-28` alongside the existing legacy
-initialization path. Unknown modern revisions are not assumed compatible. This change has not
-been deployed by the local implementation task.
+initialization path. Unknown modern revisions are not assumed compatible. The public log has read
+modern-first since about 2026-10-29; the fallback described below is live there since 2026-11-01
+08:44:57Z.
 
 ## Remote observations
 
