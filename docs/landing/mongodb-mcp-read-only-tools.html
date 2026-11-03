@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MongoDB MCP read-only mode: check which tools disappear · HISTOR</title>
+  <meta name="description" content="Use MongoDB MCP --readOnly, then compare two tools/list responses in your browser to see which tools your client gains or loses. Includes HISTOR and RugSnare observations."/>
+  <link rel="canonical" href="https://histor.modelmarket.dev/mongodb-mcp-read-only-tools.html"/>
+  <meta property="og:title" content="Which MongoDB MCP tools disappear in read-only mode?"/>
+  <meta property="og:description" content="Compare two MongoDB MCP tool lists locally and see exactly which names were added or removed."/>
+  <meta property="og:url" content="https://histor.modelmarket.dev/mongodb-mcp-read-only-tools.html"/>
+  <meta name="theme-color" content="#05080d"/>
+  <link rel="stylesheet" href="assets/fonts/fonts.css"/>
+  <link rel="stylesheet" href="assets/histor.css"/>
+  <link rel="stylesheet" href="assets/tool-comparison.css"/>
+  <script src="assets/compare-tool-names.js" defer></script>
+</head>
+<body>
+<main class="wrap section tool-comparison">
+  <p><a href="./">HISTOR</a> / MCP tools</p>
+  <h1>Which MongoDB MCP tools disappear in read-only mode?</h1>
+  <p>Enable read-only mode with <code>--readOnly</code> or <code>MDB_MCP_READ_ONLY=true</code>.
+    To see which tools your client actually receives, compare its <code>tools/list</code> responses before and after.</p>
+  <section aria-labelledby="compare-heading">
+    <h2 id="compare-heading">Compare your tool lists</h2>
+    <p id="compare-help">Paste the JSON from each run. Use the same package version, client and connection settings for both.
+      If the client paginates the list, combine every page into one tools array. The comparison runs in this browser.</p>
+    <form id="compare-tools" aria-describedby="compare-help">
+      <div class="comparison-inputs">
+        <label for="tools-before">Before enabling read-only
+          <textarea id="tools-before" rows="6" spellcheck="false" autocomplete="off" required></textarea>
+        </label>
+        <label for="tools-after">After enabling read-only
+          <textarea id="tools-after" rows="6" spellcheck="false" autocomplete="off" required></textarea>
+        </label>
+      </div>
+      <button class="btn btn-primary" type="submit" disabled>Compare tool names</button>
+      <button class="btn btn-ghost" id="compare-example" type="button" disabled>Try an example</button>
+    </form>
+    <p>The example is a small illustration of the comparison. The observed launches are described below.</p>
+    <noscript><p>Enable JavaScript to compare the lists in your browser.</p></noscript>
+    <p id="compare-status" role="status"></p>
+    <div id="compare-result"></div>
+    <p>This checks which names are advertised. Use a database user with the <code>read</code> role to enforce permissions at the database.
+      <a href="https://www.mongodb.com/docs/mcp-server/local-mcp/security-best-practices/">MongoDB security guidance</a></p>
+  </section>
+  <section aria-labelledby="observations-heading">
+    <h2 id="observations-heading">What HISTOR and RugSnare observed</h2>
+    <p>In archived comparisons of versions 3.0.5 and 3.1.0, HISTOR’s bare launch exposed nine additional write tools.
+      RugSnare used <code>--readOnly</code> and a preconfigured connection. Both settings differed, so the comparison describes
+      those two launches. Use your client’s own lists to check a specific setup.
+      <a href="https://dev.to/alexar76/same-mcp-version-different-tools-what-two-independent-captures-revealed-2p6d">HISTOR comparison</a> ·
+      <a href="https://github.com/Paraphern/rugsnare/blob/a11024e7ad1f7f8a6e328c90ddb7457c18b22dcb/docs/servers/mongodb.md">RugSnare capture notes</a></p>
+    <p>For a local preview of the enabled tools, MongoDB documents <code>--dryRun</code>. Its output includes configuration settings.
+      <a href="https://www.mongodb.com/docs/mcp-server/local-mcp/configuration/enable-or-disable-features/#enabling-mcp-server-dry-run-mode">MongoDB dry-run instructions</a></p>
+    <p><a class="btn btn-ghost" href="servers?q=mongodb-mcp-server">See MongoDB package observations in HISTOR</a></p>
+  </section>
+</main>
+</body>
+</html>

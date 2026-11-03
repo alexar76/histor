@@ -61,6 +61,7 @@ async def read_bounded_body(request: Request, limit: int) -> bytes:
 
 
 SPA_ROUTES = ("/", "/servers", "/changes", "/log", "/check", "/about", "/stats", "/watch")
+MONGODB_GUIDE = "/mongodb-mcp-read-only-tools.html"
 VC_MEDIA = "application/vc"
 
 CAPS = (
@@ -317,6 +318,14 @@ def create_app(services: Services) -> FastAPI:
         # HEAD too: link checkers and card fetchers probe with HEAD, and 405 reads as "down".
         app.add_api_route(route, spa, methods=["GET", "HEAD"], include_in_schema=False)
 
+    mongodb_guide = settings.landing_dir / MONGODB_GUIDE.lstrip("/")
+
+    @app.api_route(MONGODB_GUIDE, methods=["GET", "HEAD"], include_in_schema=False)
+    def mongodb_read_only_guide() -> Response:
+        if not mongodb_guide.is_file():
+            raise HTTPException(status_code=404, detail="guide missing")
+        return Response(mongodb_guide.read_text(encoding="utf-8"), media_type="text/html")
+
     @app.get("/s/{target_id}", include_in_schema=False)
     def server_page(target_id: str) -> Response:
         """The desk, with this server's own title and description in the HTML: what a search engine
@@ -363,7 +372,8 @@ def create_app(services: Services) -> FastAPI:
 
     @app.get("/sitemap-site.xml", include_in_schema=False)
     def sitemap_site() -> Response:
-        routes = SPA_ROUTES + tuple(r for r in settings.sitemap_extra if r not in SPA_ROUTES)
+        routes = SPA_ROUTES + ((MONGODB_GUIDE,) if mongodb_guide.is_file() else ())
+        routes += tuple(r for r in settings.sitemap_extra if r not in routes)
         urls = "".join(f"<url><loc>{xml_escape(settings.public_base)}{xml_escape(r)}</loc></url>" for r in routes)
         return Response(f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>',
                         media_type="application/xml")

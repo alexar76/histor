@@ -646,6 +646,18 @@ def test_sitemap_names_the_pages_the_deployment_serves_beside_the_app(world):
     assert site.count("/about</loc>") == 1, "a path the app already lists is not repeated"
 
 
+def test_mongodb_checker_is_linked_and_crawlable(api):
+    client, _ = api
+    path = "/mongodb-mcp-read-only-tools.html"
+    page = client.get(path)
+    assert page.status_code == client.head(path).status_code == 200
+    assert "Which MongoDB MCP tools disappear in read-only mode?" in page.text
+    assert f'https://histor.modelmarket.dev{path}"' in page.text
+    assert f'href="{path.lstrip("/")}"' in client.get("/").text
+    assert f"{path}</loc>" in client.get("/sitemap-site.xml").text
+    assert client.get("/assets/compare-tool-names.js").status_code == 200
+
+
 def test_server_pages_carry_the_record_in_the_html(api):
     client, world = api
     page = client.get(f"/s/{target_id(world, 'io.example/weather')}").text

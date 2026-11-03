@@ -1,7 +1,7 @@
 # HISTOR Watch — know when an MCP server you use changes what it tells your model
 
 You approved an MCP server once. Since then its tool descriptions, schemas or tool list may
-have changed — in a four-week window, 45% of remote servers in the official registry did, and
+have changed — in a four-week window, about a third of remote servers in the official registry did, and
 most of those changes are description text, the words your model reads. HISTOR reads every
 listed server on a schedule and records each change. Watch is how you get told.
 

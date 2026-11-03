@@ -1,0 +1,40 @@
+.tool-comparison {
+  max-width: 56rem;
+  padding-bottom: 4rem;
+}
+
+.tool-comparison h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+
+.tool-comparison section {
+  margin-top: 2.5rem;
+}
+
+.tool-comparison a:not(.btn) {
+  text-decoration: underline;
+}
+
+.comparison-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.comparison-inputs textarea {
+  display: block;
+  width: 100%;
+  margin-top: .4rem;
+  padding: .6rem;
+  resize: vertical;
+  background: var(--void);
+  color: var(--ink);
+  border: 1px solid currentColor;
+  border-radius: .4rem;
+  font: .9rem var(--mono);
+}
+
+#compare-result {
+  overflow-wrap: anywhere;
+}

@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-03
+
+- **The datasets page cites each snapshot by its own Zenodo version DOI.** It used to give the concept
+  DOI next to the newest snapshot's name; the concept DOI opens the newest version, where the same query
+  gives other numbers (the 20 October host count, 2,489 of 6,822, becomes 2,976 of 7,213 on 2 November).
+  - `dataset_index.py --zenodo` reads the versions Zenodo lists into `zenodo.json` beside the snapshots;
+    Zenodo unreachable or answering oddly leaves the file as it was.
+  - The export runs it after each snapshot, and `histor-zenodo-reminder` each morning, so a version
+    archived by hand reaches the page the next day.
+  - A snapshot not archived yet points to the newest archived one and to its own signed manifest; every
+    snapshot in the list carries its DOI, and archived snapshots older than the eight kept here stay listed.
+  - The dataset card, the READMEs and `CITATION.cff` say to cite the version DOI next to a number.
 
 - **The crawler follows robots.txt (RFC 9309).** Before an endpoint is read, its origin's robots.txt is
   asked for the product token `histor` (else `*`). A path it does not allow gets no MCP request; the

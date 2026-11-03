@@ -9,8 +9,8 @@ authors:
 repository-code: "https://github.com/alexar76/histor"
 url: "https://histor.modelmarket.dev/"
 license: MIT
-version: 0.5.3
-date-released: 2026-10-30
+version: 0.6.0
+date-released: 2026-11-03
 keywords:
   - model-context-protocol
   - transparency-log
@@ -29,4 +29,4 @@ preferred-citation:
   publisher:
     name: Zenodo
   url: "https://doi.org/10.5281/zenodo.23512759"
-  notes: "Concept DOI; each weekly snapshot has its own version DOI. Also on Hugging Face: alexar76/histor-mcp-tool-definitions."
+  notes: "Concept DOI: it opens the newest snapshot. Each archived snapshot has its own version DOI (listed at https://histor.modelmarket.dev/datasets/); cite that one next to a number. Also on Hugging Face: alexar76/histor-mcp-tool-definitions."

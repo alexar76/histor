@@ -1,11 +1,17 @@
 """The landing page of /datasets/: what the snapshots are, how to cite and load them, and a
 schema.org ``Dataset`` block so dataset search engines index the collection.
 
-    python3 dataset_index.py /var/lib/histor-datasets
+    python3 dataset_index.py [--zenodo] /var/lib/histor-datasets
 
 Standard library only: deploy/export_dataset.sh runs it on the host after each snapshot, outside
-the service image. It reads every ``<YYYY-MM-DD>/manifest.json`` and writes ``index.html`` next
-to them (written aside, then renamed).
+the service image, and deploy/zenodo_reminder.sh each morning. It reads every
+``<YYYY-MM-DD>/manifest.json`` and writes ``index.html`` next to them (written aside, then renamed).
+
+Each archived snapshot has its own Zenodo version DOI, and only that one names the files a number
+was counted on: the concept DOI opens the newest version, where the same query gives another
+count (found 2026-11-03, when a citation of the 20 October host count was about to use the concept
+DOI the page offered). ``--zenodo`` adds the
+versions Zenodo lists to ``zenodo.json`` beside the snapshots, and the page cites from that file.
 """
 
 from __future__ import annotations
@@ -15,12 +21,18 @@ import json
 import os
 import re
 import sys
+import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 SITE = "https://histor.modelmarket.dev"
 BASE = f"{SITE}/datasets"
-ZENODO_CONCEPT_DOI = "10.5281/zenodo.23512759"
+ZENODO_CONCEPT_ID = "23512759"
+ZENODO_CONCEPT_DOI = f"10.5281/zenodo.{ZENODO_CONCEPT_ID}"
+# 25 is the most Zenodo gives without a token; the newest 25 are enough, as zenodo.json keeps the rest.
+ZENODO_VERSIONS = (f"https://zenodo.org/api/records?q=conceptrecid:{ZENODO_CONCEPT_ID}"
+                   "&allversions=true&sort=newest&size=25")
+ZENODO_FILE = "zenodo.json"  # {snapshot day: its version DOI}
 HF_DATASET = "https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions"
 CODE = "https://github.com/alexar76/histor"
 CREATOR = "Aleksandr Artamokhov"
@@ -44,6 +56,53 @@ FILES = (
     ("README.md", "The dataset card: fields, loading, citation, what the data does not say."),
 )
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DOI = re.compile(r"^10\.5281/zenodo\.\d+$")
+TITLE_DAY = re.compile(r"HISTOR snapshot (\d{4}-\d{2}-\d{2})")
+
+
+def zenodo_dois(root: Path) -> dict[str, str]:
+    """The version DOI of each archived snapshot, as ``--zenodo`` last saw them."""
+    try:
+        data = json.loads((root / ZENODO_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {d: v for d, v in data.items()
+            if isinstance(d, str) and DAY.match(d) and isinstance(v, str) and DOI.match(v)}
+
+
+def _get(url: str) -> str:
+    req = urllib.request.Request(url, headers={"Accept": "application/json",
+                                               "User-Agent": f"histor-dataset-index (+{SITE})"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8")
+
+
+def refresh_zenodo(root: Path, fetch: Callable[[str], str] = _get) -> dict[str, str]:
+    """Add the versions Zenodo lists (a version's title names its snapshot day) to ``zenodo.json``.
+
+    Zenodo unreachable or an answer without hits: the file stays as it was, so a bad morning never
+    takes a DOI off the page."""
+    known = zenodo_dois(root)
+    try:
+        hits = json.loads(fetch(ZENODO_VERSIONS))["hits"]["hits"]
+        found = {}
+        for h in hits:
+            day = TITLE_DAY.search(str(h["metadata"]["title"]))
+            doi = str(h.get("doi") or "")
+            if day and DOI.match(doi):
+                found.setdefault(day.group(1), doi)  # newest first: a re-upload of a day keeps the newest
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"Zenodo not read ({type(e).__name__}); the version DOIs stay as they were", file=sys.stderr)
+        return known
+    merged = {**known, **found}
+    if merged != known:
+        tmp = root / f".{ZENODO_FILE}.{os.getpid()}"
+        tmp.write_text(json.dumps(dict(sorted(merged.items())), indent=1) + "\n", encoding="utf-8")
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, root / ZENODO_FILE)
+    return merged
 
 
 def snapshots(root: Path) -> list[dict[str, Any]]:
@@ -93,8 +152,33 @@ def json_ld(snaps: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def page(snaps: list[dict[str, Any]]) -> str:
+def _citation(day: str, doi: str) -> str:
     esc = html.escape
+    return (f'<p class="cite">Artamokhov, A. ({esc(day[:4])}). <i>HISTOR snapshot {esc(day)}: MCP tool definitions and '
+            f'how they change</i> [Data set].\nZenodo. <a href="https://doi.org/{esc(doi)}">https://doi.org/{esc(doi)}</a></p>')
+
+
+def cite_section(day: str, dois: dict[str, str]) -> str:
+    """Cite the snapshot by its version DOI; the concept DOI only stands for all of them."""
+    esc = html.escape
+    archived = sorted((d for d in dois if d <= day), reverse=True)
+    if day in dois:
+        head = _citation(day, dois[day])
+    elif archived:
+        head = (_citation(archived[0], dois[archived[0]]) +
+                f'\n<p>The latest snapshot, {esc(day)}, is not on Zenodo yet; the citation above is the newest one that is. '
+                f'To cite {esc(day)} itself, give its signed manifest: <a href="{esc(day)}/manifest.json">'
+                f'{BASE}/{esc(day)}/manifest.json</a>.</p>')
+    else:
+        head = _citation(day, ZENODO_CONCEPT_DOI)
+    return (head + f'\n<p>Cite the snapshot you counted on: the same query gives other numbers on another snapshot. '
+            f'<a href="https://doi.org/{ZENODO_CONCEPT_DOI}">doi:{ZENODO_CONCEPT_DOI}</a> stands for all of them and '
+            f'always opens the newest.</p>')
+
+
+def page(snaps: list[dict[str, Any]], dois: dict[str, str] | None = None) -> str:
+    esc = html.escape
+    dois = dois or {}
     latest = snaps[0]
     m, day = latest["manifest"], latest["day"]
     c = m["counts"]
@@ -108,10 +192,15 @@ def page(snaps: list[dict[str, Any]]) -> str:
         nrows = f"{meta['rows']:,}" if meta and isinstance(meta.get("rows"), int) else ""
         rows.append(f'<tr><td><a href="{esc(day)}/{esc(name)}"><code>{esc(name)}</code></a></td>'
                     f'<td class="n">{nrows}</td><td class="n">{size}</td><td>{esc(what)}</td></tr>')
+    def doi_of(d: str) -> str:
+        return f' · <a href="https://doi.org/{esc(dois[d])}">doi:{esc(dois[d])}</a>' if d in dois else ""
+
+    here = {s["day"]: s for s in snaps}
     older = "".join(
-        f'<li><a href="{esc(s["day"])}/">{esc(s["day"])}</a> · {s["manifest"]["counts"]["listed"]:,} servers · '
-        f'{s["manifest"]["files"]["changes.jsonl.gz"]["rows"]:,} changes</li>'
-        for s in snaps
+        (f'<li><a href="{esc(d)}/">{esc(d)}</a> · {here[d]["manifest"]["counts"]["listed"]:,} servers · '
+         f'{here[d]["manifest"]["files"]["changes.jsonl.gz"]["rows"]:,} changes{doi_of(d)}</li>') if d in here else
+        f'<li>{esc(d)} · files on Zenodo only{doi_of(d)}</li>'  # older than the snapshots kept here
+        for d in sorted(set(here) | set(dois), reverse=True)
     )
     ld = json.dumps(json_ld(snaps), ensure_ascii=False, indent=1).replace("</", "<\\/")
     return f"""<!doctype html>
@@ -172,8 +261,7 @@ GROUP BY s.name ORDER BY changes DESC LIMIT 20;</pre>
 <pre>import pandas as pd
 servers = pd.read_json("{BASE}/latest/servers.jsonl.gz", lines=True)</pre>
 <h2>Cite</h2>
-<p class="cite">Artamokhov, A. ({esc(day[:4])}). <i>HISTOR snapshot {esc(day)}: MCP tool definitions and how they change</i> [Data set].
-Zenodo. <a href="https://doi.org/{ZENODO_CONCEPT_DOI}">https://doi.org/{ZENODO_CONCEPT_DOI}</a></p>
+{cite_section(day, dois)}
 <h2>Check it</h2>
 <p><code>manifest.json</code> lists the SHA-256 of every file and is signed (Ed25519) by the log's key
 <code>{esc(m['log'])}</code>, with the signed tree head the snapshot was taken under. Any label in it can be
@@ -191,21 +279,25 @@ proven against the live log: <a href="{SITE}/">{SITE}</a>. Code: <a href="{CODE}
 """
 
 
-def write_index(root: Path) -> Path | None:
+def write_index(root: Path, zenodo: bool = False) -> Path | None:
     snaps = snapshots(root)
     if not snaps:
         return None
+    dois = refresh_zenodo(root) if zenodo else zenodo_dois(root)
     out = root / "index.html"
     tmp = root / f".index.html.{os.getpid()}"
-    tmp.write_text(page(snaps), encoding="utf-8")
+    tmp.write_text(page(snaps, dois), encoding="utf-8")
     os.chmod(tmp, 0o644)
     os.replace(tmp, out)
     return out
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("usage: dataset_index.py DATASETS_DIR", file=sys.stderr)
+    args = sys.argv[1:]
+    zenodo = "--zenodo" in args
+    args = [a for a in args if a != "--zenodo"]
+    if len(args) != 1:
+        print("usage: dataset_index.py [--zenodo] DATASETS_DIR", file=sys.stderr)
         raise SystemExit(2)
-    written = write_index(Path(sys.argv[1]))
+    written = write_index(Path(args[0]), zenodo=zenodo)
     print(written or "no snapshots with a manifest")

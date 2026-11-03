@@ -35,8 +35,9 @@ what my client received what HISTOR observed?" for a single list.
 Every server, every tool set it showed, every change, the WARDEN scans, as JSON Lines with a
 signed manifest: <https://histor.modelmarket.dev/datasets/>, mirrored on Hugging Face
 (`alexar76/histor-mcp-tool-definitions`) and archived on Zenodo
-(concept DOI [10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759)). Cite the
-snapshot you used; every label in it can be proven against the live log.
+(concept DOI [10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759), which opens the
+newest snapshot). Cite the snapshot you used by its own version DOI, listed on the datasets page;
+every label in it can be proven against the live log.
 
 ## 3. Pushed changes (for partners)
 

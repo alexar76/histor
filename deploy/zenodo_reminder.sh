@@ -2,6 +2,7 @@
 # The month's first HISTOR snapshot is archived on Zenodo by hand (a new version of the concept
 # record, so each month gets its own DOI). This says so on Telegram each morning until Zenodo has it.
 # Installed as /usr/local/sbin/histor-zenodo-reminder; histor-zenodo-reminder.timer runs it daily.
+# Each run also rebuilds the /datasets/ page with the version DOIs Zenodo lists (dataset_index.py --zenodo).
 #
 #   histor-zenodo-reminder              remind if the newest month's first snapshot is not on Zenodo yet
 #   histor-zenodo-reminder --dry        print what it would do, send nothing
@@ -10,6 +11,7 @@ set -euo pipefail
 DIR="${HISTOR_DATASET_DIR:-/var/lib/histor-datasets}"
 CONCEPT="${HISTOR_ZENODO_CONCEPT:-23512759}"
 PUBLIC="${HISTOR_PUBLIC_BASE:-https://histor.modelmarket.dev}"
+INDEX="${HISTOR_DATASET_INDEX:-/usr/local/lib/histor-dataset/dataset_index.py}"
 
 message() {
   printf '%s\n' \
@@ -28,6 +30,12 @@ case "${1:-}" in
   "") dry=0 ;;
   *) echo "usage: histor-zenodo-reminder [--dry | --message YYYY-MM-DD]" >&2; exit 2 ;;
 esac
+
+# The /datasets/ page cites each snapshot by its own version DOI: take in what Zenodo lists now, so a
+# version archived yesterday is on the page this morning (Zenodo unreachable: the page stays as it was).
+if [[ $dry -eq 0 && -r "$INDEX" ]]; then
+  python3 -I "$INDEX" --zenodo "$DIR" > /dev/null || echo "index page not rebuilt" >&2
+fi
 
 newest="$(ls -1d "$DIR"/20??-??-?? 2> /dev/null | sort | tail -1 || true)"
 [[ -n "$newest" ]] || { echo "no snapshots in $DIR"; exit 0; }

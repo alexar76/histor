@@ -559,7 +559,7 @@ WHERE s->>'detail' = 'full' AND json_array_length(s->'added') = 0 AND json_array
 Artamokhov, A. ({day[:4]}). *HISTOR snapshot {day}: MCP tool definitions and how they change* [Data set].
 Zenodo. https://doi.org/{doi or ZENODO_CONCEPT_DOI}
 
-{"This snapshot's DOI is " + doi + "; all snapshots: " if doi else "This is the DOI of every snapshot (it resolves to the newest; each has its own version DOI on the record): "}https://doi.org/{ZENODO_CONCEPT_DOI}.
+{"This snapshot's DOI is " + doi + "; all snapshots: " if doi else "This is the DOI of every snapshot, and it opens the newest one, where the same query gives other numbers. Once this snapshot is archived, its own version DOI is listed at https://histor.modelmarket.dev/datasets/; cite that one next to any number: "}https://doi.org/{ZENODO_CONCEPT_DOI}.
 Also on Hugging Face: {HF_DATASET} (tag `snapshot-{day}`).
 
 ## License and rights
