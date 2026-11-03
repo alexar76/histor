@@ -91,6 +91,24 @@ class Store:
             return None
         return json.loads(row["body"])
 
+    # -- robots.txt (histor.robots) ------------------------------------------------
+
+    _ROBOTS_COLUMNS = ("origin", "checked_at", "kind", "http", "body", "digest", "read_at", "unreachable_since", "note")
+
+    def robots_rows(self) -> list[dict[str, Any]]:
+        with self.db.read() as tx:
+            return tx.execute(f"SELECT {', '.join(self._ROBOTS_COLUMNS)} FROM robots_txt")
+
+    def save_robots(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        cols = self._ROBOTS_COLUMNS
+        sql = (f"INSERT INTO robots_txt({', '.join(cols)}) VALUES({', '.join('?' for _ in cols)}) ON CONFLICT(origin) "
+               f"DO UPDATE SET {', '.join(f'{c}=excluded.{c}' for c in cols[1:])}")
+        with self.db.transaction() as tx:
+            for row in rows:
+                tx.execute(sql, tuple(row.get(c) for c in cols))
+
     # -- classifier verdicts (advisory, NOT in the signed log) ---------------------
 
     @staticmethod
@@ -387,7 +405,8 @@ class Store:
         """What one target's publisher declares now, from its registry entry and from its declaration
         file. ``None`` for a source leaves that source's sets as they are: a file that could not be
         read this time is not a withdrawal. A digest both name counts as the registry's. Returns
-        (sets declared now, sets withdrawn)."""
+        (sets declared now, sets withdrawn). Server-card sets (source 'card') are histor.cards' to manage."""
+        active = {d: src for d, src in active.items() if src != "card"}
         keep = {d for d, src in active.items() if (src == "url" and url is None) or (src != "url" and registry is None)}
         entries: dict[str, tuple[dict[str, Any], str]] = {}
         for source, sets in (("registry", registry), ("url", url)):
@@ -488,8 +507,86 @@ class Store:
         return {"files": len(urls), "unread": sum(1 for u in urls if files.get(u, (None, "not read"))[1]),
                 "targetsWithNewSets": changed, "withdrawn": withdrawn}
 
-    _DECLARED = ("SELECT d.*, u.url AS url FROM declared_toolsets d "
-                 "LEFT JOIN declaration_urls u ON u.target_id = d.target_id ")
+    _DECLARED = ("SELECT d.*, CASE WHEN d.source = 'card' THEN c.url ELSE u.url END AS url FROM declared_toolsets d "
+                 "LEFT JOIN declaration_urls u ON u.target_id = d.target_id "
+                 "LEFT JOIN server_cards c ON c.target_id = d.target_id ")
+
+    # -- MCP server cards (histor.cards) ------------------------------------------------
+
+    def cards_due(self, now: str, limit: int) -> tuple[list[dict[str, Any]], list[str]]:
+        """Listed remote endpoints whose card is due (a day after a card read, a week after none was found),
+        oldest first; and every listed remote endpoint, to tell host-wide cards apart."""
+        from histor.cards import ABSENT_RECHECK_S, FRESH_S
+        from histor.remote_schedule import after
+        listed = "t.delisted = 0 AND t.skip_reason IS NULL AND t.transport = 'streamable-http'"
+        with self.db.read() as tx:
+            due = tx.execute(
+                "SELECT t.id, t.name, t.endpoint, t.version FROM targets t LEFT JOIN server_cards c ON c.target_id = t.id "
+                f"WHERE {listed} AND (c.target_id IS NULL OR (c.status IN ('absent', 'robots') AND c.checked_at < ?) "
+                "OR (c.status NOT IN ('absent', 'robots') AND c.checked_at < ?)) "
+                "ORDER BY CASE WHEN c.checked_at IS NULL THEN 0 ELSE 1 END, c.checked_at, t.id LIMIT ?",
+                (after(now, -ABSENT_RECHECK_S), after(now, -FRESH_S), limit))
+            every = [r["endpoint"] for r in tx.execute(f"SELECT t.endpoint FROM targets t WHERE {listed}")]
+        return [dict(r) for r in due], every
+
+    def apply_cards(self, results: list[tuple[dict[str, Any], Any, str | None, list[dict[str, Any]] | None]],
+                    now: str) -> dict[str, int]:
+        """Record card reads: (target row, histor.cards.Verdict, tool-set digest or None, canonical entries or
+        None) each. A card with a full tool list declares its set (source 'card') and withdraws the card's
+        earlier sets; a card that is gone or lists no tools withdraws them; a failed read changes nothing
+        but the row's date."""
+        from histor.cards import DECISIVE, DECLARED
+        counts = {"declared": 0, "withdrawn": 0}
+        with self.db.transaction() as tx:
+            for target, verdict, digest, entries in results:
+                tid = target["id"]
+                prior = tx.one("SELECT * FROM server_cards WHERE target_id=?", (tid,)) or {}
+                found = verdict.status in DECISIVE and verdict.status != "absent"
+                tx.execute(
+                    "INSERT INTO server_cards(target_id, url, checked_at, status, toolset, tool_count, first_seen, last_ok, detail) "
+                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET url=excluded.url, "
+                    "checked_at=excluded.checked_at, status=excluded.status, toolset=excluded.toolset, "
+                    "tool_count=excluded.tool_count, first_seen=excluded.first_seen, last_ok=excluded.last_ok, detail=excluded.detail",
+                    (tid, verdict.url or prior.get("url"), now, verdict.status,
+                     digest if verdict.status == DECLARED else (prior.get("toolset") if verdict.status not in DECISIVE else None),
+                     len(entries) if entries is not None else (prior.get("tool_count") if verdict.status not in DECISIVE else None),
+                     prior.get("first_seen") or (now if found else None),
+                     now if found else prior.get("last_ok"), (verdict.detail or "")[:300] or None))
+                if verdict.status not in DECISIVE:
+                    continue
+                if verdict.status == DECLARED and digest:
+                    Store.put_blob(tx, digest, "toolset", entries)
+                    tx.execute(
+                        "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
+                        "first_declared, last_declared, withdrawn_at, source) VALUES(?, ?, ?, NULL, ?, ?, ?, NULL, 'card') "
+                        "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
+                        "last_declared=excluded.last_declared, withdrawn_at=NULL, source='card' "
+                        "WHERE declared_toolsets.source = 'card' OR declared_toolsets.withdrawn_at IS NOT NULL",
+                        (tid, digest, len(entries or []), target.get("version"), now, now))
+                    counts["declared"] += 1
+                gone = tx.execute("SELECT toolset FROM declared_toolsets WHERE target_id=? AND source='card' "
+                                  "AND withdrawn_at IS NULL AND toolset<>?", (tid, digest or ""))
+                for row in gone:
+                    tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?",
+                               (now, tid, row["toolset"]))
+                counts["withdrawn"] += len(gone)
+        return counts
+
+    def server_card(self, target_id: str) -> dict[str, Any] | None:
+        """The endpoint's server card as the API shows it: where, when, what it decided, its tool names."""
+        with self.db.read() as tx:
+            row = tx.one("SELECT * FROM server_cards WHERE target_id=?", (target_id,))
+        if row is None or row["status"] in ("absent", "robots"):
+            return None
+        names = None
+        if row["toolset"]:
+            entries = self.get_blob(row["toolset"], "toolset")
+            if isinstance(entries, list):
+                names = [e.get("name") for e in entries if isinstance(e, dict)]
+        return {k: v for k, v in (("url", row["url"]), ("status", row["status"]), ("checkedAt", row["checked_at"]),
+                                  ("firstSeen", row["first_seen"]), ("lastOk", row["last_ok"]), ("detail", row["detail"]),
+                                  ("toolSetDigest", row["toolset"]), ("toolCount", row["tool_count"]),
+                                  ("toolNames", names)) if v is not None}
 
     def declared_toolset(self, target_id: str, toolset: str) -> dict[str, Any] | None:
         """The publisher's current declaration of this set at this target, if it makes one."""

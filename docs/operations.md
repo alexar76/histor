@@ -134,7 +134,7 @@ flowchart LR
     T["histor-backup.timer<br/>nightly 03:40 UTC"] --> S["/usr/local/sbin/histor-backup"]
     S --> D["pg_dump -Fc<br/>checked with pg_restore --list"]
     S --> K["tar of the histor-data volume<br/>issuer.key · provider keys · sth-marker.json"]
-    D --> B[("/var/backups/histor<br/>0700 · 5 days")]
+    D --> B[("/var/backups/histor<br/>0700 · 2 days")]
     K --> B
     B -. "your off-host copy" .-> O[("another machine")]
 ```
@@ -180,7 +180,7 @@ purpose: move the database AND the key and marker aside, together.
 ## Being a good crawler
 
 HISTOR identifies itself (`User-Agent: histor/<version> (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)`),
-sends `server/discover`, legacy initialization when needed, and `tools/list` per observation (plus pagination), never calls a tool, follows no redirects and keeps at most
+reads the site's robots.txt first (below), then sends `server/discover`, legacy initialization when needed, and `tools/list` per observation (plus pagination), never calls a tool, follows no redirects on the MCP path and keeps at most
 two connections per host. One observation has one deadline across every request and page, and the tool set is
 capped at 3 MiB and 5 000 tools.
 
@@ -188,7 +188,64 @@ Remote targets have an independent schedule: six hours normally, 30 minutes afte
 These are target intervals, subject to backlog, failure backoff and host limits. `/api/v1/stats` exposes
 `remotePolling` with overdue work and actual observation gaps; intermediate states can still be missed.
 
-An operator who wants their endpoint left out says so in an issue. Add the host (which covers its subdomains) or
+### robots.txt (RFC 9309)
+
+Before an endpoint is read, its origin's `/robots.txt` is asked whether the endpoint's path is open to the
+product token `histor` (`histor/robots.py`, wired into the crawler's reader). The rules are RFC 9309's:
+
+- **Group.** The group naming `histor` (case-insensitive; several are combined), else the `*` groups, else
+  no rules.
+- **Match.** The path with its query, percent-encoding normalised; `*` and a final `$` as wildcards. The
+  longest match decides and Allow wins a tie.
+- **Fetch.** Up to five redirects followed, each through the same address checks; the first 512 KiB parsed.
+  - A 4xx means no robots.txt: everything allowed.
+  - A 5xx or no answer means everything disallowed.
+- **Reuse.** A file is reused for 24 hours. While an origin is unreachable, the last file read from it keeps
+  applying; an origin with no file that stays unreachable for 30 days is then treated as having none
+  (2.3.1.4).
+
+State per origin is kept in the `robots_txt` table (migration 019), so a redeploy changes none of this.
+
+A disallowed endpoint gets no MCP request at all. The attempt is recorded with status `robots-disallowed`
+(or `robots-unreachable`); its detail names the deciding rule and how to let HISTOR in. A server observed
+before gets one signed continuity label carrying that status, and its history stays. Its page,
+`/api/v1/servers/<id>` and the `note` of `/api/v1/check` say that HISTOR does not read it. Reading resumes
+by itself once the site allows it, at the latest a day later:
+
+```
+User-agent: histor
+Allow: /mcp
+```
+
+On 2026-11-02 this applied to about 14% of the remote endpoints listed then: 4,708 of 33,520, of which
+1,489 disallow the MCP path itself and the rest an API prefix or the whole site; 1,277 more answered with
+a 5xx or not at all (survey: `artifacts/histor-robots-survey-2026-11-02` in the aicom repository). Reads a person
+starts for their own server (`histor tool-cost`, `upgrade_capture`) do not consult robots.txt: they are not
+crawling.
+
+A site that disallows the MCP path can still publish a server card at a path it allows; HISTOR reads it as the
+operator's declaration, never as an observation (`histor/cards.py`, `docs/api.md`, "Server cards"). On 2026-11-02, 280 of the
+4,359 disallowing hosts served a card listing every tool with its schema.
+
+### Sites that ask to be paid (HTTP 402)
+
+HISTOR pays for no read and never changes its user agent to get one: it says `histor/<version>` and `crawler`
+in every request, so an operator can always tell it apart. A 402 is recorded with the reason it gives:
+
+- **`pay-per-crawl`.** The site charges crawlers for each read: a `crawler-price` header (Cloudflare pay per crawl),
+  or a body that says "pay per crawl". The detail names the price when the answer gives one.
+  - The server's history stays, as for robots.txt, and its page and `/check` say that HISTOR does not read it.
+  - It is asked again a day later at most; once the site lets HISTOR in, reading resumes.
+  - On 2026-11-02 one such site, api.groundtruths.xyz, answered HISTOR with "Pay per crawl. $0.01 a page" (keyed on
+    `crawler` in the user agent) and served two other public logs without charge
+    (`artifacts/peer-xcheck-legion-atpp-2026-11-02` in the aicom repository).
+- **`payment-required`.** An endpoint where every call is paid (x402: an `x402Version`/`accepts` body or a
+  `payment-required` header). Also asked again a day later at most.
+- **`http-402`.** Any other 402, with the server's own message when it gives one. On 2026-11-02 most of these
+  were the hosting account's billing ("Payment required", "Functions are blocked - app owner lacks backend
+  functions capability") or a free tier's daily cap, not a charge for reading.
+
+An operator who wants their endpoint left out can also say so in an issue. Add the host (which covers its subdomains) or
 a URL prefix to `HISTOR_OPT_OUT` (comma-separated) or to `opt-out.txt` on the data volume (one per line, `#`
 comments), which is re-read at every crawl. The endpoint stays listed as not attempted with the reason
 `operator-opt-out`, rather than silently dropped; labels already in the log stay, because the log only grows.

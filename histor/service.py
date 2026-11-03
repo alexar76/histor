@@ -182,6 +182,13 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
                     log.warning("declaration files read: %s", result)
             except Exception:  # noqa: BLE001 - a publisher's file must not end the schedule
                 log.exception("declaration refresh failed")
+            try:
+                # MCP server cards, a day apart per endpoint (histor.cards).
+                result = services.crawler.refresh_cards()
+                if result.get("checked"):
+                    log.warning("server cards read: %s", result)
+            except Exception:  # noqa: BLE001 - a site's card must not end the schedule
+                log.exception("server card refresh failed")
 
     if services.stop.wait(first_wait):
         return

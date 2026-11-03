@@ -592,6 +592,8 @@ def create_app(services: Services) -> FastAPI:
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
             "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
             "declarationFile": store.declaration_file(target_id),
+            # The operator's server card, read where robots.txt allows (histor.cards): its word, not an observation.
+            "serverCard": store.server_card(target_id),
         }
         if t["transport"] == "stdio":
             try:

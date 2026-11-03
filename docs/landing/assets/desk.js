@@ -294,6 +294,10 @@ function reasonText(s) {
   if (r === "templated-url") return t("js_why_template");
   if (r === "cleartext-url") return t("js_why_cleartext");
   if (r === "operator-opt-out") return t("js_why_optout");
+  if (r === "robots-disallowed") return t("js_why_robots");
+  if (r === "robots-unreachable") return t("js_why_robots_down");
+  if (r === "pay-per-crawl") return t("js_why_paycrawl");
+  if (r === "payment-required") return t("js_why_paid");
   if (r === "http-401" || r === "http-403") return t("js_why_auth");
   if (r === "timeout" || r === "connect" || r === "network" || /^http-5/.test(r)) return t("js_why_down", { status: r });
   if (r === "undigestible" || (r === "ok" && !s.toolSetDigest)) return t("js_why_undigestible");
@@ -308,6 +312,7 @@ function serverRow(s) {
   if (s.adviseMatches) pills.push(el("span", { class: "pill advise", text: t("js_advise_n", { n: s.adviseMatches }) }));
   if (s.recordMatches) pills.push(el("span", { class: "pill block", text: t("js_name_n", { n: s.recordMatches }) }));
   if (!s.subjectDigest) pills.push(el("span", { class: "pill", text: reasonText(s) }));
+  else if (/^robots-|^pay-per-crawl$/.test(s.lastStatus || "")) pills.push(el("span", { class: "pill advise", text: reasonText(s) }));
   return el("a", { class: "row-card", href: href(`/s/${s.id}`), "data-route": `/s/${s.id}` },
     el("div", {}, el("div", { class: "nm" }, s.title && s.title !== s.name ? `${s.title} · ` : "", s.name, ...pills),
       el("div", { class: "ep", text: s.endpoint })),
@@ -518,6 +523,16 @@ async function serverView(id, done) {
       if (legacy.behaviour && typeof legacy.behaviour === "object") renderBehaviour(root, legacy.behaviour);
     }
   }
+  if (/^robots-/.test(s.lastStatus || "")) {
+    // RFC 9309: the site's robots.txt does not allow HISTOR, so HISTOR leaves the server alone; say so.
+    root.append(el("p", { class: "warn-t", text: t("js_robots_note") }),
+      s.lastDetail ? el("p", { class: "mono faint cond", text: String(s.lastDetail) }) : "");
+  }
+  if (s.lastStatus === "pay-per-crawl") {
+    // The site charges crawlers for each read; HISTOR does not pay and does not hide what it is.
+    root.append(el("p", { class: "warn-t", text: t("js_paycrawl_note") }),
+      s.lastDetail ? el("p", { class: "mono faint cond", text: String(s.lastDetail) }) : "");
+  }
   if (!s.toolSetDigest) {
     root.append(el("div", { class: "empty", text: s.transport === "stdio" && s.packageVersion
       ? t("js_unobserved_pkg", { status: s.lastStatus || "—" }) : t("js_unobserved_why", { status: reasonText(s) }) }));
@@ -573,7 +588,8 @@ async function serverView(id, done) {
       root.append(el("p", { class: "mono" }, el("span", { class: same ? "ok-t" : "warn-t", text: same ? t("js_same") : t("js_different") }), ` · ${short(r.toolset, 20)} · ${t("js_reports", { n: r.reports })} · ${r.first_day}…${r.last_day}`));
     }
   }
-  if (data.declaredToolSets?.length || data.declarationFile) {
+  const card = data.serverCard;
+  if (data.declaredToolSets?.length || data.declarationFile || card) {
     // The publisher's word, from its registry entry or the file that entry points at, shown as such:
     // the condition is its text, not ours.
     root.append(el("h3", { class: "block-h", text: t("js_h_declared") }), el("p", { class: "faint", text: t("js_declared_note") }));
@@ -584,13 +600,32 @@ async function serverView(id, done) {
         : el("span", { class: "ok-t", text: t("js_declared_read_ok", { at: fmt(f.lastRead) }) });
       root.append(el("p", { class: "mono" }, `${t("js_declared_file")}: `, ...visible(f.url).nodes, " · ", read));
     }
+    if (card) {
+      // The operator's server card (histor.cards): read where robots.txt allows, compared with what the server serves.
+      const what = card.status === "declared" ? t("js_card_declared", { n: card.toolCount ?? "—" })
+        : card.status === "no-tools" ? t("js_card_no_tools") : card.status === "other-endpoint" ? t("js_card_other")
+        : card.status === "ambiguous" ? t("js_card_ambiguous") : card.status === "undigestible" ? t("js_card_undigestible")
+        : t("js_card_unread", { detail: card.detail || "—" });
+      root.append(el("p", { class: "faint", text: t("js_card_note") }),
+        el("p", { class: "mono" }, `${t("js_card")}: `, ...visible(card.url || "").nodes, " · ", what, ` · ${fmt(card.checkedAt)}`));
+      const served = Array.isArray(data.tools) ? data.tools.map((x) => x && x.name).filter((x) => typeof x === "string") : null;
+      const said = Array.isArray(card.toolNames) ? card.toolNames.filter((x) => typeof x === "string") : null;
+      if (card.status === "declared" && served && said && card.toolSetDigest !== s.toolSetDigest) {
+        const onlyCard = said.filter((n) => !served.includes(n)), onlyServed = served.filter((n) => !said.includes(n));
+        root.append(el("p", { class: "warn-t", text: !onlyCard.length && !onlyServed.length ? t("js_card_same_names")
+          : [onlyCard.length ? t("js_card_only_card", { names: onlyCard.slice(0, 30).join(", ") }) : "",
+             onlyServed.length ? t("js_card_only_served", { names: onlyServed.slice(0, 30).join(", ") }) : ""].filter(Boolean).join(" · ") }));
+      } else if (card.status === "declared" && !s.toolSetDigest && said) {
+        root.append(el("p", { class: "mono cond", text: said.slice(0, 60).join(", ") + (said.length > 60 ? " …" : "") }));
+      }
+    }
     for (const d of data.declaredToolSets || []) {
       const seen = d.toolSetDigest === s.toolSetDigest;
       const state = d.withdrawn ? t("js_declared_withdrawn", { at: fmt(d.withdrawn) }) : seen ? t("js_declared_observed") : t("js_declared_unobserved");
       root.append(el("p", { class: "mono" }, el("span", { class: d.withdrawn ? "faint" : seen ? "ok-t" : "", text: state }),
         ` · ${short(d.toolSetDigest, 20)}`, d.toolCount != null ? ` · ${t("js_declared_tools", { n: d.toolCount })}` : "",
         ...(d.when ? [" · «", ...visible(d.when).nodes, "»"] : []),
-        ` · ${t(d.source === "url" ? "js_declared_src_file" : "js_declared_src_registry")}`,
+        ` · ${t(d.source === "url" ? "js_declared_src_file" : d.source === "card" ? "js_declared_src_card" : "js_declared_src_registry")}`,
         ` · ${fmt(d.firstDeclared)}…${fmt(d.lastDeclared)}`));
     }
   }

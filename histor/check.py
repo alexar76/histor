@@ -105,6 +105,24 @@ NOTE_DECLARED = (
     "has not seen this set served."
 )
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
+# lastStatus robots-disallowed / robots-unreachable (histor.robots): HISTOR leaves the server alone.
+NOTE_ROBOTS_SINCE = (
+    " HISTOR does not read this endpoint: its site's robots.txt does not allow HISTOR (RFC 9309). Changes to its "
+    "tools after {day} are not recorded; the comparison is with its last observation."
+)
+NOTE_ROBOTS_NEVER = (
+    " HISTOR does not read this endpoint: its site's robots.txt does not allow HISTOR (RFC 9309), so HISTOR has "
+    "no independent record of its tools."
+)
+# lastStatus pay-per-crawl (histor.mcpclient): the site charges crawlers for each read; HISTOR does not pay.
+NOTE_PAYCRAWL_SINCE = (
+    " HISTOR does not read this endpoint: its site charges crawlers for each read, and HISTOR does not pay for "
+    "reads. Changes to its tools after {day} are not recorded; the comparison is with its last observation."
+)
+NOTE_PAYCRAWL_NEVER = (
+    " HISTOR does not read this endpoint: its site charges crawlers for each read, and HISTOR does not pay for "
+    "reads, so HISTOR has no independent record of its tools."
+)
 NOTE_LAST_FAILED = (
     " HISTOR's latest attempt at this endpoint produced no tool set ({status}); the comparison is with its "
     "last successful observation."
@@ -194,6 +212,10 @@ class Checker:
             }
             if target.get("package_version"):
                 result["target"]["packageVersion"] = target["package_version"]
+            card = self.store.server_card(target["id"])
+            if card and card.get("status") == "declared":
+                # The operator's server card (histor.cards): what it declares, not what HISTOR observed.
+                result["target"]["serverCard"] = {k: card[k] for k in ("url", "toolSetDigest", "toolCount", "checkedAt") if k in card}
             if target.get("package_signals"):
                 try:
                     result["target"]["packageSignals"] = json.loads(target["package_signals"])
@@ -253,12 +275,21 @@ class Checker:
         if result.get("declared") and state in ("different", "not-observed"):
             declared = result["declared"]
             where = (f"in the declaration file its registry entry points at ({declared['url']})"
-                     if declared.get("source") == "url" and declared.get("url") else "in its registry entry")
+                     if declared.get("source") == "url" and declared.get("url")
+                     else f"in its server card ({declared['url']})" if declared.get("source") == "card" and declared.get("url")
+                     else "in its registry entry")
             note += NOTE_DECLARED.format(where=where, when=f' ("{declared["when"]}")' if declared.get("when") else "")
+        last_status = str(target["last_status"] or "") if target is not None else ""
+        left_alone = ((NOTE_ROBOTS_NEVER, NOTE_ROBOTS_SINCE) if last_status.startswith("robots-")
+                      else (NOTE_PAYCRAWL_NEVER, NOTE_PAYCRAWL_SINCE) if last_status == "pay-per-crawl" else None)
+        if left_alone and state == "not-observed":
+            note += left_alone[0]
         if target is not None and state not in ("not-listed", "not-observed"):
             if target["delisted"]:
                 note += NOTE_DELISTED.format(day=str(target["last_listed"] or "")[:10])
-            if target["last_status"] and target["last_status"] != "ok":
+            if left_alone:
+                note += left_alone[1].format(day=str(target["last_ok"] or "")[:10])
+            elif target["last_status"] and target["last_status"] != "ok":
                 note += NOTE_LAST_FAILED.format(status=target["last_status"])
         result["note"] = note
         scan = self._scan(client_digest, client_entries, target, digest_error is not None, allow_scan)

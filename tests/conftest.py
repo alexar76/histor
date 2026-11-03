@@ -69,7 +69,7 @@ class FakeMcp:
     """In-process MCP servers keyed by URL path, served through ``httpx.MockTransport``.
 
     ``tools[path]`` is what tools/list returns (paginated by ``page_size`` when set);
-    ``status[path]`` forces an HTTP status; ``sse`` paths answer as event streams;
+    ``status[path]`` forces an HTTP status (or a whole response); ``sse`` paths answer as event streams;
     ``server_versions[path]`` is the serverInfo version initialize reports (default "1.0").
     """
 
@@ -91,7 +91,8 @@ class FakeMcp:
         method = body.get("method", "")
         self.calls.append((path, method))
         if path in self.status:
-            return httpx.Response(self.status[path])
+            forced = self.status[path]
+            return forced if isinstance(forced, httpx.Response) else httpx.Response(forced)
         if method == "notifications/initialized":
             return httpx.Response(202)
         if method == "initialize":

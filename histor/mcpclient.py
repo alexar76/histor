@@ -51,6 +51,13 @@ _LEGACY_HTTP_STATUSES = frozenset((400, 404, 405))
 # and tools/list open (mcp.kaiku.tech, 2026-11-01). Rate limits, timeouts and redirects are not.
 _PROBE_HTTP_STATUSES = _LEGACY_HTTP_STATUSES | frozenset((401, 403))
 _FIRST_MODERN_VERSION = "2026-07-28"  # earlier revisions open with initialize
+# A 402 says why: a site that charges crawlers for each read (Cloudflare pay per crawl's crawler-price header, or
+# a body that says "pay per crawl": api.groundtruths.xyz, 2026-11-02, matches "crawler" in the user agent), or
+# an endpoint where every call is paid (x402). HISTOR pays for neither, and its user agent keeps naming it.
+PAY_PER_CRAWL = "pay-per-crawl"
+PAYMENT_REQUIRED = "payment-required"
+_PAYMENT_BODY_BYTES = 16 * 1024
+_PAY_PER_CRAWL_TEXT = re.compile(r"pay[\s_-]*per[\s_-]*crawl", re.I)
 USER_AGENT = f"histor/{__version__} (+https://histor.modelmarket.dev/#crawler; read-only: discover + tools/list)"
 MAX_BODY_BYTES = 4 * 1024 * 1024   # one response, decompressed
 MAX_SET_BYTES = 3 * 1024 * 1024    # every tools/list page of one observation together
@@ -81,6 +88,18 @@ class Observation:
     # start arguments): the conditions a reader needs to judge the observation by.
     package_conditions: dict[str, Any] | None = None
     package_supplied: dict[str, Any] | None = None
+
+
+def _server_message(doc: Any) -> str:
+    """The server's own words in an error body ({"message"}, {"error": {"message"}}, {"error": "…"}), bounded."""
+    if not isinstance(doc, dict):
+        return ""
+    error = doc.get("error")
+    for value in (doc.get("message"), error.get("message") if isinstance(error, dict) else error):
+        if isinstance(value, str) and value.strip():
+            text = " ".join(value.split())
+            return "the server says: " + (text if len(text) <= 120 else text[:119] + "…")
+    return ""
 
 
 class _Stop(Exception):
@@ -194,10 +213,13 @@ def _matching(message: Any, request_id: int) -> bool:
 
 class McpReader:
     def __init__(self, *, timeout: float = 20.0, allow_private: bool = False, transport: httpx.BaseTransport | None = None,
-                 deadline: float | None = None):
+                 deadline: float | None = None, robots: Any = None):
         self.timeout = timeout
         self.allow_private = allow_private
         self._transport = transport
+        # histor.robots.Policy for the crawler: a path the site's robots.txt disallows is not read.
+        # None for a person's own one-off read (toolcost_cli, upgrade_capture), which is not crawling.
+        self.robots = robots
         # One observation — initialize, the notification and every tools/list page — must finish
         # inside this, whatever the server does with the stream.
         self.deadline = deadline if deadline is not None else max(3 * timeout, 60.0)
@@ -243,6 +265,8 @@ class McpReader:
                     code = _error_code(message)
                     if code in _MODERN_ERRORS:
                         raise _Stop("protocol", f"modern {body['method']} returned MCP error {code}; no downgrade")
+                if response.status_code == 402:
+                    raise _Stop(*self._payment_reason(response, deadline))
                 raise _Stop(f"http-{response.status_code}")
             if want_id is None:
                 return None, response.headers, 0
@@ -258,6 +282,30 @@ class McpReader:
             return message, response.headers, size
         finally:
             response.close()
+
+    @classmethod
+    def _payment_reason(cls, response: httpx.Response, deadline: _Deadline) -> tuple[str, str]:
+        """What a 402 asks for, from its headers and the first 16 KiB of its body."""
+        headers = response.headers
+        try:
+            body = b"".join(cls._decoded(response, _Decoder(headers.get("content-encoding", "")), deadline,
+                                         _PAYMENT_BODY_BYTES, "payment response")).decode("utf-8", "replace")
+        except _Stop:
+            body = ""
+        doc: Any = None
+        if body.lstrip()[:1] == "{":
+            try:
+                doc = json.loads(body)
+            except ValueError:
+                doc = None
+        price = headers.get("crawler-price") or (doc.get("price") if isinstance(doc, dict) else None)
+        price = price.strip()[:40] if isinstance(price, str) and price.strip() else None
+        if "crawler-price" in headers or _PAY_PER_CRAWL_TEXT.search(body):
+            return PAY_PER_CRAWL, ("the site charges crawlers for each read" + (f" ({price})" if price else "")
+                                   + "; HISTOR does not pay for reads")
+        if "payment-required" in headers or (isinstance(doc, dict) and ("x402Version" in doc or isinstance(doc.get("accepts"), list))):
+            return PAYMENT_REQUIRED, "every call to this endpoint is paid (x402); HISTOR does not pay"
+        return "http-402", _server_message(doc)
 
     @classmethod
     def _http_error_body(cls, response: httpx.Response, deadline: _Deadline, budget: int, want_id: int | None) -> Any:
@@ -583,6 +631,10 @@ class McpReader:
             # a round-robin name cannot split one observation across two machines.
             pinned = resolve_public(url, allow_private=self.allow_private)
             obs.address = pinned.address
+            if self.robots is not None:
+                decision = self.robots.decide(url)
+                if not decision.allowed:
+                    raise _Stop(decision.status, decision.detail)
             with self._client() as client:
                 protocol = self._discover(client, pinned, deadline, obs)
                 tools: list[Any] | None = None

@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+- **The crawler follows robots.txt (RFC 9309).** Before an endpoint is read, its origin's robots.txt is
+  asked for the product token `histor` (else `*`). A path it does not allow gets no MCP request; the
+  attempt is recorded as `robots-disallowed`, or as `robots-unreachable` when robots.txt answers 5xx or
+  not at all. Details:
+  - Matching: the longest match, Allow on a tie, `*` and `$`, percent-encoding normalised.
+  - Fetching: up to five redirects, 512 KiB, a 4xx meaning no robots.txt.
+  - Reuse: a file is reused for 24 h; while an origin is unreachable its last file still applies, and
+    after 30 days unreachable with no file, robots.txt counts as absent.
+  - State per origin lives in `robots_txt` (migration 019).
+  - The detail names the deciding rule and the two lines that let HISTOR in. A server observed before
+    keeps its history and gets one continuity label with the status. Reading resumes when the site
+    allows it.
+  - The server page shows "not observed: robots.txt does not allow HISTOR", and `/api/v1/check` says so
+    in its `note`.
+  - One-off reads a person starts (`histor tool-cost`) are not crawling and do not consult it.
+- **Server cards as declarations.** HISTOR reads each remote endpoint's MCP server card where robots.txt
+  allows it: `<endpoint path>/server-card` and `/.well-known/mcp/server-card.json`.
+  - Schedule: daily, a week after none was found; no redirects; 1 MiB.
+  - What counts: a card listing every tool with a name and an `inputSchema` is digested like an
+    observation and kept as a declared set with `source: "card"`. Registry and file syncs leave such sets
+    alone. A card naming endpoints counts only for those; a host-wide card naming none counts only on a
+    host with one remote endpoint.
+  - Withdrawal: a missing card or one without tools withdraws its set; a failed read does not.
+  - Where it shows: `serverCard` on `/api/v1/servers/<id>`, `target.serverCard` and the note on
+    `/check`. The page shows the card beside the served set, with the tool names only one of them has,
+    in five languages.
+  - Storage: `server_cards` (migration 020).
+  - A third path, `/.well-known/mcp.json`, read after the other two. It has no standard behind it, but on
+    2026-11-02 34 of 400 sampled hosts with neither standard card served one there, 4 with a full tool list.
+    Such files also name their endpoint as `mcpUrl`, `remote.url`, `servers[]`, `aliases[]` or a map of
+    `endpoints`, all read now. Migration 021 makes earlier `absent` and `robots` reads due at once.
+  - Why: sites that keep HISTOR off their MCP path, and servers that list tools only with a key, still
+    get the operator's own account on record.
+- **A 402 says why HISTOR did not read.** `pay-per-crawl` when the site charges crawlers for each read
+  (`crawler-price` header or "pay per crawl" in the body), `payment-required` for an x402 endpoint where every
+  call is paid, `http-402` otherwise.
+  - HISTOR pays for no read and keeps a user agent that names it.
+  - The server keeps its history. Its page and `/check` say that HISTOR does not read it, and the detail names the
+    price.
+  - Both statuses are asked again a day later at most, like 401 and 403.
+- The crawler FAQ on the landing page was wrong about frequency and requests. It now says: every 6 h
+  (30 min after repeated changes), robots.txt first, `server/discover` before `initialize`, and how to
+  allow or refuse HISTOR. Five languages.
+
 ## 0.5.3 — 2026-11-01
 
 - **Legacy MCP servers are read again.** In 0.5.2 the remote reader opened with the 2026-07-28

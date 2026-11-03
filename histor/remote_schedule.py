@@ -70,7 +70,8 @@ class RemoteSchedule:
                 # including endpoints that qualified for the faster change-watching interval.
                 base = max(3600, cfg.remote_interval_s, delay) if status == "http-429" else delay
                 delay = min(max(86400, base), base * 2 ** min(failures - 1, 8))
-            if status in {"http-401", "http-403"}:
+            # Behind a login, or asking to be paid for each read (histor.mcpclient): ask again a day later at most.
+            if status in {"http-401", "http-403", "pay-per-crawl", "payment-required"}:
                 delay = max(delay, 86400)
             gap = None
             if row["last_checked"]:

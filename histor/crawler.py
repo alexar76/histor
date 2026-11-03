@@ -45,7 +45,7 @@ from histor.extras import extras_diff, tool_extras
 from histor.labels import LabelIssuer
 from histor.launch_profiles import package_launch_defaults
 from histor.logbook import Logbook, utcnow
-from histor.mcpclient import McpReader, Observation
+from histor.mcpclient import USER_AGENT, McpReader, Observation
 from histor.packages import (
     SANDBOX_ERROR,
     PackageReader,
@@ -66,9 +66,12 @@ from histor.registry import (
     with_curated,
 )
 from histor.remote_schedule import RemoteSchedule
+from histor import cards
+from histor.robots import Fetcher as RobotsFetcher
+from histor.robots import Policy
 from histor.scanner import RuleSets, Scanner, ScannerError
 from histor.store import Store, dumps, sum_counts
-from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject
+from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject, tool_set_digest
 from histor.untrusted import clean_text
 
 CONTINUITY_MIN_INTERVAL_S = 20 * 3600
@@ -272,13 +275,21 @@ class Crawler:
         self.logbook = logbook
         self.scanner = scanner
         self.classifier = classifier
-        self.reader = reader or McpReader(timeout=settings.crawl_timeout_s,
-                                          allow_private=settings.allow_private_targets)
+        if reader is None:
+            # RFC 9309: a path the site's robots.txt does not allow HISTOR is not read (histor.robots).
+            robots = Policy(fetch=RobotsFetcher(user_agent=USER_AGENT, timeout=min(settings.crawl_timeout_s, 10.0),
+                                                allow_private=settings.allow_private_targets), clock=clock)
+            reader = McpReader(timeout=settings.crawl_timeout_s, allow_private=settings.allow_private_targets,
+                               robots=robots)
+        self.reader = reader
+        self.robots: Policy | None = getattr(reader, "robots", None)
         if packages is None and settings.sandbox_enabled:
             readers = sandbox_readers(settings)
             packages = SandboxPool(readers, max_slots=settings.sandbox_max_slots) if len(readers) > 1 else readers[0][0]
         self.packages = packages
         self.declarations = declarations or DeclarationFetcher(allow_private=settings.allow_private_targets)
+        # MCP server cards (histor.cards), read only where robots.txt allows; tests swap in their own reader.
+        self.cards = cards.CardReader(robots=self.robots, allow_private=settings.allow_private_targets)
         # The crawl's sync and the hourly refresh both write the declared sets: one at a time.
         self._declarations_lock = threading.Lock()
         self._due_versions: dict[str, str] = {}
@@ -458,15 +469,21 @@ class Crawler:
     def _remote_batch(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,
                       tally: _Tally) -> int:
         processed = 0
-        for prepared in self._observe(targets):
-            scans, scan_failed = self._scan(prepared, sets)
-            with tally.classify_lock:
-                classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
-            for item in prepared:
-                # A package failure in the parallel lane must not back off this remote.
-                status = self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
-                self.remote_schedule.record(item.target.id, item.observed_at, status)
-            processed += len(prepared)
+        if self.robots is not None and not self.robots.loaded:
+            self.robots.load(self.store.robots_rows())
+        try:
+            for prepared in self._observe(targets):
+                scans, scan_failed = self._scan(prepared, sets)
+                with tally.classify_lock:
+                    classifications, tally.classify_budget = self._classify(prepared, tally.classify_budget)
+                for item in prepared:
+                    # A package failure in the parallel lane must not back off this remote.
+                    status = self._settle(item, run_id, rulesets, scans, scan_failed, sets, classifications, tally)
+                    self.remote_schedule.record(item.target.id, item.observed_at, status)
+                processed += len(prepared)
+        finally:
+            if self.robots is not None:
+                self.store.save_robots(self.robots.take_dirty())
         return processed
 
     def poll_remote(self) -> dict[str, Any] | None:
@@ -528,6 +545,48 @@ class Crawler:
             return {}
         with ThreadPoolExecutor(max_workers=min(8, len(urls)), thread_name_prefix="histor-declared") as pool:
             return dict(pool.map(one, sorted(urls)))
+
+    def refresh_cards(self, limit: int = 3000) -> dict[str, Any]:
+        """Read the server cards that are due (histor.cards) and record what they declare. Cards are read
+        before any transaction opens, at most two at a time per host, each path only if robots.txt allows it."""
+        now = self.clock()
+        due, every = self.store.cards_due(now, limit)
+        if not due:
+            return {"checked": 0}
+        if self.robots is not None and not self.robots.loaded:
+            self.robots.load(self.store.robots_rows())
+        per_host: Counter[str] = Counter(urlsplit(e).hostname or "" for e in every)
+        urls = sorted({u for t in due for u in cards.candidates(t["endpoint"])})
+        locks: dict[str, threading.Semaphore] = defaultdict(lambda: threading.Semaphore(self.settings.crawl_per_host))
+        guard = threading.Lock()
+
+        def one(url: str) -> tuple[str, cards.Read]:
+            with guard:
+                sem = locks[urlsplit(url).hostname or ""]
+            with sem:
+                try:
+                    return url, self.cards.read(url)
+                except Exception as exc:  # noqa: BLE001 - one site's card must not stop the pass
+                    return url, cards.Read("error", detail=f"internal: {type(exc).__name__}")
+        try:
+            with ThreadPoolExecutor(max_workers=min(16, len(urls)), thread_name_prefix="histor-cards") as pool:
+                reads = dict(pool.map(one, urls))
+        finally:
+            if self.robots is not None:
+                self.store.save_robots(self.robots.take_dirty())
+        results = []
+        for t in due:
+            verdict = cards.judge(t["endpoint"], reads, per_host[urlsplit(t["endpoint"]).hostname or ""])
+            digest = entries = None
+            if verdict.status == cards.DECLARED:
+                try:
+                    digest, entries = tool_set_digest(verdict.tools)
+                except Exception as exc:  # noqa: BLE001 - MTL refuses it: say so, declare nothing
+                    verdict = cards.Verdict(cards.UNDIGESTIBLE, verdict.url, detail=f"{type(exc).__name__}: {exc}"[:300])
+            results.append((t, verdict, digest, entries))
+        counts = self.store.apply_cards(results, now)
+        return {"checked": len(due), "urls": len(urls), **counts,
+                "statuses": dict(Counter(v.status for _, v, _, _ in results))}
 
     def refresh_declarations(self) -> dict[str, Any]:
         """Read every declaration file again, between crawls: a publisher who ships a runner adds its

@@ -28,7 +28,7 @@ flowchart LR
 | Method | Path | Returns |
 |---|---|---|
 | GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (no tool list read), `undigested` (a list read, no digest); `q` matches name, endpoint, title |
-| GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`) |
+| GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`, from the registry entry, a declaration file or the server card) and the server card (`serverCard`) |
 | GET | `/badge/<id>.svg` | README badge: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
@@ -193,6 +193,15 @@ starts the server the way a client would, digests its `tools/list` and adds the 
 **What HISTOR does with it.** It applies the declaration to every endpoint and package of the server, from the server's latest registry entry, and keeps the first and the last day it read each set; a set no longer named is marked withdrawn, not deleted. A file that cannot be read keeps what it declared until the next good read — a failed read is not a withdrawal — and the server page shows when the file was last read and why a read failed. When the entry stops pointing at a file, what only the file declared is withdrawn. A digest named in both places counts as the registry entry's. Anything that breaks the rules is skipped, and the crawl says why (`lastRun.declaredToolSets.ignored`, and `unread` for a file it could not read, in `/api/v1/stats`).
 
 A declaration is the publisher's word: the registry vouches that it comes from whoever controls the server's namespace, and the file is bound to the same domain or account. HISTOR never counts it as an observation, issues no label about it and never sees the tools behind it. WARDEN reports a declared set as `HISTOR_DECLARED_TOOLSET` (low; info when HISTOR has no set of its own) instead of `HISTOR_UNSEEN_TOOLSET`, says where the declaration is, and still runs every one of its own checks on the tools.
+
+**Server cards.** A server's own MCP server card is a third source (`source: "card"`, `histor/cards.py`). For each listed remote endpoint HISTOR reads `<endpoint path>/server-card`, the host's `/.well-known/mcp/server-card.json` and the host's `/.well-known/mcp.json` (no standard names it, but many sites keep their card there), in that order, only where the site's robots.txt allows HISTOR, once a day (a week after none was found), with no redirects and at most 1 MiB.
+
+- **Which endpoint a card is for.** A card that names endpoints (`transport.endpoint`/`url`, `endpoint`, `url`, `mcpUrl`, `remote.url`, `remotes[]`, `servers[]`, `aliases[]`, `endpoints` as a list or a map of transports; relative ones resolved against the card) describes those. One that names none counts for the endpoint whose path it extends, or for the host's only listed remote endpoint.
+- **What counts.** Only a card listing every tool with a `name` and an `inputSchema` declares a set, digested with MTL/1 like an observation.
+- **When it is withdrawn.** A card that is gone or no longer lists its tools withdraws its set; a failed read withdraws nothing.
+- **Where it shows.** `/api/v1/servers/<id>` carries `serverCard` (`url`, `status`, `checkedAt`, `toolSetDigest`, `toolCount`, `toolNames`), and the page shows the card beside what the server serves. `/check` adds `target.serverCard` and names the card in its note when the set sent is the card's.
+
+Like every declaration, a card is the operator's word: on 2026-11-02, 49 of 137 cards differed from what their server served.
 
 ## Stats and live badges
 

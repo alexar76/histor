@@ -472,6 +472,51 @@ MIGRATION_018: tuple[str, ...] = (
     "CREATE INDEX watch_payments_intent ON watch_payments(payment_intent)",
 )
 
+MIGRATION_019: tuple[str, ...] = (
+    # robots.txt per origin (histor.robots). Kept across restarts so the 24-hour reuse, the copy that
+    # applies while an origin is unreachable, and the 30 days after which an unreachable robots.txt
+    # counts as absent (RFC 9309 2.3.1.4, 2.4) survive a redeploy.
+    """
+    CREATE TABLE robots_txt (
+        origin TEXT PRIMARY KEY,
+        checked_at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        http INTEGER,
+        body TEXT,
+        digest TEXT,
+        read_at TEXT,
+        unreachable_since TEXT,
+        note TEXT
+    )
+    """,
+)
+
+MIGRATION_020: tuple[str, ...] = (
+    # MCP server cards (histor.cards): the card read for each remote endpoint and what it decided. A card
+    # with a full tool list is also a row in declared_toolsets with source 'card'.
+    """
+    CREATE TABLE server_cards (
+        target_id TEXT PRIMARY KEY,
+        url TEXT,
+        checked_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        toolset TEXT,
+        tool_count INTEGER,
+        first_seen TEXT,
+        last_ok TEXT,
+        detail TEXT
+    )
+    """,
+    "CREATE INDEX server_cards_checked ON server_cards(checked_at)",
+)
+
+MIGRATION_021: tuple[str, ...] = (
+    # A third card path, /.well-known/mcp.json (histor.cards.MCP_JSON). Endpoints read before it found no
+    # card, or only disallowed paths, and would wait a week to be asked again; make them due now. The
+    # server page never shows these rows, and no declaration hangs on them.
+    "UPDATE server_cards SET checked_at = '1970-01-01T00:00:00Z' WHERE status IN ('absent', 'robots')",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -492,6 +537,9 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (16, "016_change_versions", MIGRATION_016),
     (17, "017_checkpoints_and_witness", MIGRATION_017),
     (18, "018_watch_subscriptions", MIGRATION_018),
+    (19, "019_robots_txt", MIGRATION_019),
+    (20, "020_server_cards", MIGRATION_020),
+    (21, "021_card_path_mcp_json", MIGRATION_021),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

@@ -197,6 +197,16 @@
   </div>
 </section>
 
+<section class="section wrap" id="checks">
+  <p class="eyebrow rv" data-i="chk_eye">Other logs, the same servers</p>
+  <h2 class="rv" data-i="chk_h">Outside checks</h2>
+  <p class="lede rv" data-i="chk_p">HISTOR is not the only public record of MCP tool definitions. Where another log publishes its reads, the two are compared on the same servers and days, and the result is published both ways, with HISTOR's own misses.</p>
+  <div class="cards rv">
+    <article class="card"><h3>ScraperWatch</h3><p data-i="chk1p">A daily diff of a fixed panel of about 3,000 remote endpoints. HISTOR compares each of their published days with its own reads, and ScraperWatch shows the result on its page under "Outside check". The first comparison found a robots.txt parsing limit on their side and a handshake regression on HISTOR's; both were fixed the same day.</p><p class="refs"><a href="https://scraperwatch.com/mcp-changes/">scraperwatch.com/mcp-changes</a><br/><a href="/datasets/peers/scraperwatch/latest/">/datasets/peers/scraperwatch/latest</a></p></article>
+    <article class="card"><h3>heldfast</h3><p data-i="chk2p">An open daily record of the tool definitions of the servers in the official MCP registry. Of the 23,190 servers both logs recorded on 26 October 2026, 21,215 had every field in both; on those, 97.9% of servers and 99.1% of tools were identical byte for byte, and each difference has a stated cause: package versions, read times, failed reads, a first page only, an older protocol.</p><p class="refs"><a href="https://github.com/rufat325/heldfast">github.com/rufat325/heldfast</a><br/><a href="/datasets/interop-digests-2026-10-31/">/datasets/interop-digests-2026-10-31</a></p></article>
+  </div>
+</section>
+
 <section class="section wrap" id="integrate">
   <p class="eyebrow rv" data-i="int_eye">For clients, registries and server authors</p>
   <h2 class="rv" data-i="int_h">Use it</h2>
@@ -230,7 +240,7 @@ https://histor.modelmarket.dev/feed.xml</pre>
     <details><summary data-i="q5">How do I get a badge for my server?</summary><p data-i="a5">Find your endpoint on the Servers tab, open it, and copy the Markdown snippet under the facts. The badge shows the date your definitions were pinned or last changed, and links to the full history.</p></details>
     <details><summary data-i="q6">Why should I trust HISTOR itself?</summary><p data-i="a6">You do not have to. Every label and every tree head is signed with one published key; the Log tab proves in your browser that the log only grew; and the command-line auditor does the same from any machine. What remains is that one operator runs it today — a second, independent observer is the next step.</p></details>
     <details><summary data-i="q7">What does it cost?</summary><p data-i="a7">Looking things up, the badges, the feed and /check are free. HISTOR also offers histor.check@v1 to the AIMarket Hub, so agents can reach it through the market.</p></details>
-    <details id="crawler"><summary data-i="q8">I run an MCP server. What does HISTOR send it, and how do I opt out?</summary><p data-i="a8">Once a day: initialize, notifications/initialized and tools/list — never a tool call, never a redirect followed, at most two connections per host, from a User-Agent that starts with histor/. To be left out, open an issue on the histor repository with your endpoint or host; it is then listed as not observed (operator-opt-out), with the reason, rather than silently dropped. Labels already in the log stay: the log only grows.</p></details>
+    <details id="crawler"><summary data-i="q8">I run an MCP server. What does HISTOR send it, and how do I opt out?</summary><p data-i="a8">Every 6 hours, and every 30 minutes for a week once its tools have changed twice in a week. First it reads /robots.txt (RFC 9309, product token histor, about once a day per site): a path that file does not allow HISTOR is not read, and its page here says so. Otherwise server/discover and tools/list (MCP 2026-07-28), or, for a server without that, initialize, notifications/initialized and tools/list — never a tool call, never a redirect followed on the MCP path, at most two connections per host, from a User-Agent that starts with histor/. To keep HISTOR out, disallow your MCP path for User-agent: histor (or for all crawlers); to let HISTOR alone in, add User-agent: histor with an Allow line for that path. An issue on the histor repository with your endpoint or host also works: it is then listed as not observed (operator-opt-out), with the reason, rather than silently dropped. Labels already in the log stay: the log only grows.</p></details>
   </div>
 </section>
 

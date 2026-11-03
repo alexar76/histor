@@ -119,6 +119,7 @@ h2{font-size:clamp(28px,3.4vw,42px);margin:0 0 12px}
 .card{border:1px solid var(--line-2);border-radius:var(--r-m);padding:18px;background:var(--panel)}
 .card h3{font-size:18px;margin:0 0 8px}
 .card p{margin:0;color:var(--ink-2);font-size:15px}
+.card p.refs{margin-top:10px;font-size:13px;overflow-wrap:anywhere}
 .rail{display:flex;flex-wrap:wrap;gap:10px}
 .rail-step{flex:1 1 160px;border:1px solid var(--line-2);border-radius:var(--r-m);padding:14px;background:var(--panel)}
 .rail-step strong{display:block;font-family:var(--mono);letter-spacing:.08em}

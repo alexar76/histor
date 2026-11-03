@@ -245,7 +245,7 @@ def public(row: dict[str, Any]) -> dict[str, Any]:
         ("toolCount", row["tool_count"]),
         ("when", row["when_text"]),
         ("source", row.get("source") or "registry"),
-        ("url", row.get("url") if (row.get("source") == "url") else None),
+        ("url", row.get("url") if (row.get("source") in ("url", "card")) else None),
         ("registryVersion", row["registry_version"]),
         ("firstDeclared", row["first_declared"]),
         ("lastDeclared", row["last_declared"]),
