@@ -1,6 +1,6 @@
 # HISTOR Transparency Log — format specification
 
-**Version:** `histor-tlog/2` · **Status:** Draft, implemented; seeking a second implementation and outside witnesses · `histor-tlog/1` is this document without §4.4 and §8.1, and every `/1` artefact stays valid under `/2` · **License:** this text and the vectors in [`test-vectors/`](../../test-vectors/) are Apache-2.0 (the HISTOR repository license)
+**Version:** `histor-tlog/2` · **Status:** Draft, implemented; seeking a second implementation; co-signed by outside witnesses since 2026-11-04 (§8.2) · `histor-tlog/1` is this document without §4.4 and §8.1, and every `/1` artefact stays valid under `/2` · **License:** this text and the vectors in [`test-vectors/`](../../test-vectors/) are Apache-2.0 (the HISTOR repository license)
 
 > This is the normative description of the log that runs at `https://histor.modelmarket.dev`. The guide for auditors is [`docs/log.md`](../log.md); the API reference is [`docs/api.md`](../api.md). Where this document and the running code disagree, one of them is a bug: file an issue. Where this document and the vectors disagree, the vectors win.
 >
@@ -140,6 +140,18 @@ The checkpoint and `histor.sth/v1` are two encodings of one head: same size, sam
 
 Verification is RFC 9162 §2.1.3.2 and §2.1.4.2 without change. A verifier MUST verify an inclusion proof against a head whose signature it verified under the pinned key, never against a root the proof response itself carries.
 
+### 4.5 The tree as tiles (c2sp.org/tlog-tiles)
+
+The same tree is served as a tiled log ([c2sp.org/tlog-tiles](https://c2sp.org/tlog-tiles)) under the prefix `https://<origin>/` — for the public instance `https://histor.modelmarket.dev/log/`, which is where a witness that found the log in a witness-network list looks for it:
+
+- `<prefix>checkpoint`: the latest checkpoint of §4.3, `text/plain; charset=utf-8`, `Cache-Control: no-cache`.
+- `<prefix>tile/<L>/<N>[.p/<W>]`: a Merkle tree tile, the hashes `MTH(D[(N·256+i)·256^L : (N·256+i+1)·256^L])` for `i` from 0 to `W-1` (`W` = 256 for a full tile) concatenated, `application/octet-stream`. `<L>` is 0–63 and `<W>` 1–255, both without leading zeros; `<N>` is written in three-digit path elements, all but the last prefixed by `x` (`1234067` → `x001/x234/067`).
+- `<prefix>tile/entries/<N>[.p/<W>]`: an entry bundle, the leaf inputs of §3.2 (the label's RFC 8785 bytes), each prefixed by its length as a big-endian uint16.
+
+The bytes at a tile path never change, partial or full, so tiles are served `Cache-Control: public, max-age=31536000, immutable`. A tile the tree does not hold yet (a full tile that is still partial, a width larger than the leaves that exist, an empty tile) and a path in a non-canonical spelling answer 404. The log hashes every entry of a bundle and compares it with the leaf it must match before serving the bundle, and refuses with 500 a bundle it cannot serve exactly, including one with an entry longer than 65,535 bytes. The prefix is published at `GET /api/v1/issuer` under `checkpoint.tiles`.
+
+Tiles carry nothing the proofs of §4.4 did not; they let a client that knows only the C2SP specifications compute any proof itself and follow the log without its API. The implementation was checked with `golang.org/x/mod/sumdb/tlog` on a 70,000-leaf tree (the tile layout of the specification's own example; the root rebuilt from the tiles; consistency proofs from sizes 1, 12,345, 65,536 and 69,999; inclusion of entries from a bundle) and on the public log.
+
 ## 5. What a verifier checks
 
 A **monitor** (a reader that wants to know the log only grew) keeps the last head it verified and, on each visit:
@@ -176,7 +188,7 @@ The witness signs with a key of its own (`witness.key`), never the log key: the 
 
 `python -m histor witness-submit --log <log> --witness <submission prefix> [--submit-to-log]` takes a log's checkpoint and consistency proof to any witness that speaks the protocol, and stores the returned line in the log so that `/checkpoint` carries it. With `--witnesses-file` (a JSON list of `{name, vkey, url}`) it pushes to several witnesses and keeps a line only after verifying it under that witness's `vkey`; the log's own `POST /api/v1/log/cosignatures` checks shape only, so this verification is the one that matters.
 
-The public instance pushes to the staging witnesses of [witness-network.org](https://witness-network.org) once it is listed there: `deploy/witness_push.sh` with `histor-witness-push.{service,timer}` (every 10 minutes, 144 requests per witness per day — the `qpd` of the listing), witnesses in `deploy/witnesses.staging.json`. A monitor (§5) that also keeps the cosigned checkpoints of two independent witnesses has, for the first time, evidence that the log shows them the same tree.
+The public instance is listed on the staging witness network of [witness-network.org](https://witness-network.org) since 2026-11-04 (`log-list-10qps-4klogs.1`) and pushes to its witnesses: `deploy/witness_push.sh` with `histor-witness-push.{service,timer}` (every 10 minutes, 144 requests per witness per day — the `qpd` of the listing), witnesses in `deploy/witnesses.staging.json`. A witness that follows the list can also poll the log itself through the tiles of §4.5 instead of seeing only what the log pushes. A monitor (§5) that also keeps the cosigned checkpoints of two independent witnesses has, for the first time, evidence that the log shows them the same tree.
 
 ## 9. What is not specified, and why
 

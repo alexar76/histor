@@ -11,4 +11,5 @@
 - **`/check` 应答**（`histor.check/v1`）是一条签名声明：日志对该工具集持有该裁定；它是需要核实的线索，不是证明。
 - **未包含的内容**：发布者签名（发布者一侧是在注册表或自己域名下的文件中声明工具集）、时间与完整性的证明。
 - **`histor-tlog/2`（2026-10-30）：** 同一树头也以 **C2SP checkpoint** 形式提供（`GET /checkpoint`：origin、大小、base64 根、按 c2sp.org/signed-note 的日志签名，随后是按 c2sp.org/tlog-cosignature 的见证者副署行），且本实例按 c2sp.org/tlog-witness 充当 `HISTOR_WITNESS_LOGS` 中所列日志的**见证者**（`POST /witness/v1/add-checkpoint`，独立密钥 `witness.key`）。树、叶子与证明不变。向量已用参考 Go 库（`golang.org/x/mod/sumdb/note`、`github.com/transparency-dev/formats/note`）验证。
+- **瓦片（2026-11-04）：** 同一棵树按 c2sp.org/tlog-tiles 以瓦片日志形式提供，前缀为 `https://histor.modelmarket.dev/log/`（`checkpoint`、`tile/<L>/<N>[.p/<W>]`、`tile/entries/…`），见证者或监控者无需 HISTOR 的 API 即可自行计算任何证明。已用 `golang.org/x/mod/sumdb/tlog` 验证。自当日起，该日志列入 witness-network.org 的 staging 列表，并由外部见证者共同签名。
 - **向量** `test-vectors/vectors.json` 具规范性：8 个叶子、大小 1–8 的根、全部包含与一致性证明、测试密钥签名的两个树头、三个反例。`tests/test_spec_vectors.py` 使代码与该文件保持一致。

@@ -27,6 +27,7 @@ from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge, fingerprints, toolcost, watch_paid
 from histor.check import MAX_MATCHES, CheckError
+from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
 from histor.checkpoint import (
     COSIGNATURE_V1_TYPE,
     LOG_KEY_TYPE,
@@ -220,6 +221,10 @@ def _json_or_none(text: str | None) -> Any:
 def create_app(services: Services) -> FastAPI:
     settings = services.settings
     store = services.store
+    # c2sp.org/tlog-tiles (histor.tiles) under the checkpoint origin's path, where a witness that found the
+    # log in a witness-network list looks for it: https://<origin>/checkpoint and https://<origin>/tile/...
+    tiles_path = (settings.checkpoint_origin[len(settings.public_host):]
+                  if settings.checkpoint_origin.startswith(settings.public_host + "/") else "/log")
     limiter = RateLimiter()
     proxies = []
     for entry in settings.trusted_proxies:
@@ -446,6 +451,7 @@ def create_app(services: Services) -> FastAPI:
                 "origin": settings.checkpoint_origin,
                 "vkey": vkey(settings.checkpoint_origin, LOG_KEY_TYPE, services.key.public_key_bytes),
                 "url": f"{settings.public_base}/checkpoint",
+                "tiles": {"format": "c2sp.org/tlog-tiles", "prefix": f"{settings.public_base}{tiles_path}/"},
             },
             "witness": {
                 "name": settings.cosigner_name,
@@ -889,6 +895,25 @@ def create_app(services: Services) -> FastAPI:
             raise HTTPException(status_code=404, detail="the log is empty")
         return Response(_checkpoint(sth), media_type="text/plain; charset=utf-8",
                         headers={"Cache-Control": "no-cache"})
+
+    # c2sp.org/tlog-tiles under tiles_path (set at the top of create_app).
+    @app.get(tiles_path + "/checkpoint")
+    def tiles_checkpoint() -> Response:
+        return latest_checkpoint()
+
+    @app.get(tiles_path + "/tile/{path:path}")
+    def tile(path: str) -> Response:
+        try:
+            wanted = parse_tile_path(path)
+            with store.db.read() as tx:
+                data = read_tile(tx, wanted)
+        except TileError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except TileIntegrityError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        # A tile, partial or full, never changes: the same path always holds the same bytes.
+        return Response(data, media_type="application/octet-stream",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
     @app.get("/api/v1/log/checkpoint/{tree_size}")
     def checkpoint_at(tree_size: int) -> Response:

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.2 — 2026-11-04
+
+- **The log is also a tiled log (c2sp.org/tlog-tiles).** Under `https://<origin>/` (the public instance:
+  `https://histor.modelmarket.dev/log/`) HISTOR serves `checkpoint`, the Merkle tree tiles
+  `tile/<L>/<N>[.p/<W>]` and the entry bundles `tile/entries/<N>[.p/<W>]`, read straight from the stored
+  complete-subtree nodes. That is where a witness that found the log in a witness-network list looks for it,
+  so it can poll the log and check consistency itself instead of seeing only what the log pushes.
+  - Every entry of a bundle is hashed and compared with its leaf before the bundle is served; a mismatch, or
+    an entry over 65,535 bytes, is refused with 500, never served wrong.
+  - Tile paths are parsed strictly (one canonical spelling per tile); tiles the tree does not hold yet answer
+    404; served tiles are cached as immutable.
+  - Checked with `golang.org/x/mod/sumdb/tlog` on a 70,000-leaf tree: the root rebuilt from the tiles,
+    consistency proofs from four sizes, inclusion of entries. Spec §4.5; `tests/test_tiles.py` (both backends).
+- The log is listed on the staging witness network (witness-network.org, 2026-11-04) and co-signed by
+  outside witnesses; spec §8.2.
+
 ## 0.6.1 — 2026-11-04
 
 - The package description gives new MCP users a first query for their own dependency and
