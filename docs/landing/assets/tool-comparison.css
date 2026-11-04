@@ -22,7 +22,8 @@
   margin-bottom: 1rem;
 }
 
-.comparison-inputs textarea {
+.comparison-inputs textarea,
+#review-note-text {
   display: block;
   width: 100%;
   margin-top: .4rem;

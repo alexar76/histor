@@ -636,6 +636,33 @@ def test_server_pages_carry_their_own_title_and_the_sitemap_lists_them(api):
     assert "/datasets/" not in client.get("/sitemap-site.xml").text, "only a deployment that serves it lists it"
 
 
+@pytest.mark.parametrize(("lang", "title", "fact", "heading"), [
+    ("en", "MCP server record", "First observed", "Tool definitions as last observed (2)"),
+    ("ru", "карточка MCP-сервера", "Первое наблюдение", "Определения инструментов по последнему наблюдению (2)"),
+    ("es", "registro del servidor MCP", "Primera observación", "Definiciones de herramientas en la última observación (2)"),
+    ("fr", "fiche du serveur MCP", "Première observation", "Définitions d’outils lors de la dernière observation (2)"),
+    ("zh", "MCP 服务器记录", "首次观测", "最近观测到的工具定义（2）"),
+])
+def test_server_card_language_variants(api, lang, title, fact, heading):
+    client, world = api
+    path = f"/s/{target_id(world, 'io.example/weather')}"
+    base = world["services"].settings.public_base + path
+    variants = {code: base + f"?lang={code}" for code in ("ru", "es", "fr", "zh")}
+    variants.update(en=base, **{"x-default": base})
+    response = client.get(path, params={"lang": lang, "utm_source": "test"})
+    assert response.status_code == 200
+    page = response.text
+    assert f'<html lang="{lang}">' in page
+    assert f"<title>weather — {title} · HISTOR</title>" in page
+    assert f'<link rel="canonical" href="{variants[lang]}"/>' in page
+    assert f'<meta property="og:url" content="{variants[lang]}"/>' in page
+    assert page.count('hreflang=') == len(variants)
+    for code, url in variants.items():
+        assert f'<link rel="alternate" hreflang="{code}" href="{url}"/>' in page
+    view = page.split('<div id="view" aria-live="polite">', 1)[1].split("</section>", 1)[0]
+    assert fact in view and heading in view and "<code>get_weather</code>" in view
+
+
 def test_sitemap_names_the_pages_the_deployment_serves_beside_the_app(world):
     from dataclasses import replace
 

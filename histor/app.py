@@ -39,6 +39,7 @@ from histor.declared import public as declared_public
 from histor.labels import SHORT
 from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
+from histor.server_page_text import CARD_TEXT
 from histor.service import Services, crawl_in_background, scheduler
 from histor.untrusted import TooDeep, loads_limited
 
@@ -133,7 +134,7 @@ def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
     return xml_escape(_INVISIBLE.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", s))
 
 
-def _server_prerender(t: dict[str, Any], tools_json: str | None) -> str:
+def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str) -> str:
     """What the desk shows for one server, as plain HTML inside #view.
 
     Without it all /s/<id> pages were the landing page with another <title> — 99.7% the same
@@ -143,9 +144,10 @@ def _server_prerender(t: dict[str, Any], tools_json: str | None) -> str:
     """
     name = t["title"] or t["name"]
     day = lambda v: str(v)[:10] if v else "—"  # noqa: E731
-    facts = (("First observed", day(t["first_pinned"])), ("Unchanged since", day(t["unchanged_since"])),
-             ("Last observed", day(t["last_ok"])), ("Observations", t["ok_observations"]),
-             ("Changes on record", t["changes"]), ("Tools", "—" if t["current_count"] is None else t["current_count"]))
+    copy = CARD_TEXT[lang]
+    values = (day(t["first_pinned"]), day(t["unchanged_since"]), day(t["last_ok"]),
+              t["ok_observations"], t["changes"], "—" if t["current_count"] is None else t["current_count"])
+    facts = zip(copy["facts"], values, strict=True)
     out = [f'<div class="detail"><h2>{_shown(name, 200)}</h2>',
            f'<p class="mono faint">{_shown(t["name"], 200)} · {_shown(t["endpoint"], 300)}</p>']
     if t["description"]:
@@ -158,13 +160,14 @@ def _server_prerender(t: dict[str, Any], tools_json: str | None) -> str:
         tools = []
     tools = [x for x in tools if isinstance(x, dict)] if isinstance(tools, list) else []
     if tools:
-        out.append(f'<h3 class="block-h">Tool definitions as last observed ({len(tools)})</h3><ul class="prerender-tools">')
+        heading = copy["definitions"].format(count=len(tools))
+        out.append(f'<h3 class="block-h">{heading}</h3><ul class="prerender-tools">')
         out += [f"<li><code>{_shown(x.get('name'), 120)}</code> — {_shown(x.get('description'))}</li>" for x in tools[:PRERENDER_TOOLS]]
         if len(tools) > PRERENDER_TOOLS:
-            out.append(f"<li>… and {len(tools) - PRERENDER_TOOLS} more</li>")
+            out.append("<li>" + copy["more"].format(count=len(tools) - PRERENDER_TOOLS) + "</li>")
         out.append("</ul>")
-    out.append('<p class="faint">The signed observations, every earlier tool set and a diff of each change: this page '
-               f'with scripts on, or <code>/api/v1/servers/{t["id"]}</code>.</p></div>')
+    details = copy["details"].format(api=f'<code>/api/v1/servers/{t["id"]}</code>')
+    out.append(f'<p class="faint">{details}</p></div>')
     return "".join(out)
 
 
@@ -327,32 +330,48 @@ def create_app(services: Services) -> FastAPI:
         return Response(mongodb_guide.read_text(encoding="utf-8"), media_type="text/html")
 
     @app.get("/s/{target_id}", include_in_schema=False)
-    def server_page(target_id: str) -> Response:
+    def server_page(target_id: str, lang: str = "en") -> Response:
         """The desk, with this server's own title and description in the HTML: what a search engine
         and a link preview read. Facts only — HISTOR never calls a server safe."""
         page = spa()
         t = store.target(target_id) if re.fullmatch(r"[0-9a-f]{16}", target_id) else None
         if t is None:
             return page
-        kind = "npm/PyPI package" if t["transport"] == "stdio" else "MCP server"
-        name = t["title"] or t["name"]
-        what = f"{t['current_count']} tools" if t["current_count"] is not None else "its tools"
-        since = f", unchanged since {str(t['unchanged_since'])[:10]}" if t["unchanged_since"] else ""
-        changes = f", {t['changes']} change{'s' if t['changes'] != 1 else ''} on record" if t["changes"] else ""
-        title = f"{name} — {kind} record · HISTOR"
-        desc = (f"What {t['endpoint']} tells AI models ({what}){since}{changes}: signed observations, a diff of every "
-                f"change{', and what the package did in HISTOR’s sandbox' if t['transport'] == 'stdio' else ''}.")
-        url = f"{settings.public_base}/s/{target_id}"
-        html = page.body.decode("utf-8")
-        html = re.sub(r"<title>.*?</title>", f"<title>{xml_escape(title)}</title>", html, count=1, flags=re.S)
-        html = re.sub(r'<meta name="description" content="[^"]*"/>', f'<meta name="description" content="{xml_escape(desc, {chr(34): "&quot;"})}"/>', html, count=1)
+        lang = lang if lang in CARD_TEXT else "en"
+        copy = CARD_TEXT[lang]
+        package = t["transport"] == "stdio"
+        kind = copy["package" if package else "remote"]
+        title = f"{t['title'] or t['name']} — {kind} · HISTOR"
+        desc = copy["description"].format(endpoint=t["endpoint"])
+        if package:
+            desc += " " + copy["sandbox"]
+
+        base_url = f"{settings.public_base}/s/{target_id}"
+        variants = {code: base_url if code == "en" else f"{base_url}?lang={code}" for code in CARD_TEXT}
+        alternates = {**variants, "x-default": base_url}
+        url = variants[lang]
+        html = page.body.decode("utf-8").replace('<html lang="en">', f'<html lang="{lang}">', 1)
+        html = re.sub(r"<title>.*?</title>", lambda _: f"<title>{xml_escape(title)}</title>", html, count=1, flags=re.S)
+        html = re.sub(
+            r'<link rel="alternate" hreflang="([^"]+)" href="[^"]*"/>',
+            lambda m: f'<link rel="alternate" hreflang="{m[1]}" href="{alternates[m[1]]}"/>',
+            html,
+        )
         html = re.sub(r'<link rel="canonical" href="[^"]*"/>', f'<link rel="canonical" href="{xml_escape(url)}"/>', html, count=1)
-        html = re.sub(r'<meta property="og:title" content="[^"]*"/>', f'<meta property="og:title" content="{xml_escape(title, {chr(34): "&quot;"})}"/>', html, count=1)
-        html = re.sub(r'<meta property="og:description" content="[^"]*"/>', f'<meta property="og:description" content="{xml_escape(desc, {chr(34): "&quot;"})}"/>', html, count=1)
-        html = re.sub(r'<meta property="og:url" content="[^"]*"/>', f'<meta property="og:url" content="{xml_escape(url)}"/>', html, count=1)
+        for attribute, key, value in (
+            ("name", "description", desc), ("property", "og:title", title),
+            ("property", "og:description", desc), ("property", "og:url", url),
+        ):
+            escaped = xml_escape(value, {'"': "&quot;"})
+            tag = f'<meta {attribute}="{key}" content="{escaped}"/>'
+            html = re.sub(
+                rf'<meta {attribute}="{key}" content="[^"]*"/>',
+                lambda _, tag=tag: tag,
+                html, count=1,
+            )
         tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
         html = html.replace('<div id="view" aria-live="polite"></div>',
-                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools)}</div>', 1)
+                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools, lang)}</div>', 1)
         return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     SITEMAP_PAGE = 40_000

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — 2026-11-04
+
+- The package description gives new MCP users a first query for their own dependency and
+  a direct link to the browser's package search.
+- The browser can copy a Markdown note from the MongoDB read-only comparison. Server
+  records use descriptions and search metadata specific to the endpoint.
+
 ## 0.6.0 — 2026-11-03
 
 - **The datasets page cites each snapshot by its own Zenodo version DOI.** It used to give the concept
@@ -56,6 +63,11 @@
 - The crawler FAQ on the landing page was wrong about frequency and requests. It now says: every 6 h
   (30 min after repeated changes), robots.txt first, `server/discover` before `initialize`, and how to
   allow or refuse HISTOR. Five languages.
+- **A guide to MongoDB MCP's read-only mode, with a tool-list comparison.** `/mongodb-mcp-read-only-tools.html`
+  shows which tools `--readOnly` hides and compares two pasted `tools/list` answers in the browser (nothing is
+  sent anywhere) to show which tools a client gains or loses, next to HISTOR and RugSnare observations. The
+  app serves it for GET and HEAD and lists it in the sitemap when the landing folder holds it; the home page
+  links it.
 
 ## 0.5.3 — 2026-11-01
 

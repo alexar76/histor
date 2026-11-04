@@ -12,8 +12,8 @@
   <meta name="theme-color" content="#05080d"/>
   <link rel="stylesheet" href="assets/fonts/fonts.css"/>
   <link rel="stylesheet" href="assets/histor.css"/>
-  <link rel="stylesheet" href="assets/tool-comparison.css"/>
-  <script src="assets/compare-tool-names.js" defer></script>
+  <link rel="stylesheet" href="assets/tool-comparison.css?v=review-note"/>
+  <script src="assets/compare-tool-names.js?v=review-note" defer></script>
 </head>
 <body>
 <main class="wrap section tool-comparison">
@@ -41,6 +41,15 @@
     <noscript><p>Enable JavaScript to compare the lists in your browser.</p></noscript>
     <p id="compare-status" role="status"></p>
     <div id="compare-result"></div>
+    <div id="review-note" hidden>
+      <button class="btn btn-ghost" id="copy-review-note" type="button">Copy review note</button>
+      <p>The Markdown note includes the counts, selected tool names and a link to this checker.</p>
+      <p id="review-note-status" role="status"></p>
+      <div id="review-note-fallback" hidden>
+        <label for="review-note-text">Review note</label>
+        <textarea id="review-note-text" rows="7" readonly></textarea>
+      </div>
+    </div>
     <p>This checks which names are advertised. Use a database user with the <code>read</code> role to enforce permissions at the database.
       <a href="https://www.mongodb.com/docs/mcp-server/local-mcp/security-best-practices/">MongoDB security guidance</a></p>
   </section>

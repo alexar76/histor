@@ -134,6 +134,11 @@ three tools that ask the public log; nothing is crawled or stored locally. `aima
 (or `histor mcp`) serves your own log from `HISTOR_DATA_DIR` instead. Listed in the official MCP registry as
 `io.github.alexar76/histor`.
 
+After connecting, ask: “Use `histor_server` with endpoint `npm:mongodb-mcp-server`.
+Show the last observation, the number of tools, and the link to its HISTOR record.”
+Substitute your own `npm:` or `pypi:` package, or
+[look it up in the browser](https://histor.modelmarket.dev/servers?from=pypi-histor).
+
 ## Quick start
 
 To run your own log from source:

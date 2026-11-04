@@ -217,11 +217,25 @@ function currentRoute() {
   const raw = SERVED ? location.pathname : (location.hash.replace(/^#/, "") || "/");
   return raw.replace(/\/+$/, "") || "/";
 }
-function href(route) { return SERVED ? route : `#${route}`; }
+function href(route) {
+  if (!SERVED) return `#${route}`;
+  return route.startsWith("/s/") && lang !== "en" ? `${route}?lang=${lang}` : route;
+}
+function cardLanguage() {
+  if (!SERVED || !currentRoute().startsWith("/s/")) return null;
+  const requested = new URLSearchParams(location.search).get("lang");
+  return LANGS.includes(requested) ? requested : "en";
+}
 function go(route, push = true) {
   if (push) {
-    if (SERVED) history.pushState({}, "", route + location.search);
-    else location.hash = route;
+    if (SERVED) {
+      const url = new URL(route + location.search, location.origin);
+      if (route.startsWith("/s/")) {
+        if (lang === "en") url.searchParams.delete("lang");
+        else url.searchParams.set("lang", lang);
+      }
+      history.pushState({}, "", url);
+    } else location.hash = route;
   }
   render();
   if (route !== "/") document.getElementById("desk").scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
@@ -234,7 +248,11 @@ document.addEventListener("click", (e) => {
   document.body.classList.remove("menu-open");
   go(a.dataset.route);
 });
-window.addEventListener("popstate", () => render());
+window.addEventListener("popstate", () => {
+  const selected = cardLanguage();
+  if (selected && selected !== lang) applyLang(selected, false);
+  else render();
+});
 window.addEventListener("hashchange", () => { if (!SERVED) render(); });
 
 const view = document.getElementById("view");
@@ -1037,7 +1055,18 @@ document.getElementById("burger").addEventListener("click", () => {
   document.body.classList.toggle("menu-open", open);
   document.getElementById("burger").setAttribute("aria-expanded", String(open));
 });
-document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => applyLang(b.dataset.lang, true)));
+document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => {
+  const next = b.dataset.lang;
+  if (SERVED && currentRoute().startsWith("/s/") && next !== lang) {
+    const url = new URL(location.href);
+    if (next === "en") url.searchParams.delete("lang");
+    else url.searchParams.set("lang", next);
+    try { localStorage.setItem("histor-lang", next); } catch { /* storage may be blocked */ }
+    location.assign(url);
+  } else {
+    applyLang(next, true);
+  }
+}));
 
 // Reveal on scroll. Sections are hidden only once this line has run (html.rv-on), so a script
 // that fails to load leaves the page readable instead of blank; what is already on screen is
@@ -1082,7 +1111,7 @@ async function startLoom() {
 }
 
 let initial = "en";
-try { initial = new URLSearchParams(location.search).get("lang") || localStorage.getItem("histor-lang") || (navigator.language || "en").slice(0, 2); } catch { /* storage blocked */ }
+try { initial = cardLanguage() || new URLSearchParams(location.search).get("lang") || localStorage.getItem("histor-lang") || (navigator.language || "en").slice(0, 2); } catch { /* storage blocked */ }
 applyLang(initial, false);
 if (currentRoute() !== "/") {
   // A deep link (/s/<id>, /log …) lands on the desk, not on the hero above it.
