@@ -736,3 +736,22 @@ def test_changes_resume_after_a_cursor_and_can_be_limited_to_watched_servers(api
     assert client.get(f"/api/v1/changes?before={2**63}").status_code == 422
     assert client.get(f"/api/v1/changes/{2**63}").status_code == 404
     assert client.get(f"/api/v1/changes?after={2**63 - 1}").json() == {"changes": [], "nextCursor": 2**63 - 1}
+
+
+def test_server_api_says_why_there_is_no_digest(world):
+    # MTL/1.2 (agent-control-standard#38, 2026-11-06): nothing read and read-but-declined stay apart,
+    # and the server page names the code and the revision that declined the set.
+    s, mcp = world["services"], world["mcp"]
+    mcp.tools["/bad"] = [tool("a", "A tool."), {"description": "no name", "inputSchema": {}}]
+    mcp.status["/down"] = 401
+    world["targets"] += [make_target("io.example/bad", "/bad"), make_target("io.example/down", "/down")]
+    s.crawler.run()
+    client = TestClient(create_app(s))
+    listed = {r["name"]: r for r in client.get("/api/v1/servers", params={"limit": 50}).json()["servers"]}
+    assert listed["io.example/bad"]["noDigest"] == {"reason": "not_digestible"}
+    assert listed["io.example/down"]["noDigest"] == {"reason": "not_observed"}
+    assert all(r["noDigest"] is None for n, r in listed.items() if r["toolSetDigest"])
+    page = client.get(f"/api/v1/servers/{listed['io.example/bad']['id']}").json()
+    nd = page["server"]["noDigest"]
+    assert nd["reason"] == "not_digestible" and nd["code"] == "MTL-SUBJ-001"
+    assert nd["profileRevision"] == "1.2.0" and nd["decidedAt"] == listed["io.example/bad"]["lastAttempt"]

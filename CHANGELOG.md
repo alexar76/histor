@@ -36,6 +36,19 @@
     snapshot in the list carries its DOI, and archived snapshots older than the eight kept here stay listed.
   - The dataset card, the READMEs and `CITATION.cff` say to cite the version DOI next to a number.
 
+- **Labels follow MTL/1.2: the revision that decided them, and why a set has no digest.** Every label
+  carries `profileRevision` ("1.2.0"). A read set without a digest says `toolSet.noDigest`
+  `{"reason": "not_digestible", "code": …}`, and a continuity label names each side without one
+  under `noDigest` (`current` / `prior`). A failed read is `not_observed`, and the prior side carries
+  the revision its own label named. The server API returns `noDigest` (reason). The server page adds
+  the code, the revision and `decidedAt`, so a set 1.0 refused (before 2026-10-31) is told from one
+  the current rules refuse (agent-control-standard#38).
+- **A package whose set an older revision declined runs once more.** The version did not change, so
+  nothing else would run it, and its record kept 1.0's "not digestible" for sets 1.1 digests (138 on
+  2026-11-06). Each run records the revision that judged it (`package_signals.mtl`, not a security
+  event), and an `undigestible` package judged by the current revision is settled until its version,
+  observer or the revision changes. Crawl stats: `packages.undigestedAgain`.
+
 - **The crawler follows robots.txt (RFC 9309).** Before an endpoint is read, its origin's robots.txt is
   asked for the product token `histor` (else `*`). A path it does not allow gets no MCP request; the
   attempt is recorded as `robots-disallowed`, or as `robots-unreachable` when robots.txt answers 5xx or

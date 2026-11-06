@@ -7,7 +7,10 @@ The parts that are easy to get wrong, restated where the code makes them:
 * no ``score``, ever (section 6.4) — not even the gate's own 0..1;
 * three of the four methods can never return ``fail``. Only continuity can, because it is a
   statement about two digests, not a judgement (section 7.4);
-* ``scope`` is the honest sentence, inside the signature, so no page template can replace it.
+* ``scope`` is the honest sentence, inside the signature, so no page template can replace it;
+* since 1.2 every label names the profile revision it was issued under, and a side without a
+  tool-set digest says why from a closed list: ``not_observed`` (nothing was read) or
+  ``not_digestible`` (a set was read and this revision declined it), with the code (section 6.3).
 """
 
 from __future__ import annotations
@@ -20,6 +23,12 @@ from histor.subject import Subject
 
 MTL_CONTEXT = "https://verify.modelmarket.dev/ns/awr/mtl/v1"
 LABEL_TYPE = "MCPTrustLabel"
+# The revision of PROFILE.md this issuer follows. The descriptor's `mtl` member stays "1" across
+# revisions (no digest changes), so only the label can say which rules decided it: a set 1.0 found
+# not digestible may have a digest under 1.1 (agent-control-standard#38, 2026-11-06).
+PROFILE_REVISION = "1.2.0"
+NOT_OBSERVED = "not_observed"      # no tool set was read for this side
+NOT_DIGESTIBLE = "not_digestible"  # a tool set was read, and this revision of the profile declined to digest it
 ISSUER_NAME = "HISTOR (histor.modelmarket.dev)"
 
 OBSERVATION = "urn:awr:mtl:1:method:tool-set-observation"
@@ -88,7 +97,7 @@ class LabelIssuer:
                evidence: list[dict[str, Any]], issued_at: str) -> dict[str, Any]:
         if verdict not in ALLOWED_VERDICTS[method]:
             raise ValueError(f"verdict {verdict!r} is not permitted for {method} (MTL-METH-002)")
-        body = {"profile": "MTL/1", "reproducibility": "deterministic", **detail}
+        body = {"profile": "MTL/1", "profileRevision": PROFILE_REVISION, "reproducibility": "deterministic", **detail}
         return issue_verification_verdict(
             {
                 "verifiedWork": subject_ref,
@@ -118,6 +127,15 @@ class LabelIssuer:
         return out
 
     @staticmethod
+    def _no_digest(reason: str, code: str | None = None, revision: str | None = None) -> dict[str, str]:
+        out = {"reason": reason}
+        if code:
+            out["code"] = code
+        if revision:
+            out["profileRevision"] = revision
+        return out
+
+    @staticmethod
     def _base_evidence(subject: Subject) -> list[dict[str, Any]]:
         evidence: list[dict[str, Any]] = [{"kind": "mtl-subject-descriptor", "digestSRI": subject.digest}]
         if subject.tool_set_digest:
@@ -131,10 +149,13 @@ class LabelIssuer:
         else:
             verdict, scope = "inconclusive", SCOPE_OBSERVATION_INCONCLUSIVE
             reasons = [{"code": subject.hazard.code, "detail": subject.hazard.detail}]
+        tool_set = self._tool_set(subject)
+        if subject.hazard is not None and not subject.tool_set_digest:
+            tool_set["noDigest"] = self._no_digest(NOT_DIGESTIBLE, subject.hazard.code)
         detail: dict[str, Any] = {
             "observedAt": observed_at,
             "server": self._server(subject),
-            "toolSet": self._tool_set(subject),
+            "toolSet": tool_set,
             "scope": scope,
         }
         if reasons:
@@ -154,7 +175,7 @@ class LabelIssuer:
             detail={
                 "observedAt": observed_at,
                 "server": server,
-                "toolSet": {"count": count},
+                "toolSet": {"count": count, "noDigest": self._no_digest(NOT_DIGESTIBLE, code)},
                 "scope": SCOPE_OBSERVATION_INCONCLUSIVE,
                 "reasons": [{"code": code, "detail": message}],
             },
@@ -213,7 +234,9 @@ class LabelIssuer:
         *current* is None when this observation failed; the label then references the prior
         subject and says so, rather than inventing a descriptor for a server we could not read.
         *no_digest_code* is why the current set has no digest, *prior_no_digest_code* why the
-        prior one had none; a side with no known reason is named without a code.
+        prior one had none; a side with no known reason is named without a code. ``noDigest``
+        names each side that has no tool-set digest and why, from the closed list (section 7.4);
+        the prior side carries the revision its own label was issued under, when it names one.
         """
         prior_digest = canonical_sri(prior_label)
         prior_ref = {
@@ -223,6 +246,15 @@ class LabelIssuer:
         }
         server = prior_label["credentialSubject"]["mcpTrustLabel"]["server"]
         detail: dict[str, Any] = {"observedAt": observed_at, "server": server, "priorLabel": prior_ref}
+        prior_mtl = prior_label["credentialSubject"]["mcpTrustLabel"]
+        no_digest: dict[str, dict[str, str]] = {}
+        if current is None:
+            no_digest["current"] = self._no_digest(NOT_OBSERVED)
+        elif current.tool_set_digest is None:
+            no_digest["current"] = self._no_digest(
+                NOT_DIGESTIBLE, no_digest_code or (current.hazard.code if current.hazard else None))
+        if current is not None and prior_tool_digest is None:
+            no_digest["prior"] = self._no_digest(NOT_DIGESTIBLE, prior_no_digest_code, prior_mtl.get("profileRevision"))
         if current is None:
             verdict = "inconclusive"
             detail["scope"] = SCOPE_CONTINUITY_INCONCLUSIVE.format(why="the current observation failed")
@@ -257,6 +289,8 @@ class LabelIssuer:
             else:
                 verdict = "fail"
                 detail["scope"] = SCOPE_CONTINUITY_FAIL
+        if no_digest:
+            detail["noDigest"] = no_digest
         evidence = [
             {"kind": "mtl-subject-descriptor", "digestSRI": subject_ref["digestSRI"]},
             {"kind": "mtl-prior-label", "id": prior_label["id"], "digestSRI": prior_digest},

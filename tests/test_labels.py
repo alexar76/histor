@@ -72,3 +72,69 @@ def test_the_vocabulary_never_claims_safety(issuer):
     for doc in docs:
         scope = doc["credentialSubject"]["mcpTrustLabel"]["scope"].lower()
         assert not any(word in scope.split() for word in banned)
+
+
+# -- MTL/1.2: the revision a label was issued under, and why a side has no digest ----------------
+# agent-control-standard#38 (2026-11-06): "unknown" must keep apart a declaration nobody read from
+# one that was read and declined by the profile, and "declined" is only true for a given revision.
+
+def _undigestible():
+    return subject([{"name": "p", "inputSchema": {"maximum": float("inf")}}])
+
+
+def test_every_label_names_its_profile_revision(issuer):
+    from histor.labels import PROFILE_REVISION
+    a = subject()
+    obs = issuer.observation(a, observed_at=TS, issued_at=TS)
+    cont = issuer.continuity(current=a, prior_label=obs, prior_subject_ref=a.reference(),
+                             prior_tool_digest=a.tool_set_digest, unchanged_since=None, observed_at=TS, issued_at=TS)
+    for doc in (obs, cont):
+        assert verify_document(doc)["valid"]
+        assert doc["credentialSubject"]["mcpTrustLabel"]["profileRevision"] == PROFILE_REVISION == "1.2.0"
+    assert "noDigest" not in obs["credentialSubject"]["mcpTrustLabel"]["toolSet"]
+    assert "noDigest" not in cont["credentialSubject"]["mcpTrustLabel"]
+
+
+def test_a_declined_set_says_not_digestible_with_the_code(issuer):
+    doc = issuer.observation(_undigestible(), observed_at=TS, issued_at=TS)
+    body = doc["credentialSubject"]["mcpTrustLabel"]
+    assert verify_document(doc)["valid"] and doc["credentialSubject"]["verdict"] == "inconclusive"
+    assert body["toolSet"]["noDigest"] == {"reason": "not_digestible", "code": "MTL-NUM-001"}
+    assert body["reasons"][0]["code"] == "MTL-NUM-001"  # the 1.1 member stays
+
+
+def test_an_undigestible_label_says_not_digestible(issuer):
+    a = subject()
+    doc = issuer.undigestible(subject_ref=a.reference(), server={"name": "io.example/s", "registry": "r"}, count=0,
+                              code="MTL-SUBJ-001", message="nameless entry", observed_at=TS, issued_at=TS)
+    assert doc["credentialSubject"]["mcpTrustLabel"]["toolSet"] == {
+        "count": 0, "noDigest": {"reason": "not_digestible", "code": "MTL-SUBJ-001"}}
+
+
+def test_a_failed_observation_is_not_observed_not_undigestible(issuer):
+    a = subject()
+    prior = issuer.observation(a, observed_at=TS, issued_at=TS)
+    doc = issuer.continuity(current=None, prior_label=prior, prior_subject_ref=a.reference(), prior_tool_digest=None,
+                            unchanged_since=None, observed_at=TS, issued_at=TS, failure={"status": "http-401"})
+    assert doc["credentialSubject"]["mcpTrustLabel"]["noDigest"] == {"current": {"reason": "not_observed"}}
+
+
+def test_continuity_names_each_side_without_a_digest_and_the_prior_revision(issuer):
+    bad, good = _undigestible(), subject()
+    prior = issuer.observation(bad, observed_at=TS, issued_at=TS)
+    # A prior label from before 1.2 names no revision; the continuity label must not invent one.
+    old = {**prior, "credentialSubject": {**prior["credentialSubject"], "mcpTrustLabel": {
+        k: v for k, v in prior["credentialSubject"]["mcpTrustLabel"].items() if k != "profileRevision"}}}
+    for p, revision in ((prior, "1.2.0"), (old, None)):
+        doc = issuer.continuity(current=good, prior_label=p, prior_subject_ref=bad.reference(), prior_tool_digest=None,
+                                unchanged_since=None, observed_at=TS, issued_at=TS, prior_no_digest_code="MTL-NUM-001")
+        body = doc["credentialSubject"]["mcpTrustLabel"]
+        expected = {"reason": "not_digestible", "code": "MTL-NUM-001"}
+        if revision:
+            expected["profileRevision"] = revision
+        assert body["noDigest"] == {"prior": expected}
+        assert doc["credentialSubject"]["verdict"] == "inconclusive"
+    both = issuer.continuity(current=bad, prior_label=prior, prior_subject_ref=bad.reference(), prior_tool_digest=None,
+                             unchanged_since=None, observed_at=TS, issued_at=TS, no_digest_code="MTL-NUM-001",
+                             prior_no_digest_code="MTL-NUM-001")
+    assert set(both["credentialSubject"]["mcpTrustLabel"]["noDigest"]) == {"current", "prior"}

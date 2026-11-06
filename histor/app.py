@@ -567,7 +567,38 @@ def create_app(services: Services) -> FastAPI:
             # Annotations, _meta and the other members MTL/1 does not digest (histor.extras); "" is
             # "observed, none", null "not observed since HISTOR started keeping them".
             "toolExtrasDigest": t.get("current_extras"),
+            # Why there is no tool-set digest, from MTL/1.2's closed list: nothing read, or read and
+            # declined by the profile. The server page adds the code and the revision that decided it.
+            "noDigest": None if t["current_toolset"] else
+                        {"reason": "not_digestible" if t["current_subject"] else "not_observed"},
         }
+
+    def no_digest_detail(t: dict[str, Any]) -> dict[str, Any] | None:
+        """``noDigest`` with the code and profile revision of the label that declined the current set.
+
+        Walks the target's chain back to the label about the current subject that names an
+        ``MTL-NUM`` or ``MTL-SUBJ`` code. ``profileRevision`` is null for a label issued before
+        MTL/1.2 put it in labels; ``decidedAt`` is that label's observedAt, so a reader can tell a
+        set refused under 1.0 (before 2026-10-31) from one refused under the current rules.
+        """
+        out = target_summary(t)["noDigest"]
+        if out is None or out["reason"] != "not_digestible":
+            return out
+        label_id = t.get("chain_label")
+        for _ in range(64):
+            row = store.label(label_id) if label_id else None
+            if row is None:
+                break
+            doc = json.loads(row["body"])
+            mtl = doc["credentialSubject"]["mcpTrustLabel"]
+            if doc["credentialSubject"]["verifiedWork"].get("digestSRI") == t["current_subject"]:
+                code = next((str(r["code"]) for r in mtl.get("reasons") or []
+                             if str(r.get("code") or "").startswith(("MTL-NUM-", "MTL-SUBJ-"))), None)
+                if code:
+                    return {**out, "code": code, "profileRevision": mtl.get("profileRevision"),
+                            "decidedAt": mtl.get("observedAt")}
+            label_id = (mtl.get("priorLabel") or {}).get("id")
+        return out
 
     @app.get("/api/v1/servers")
     def servers(q: str = Query("", max_length=200), state: str = Query("all", max_length=20),
@@ -613,7 +644,7 @@ def create_app(services: Services) -> FastAPI:
         if t["current_toolset"] and t["classifier_model"]:
             classifier = store.classification(t["current_toolset"], t["classifier_model"])
         page = {
-            "server": target_summary(t),
+            "server": {**target_summary(t), "noDigest": no_digest_detail(t)},
             "description": t["description"],
             "descriptor": descriptor,
             "patternMatches": matches,

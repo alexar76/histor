@@ -177,7 +177,8 @@ class Store:
         """What a crawl needs to plan the package sandbox, for every package target, in one query.
         Asking target by target cost a round trip each — ~47 000 of them — before any package ran."""
         with self.db.read() as tx:
-            rows = tx.execute("SELECT id, package_version, package_signals, last_status, last_attempt, last_detail FROM targets "
+            rows = tx.execute("SELECT id, package_version, package_signals, last_status, last_attempt, last_detail, "
+                              "current_subject, current_toolset FROM targets "
                               "WHERE transport = 'stdio'")
         return {r["id"]: r for r in rows}
 

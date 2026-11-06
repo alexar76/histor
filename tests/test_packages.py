@@ -711,3 +711,39 @@ def test_an_unreadable_cache_file_only_costs_a_full_answer(tmp_path):
     path = tmp_path / "v.json"
     path.write_text("{not json")
     assert VersionCache(path).get("https://pypi.org/pypi/x/json") is None
+
+
+def test_a_set_an_older_revision_declined_runs_once_more(world):
+    """MTL/1.2: same version, no digest, judged before this revision → one more run, then settled."""
+    services = world["services"]
+    fake = FakePackages()
+    services.crawler.packages = fake
+    nameless, plain = package_target(), package_target("io.a/plain", "npm:@a/plain")
+    world["targets"] += [nameless, plain]
+    for t in (nameless, plain):
+        fake.latest[t.endpoint] = "1.0.0"
+    fake.tools[(nameless.endpoint, "1.0.0")] = [tool("a", "A tool."), {"description": "no name", "inputSchema": {}}]
+    fake.tools[(plain.endpoint, "1.0.0")] = [tool("read", "A tool.")]
+    services.crawler.run()
+    assert len(fake.runs) == 2
+    assert services.store.target(nameless.id)["current_toolset"] is None
+    assert services.store.target(plain.id)["current_toolset"]
+    # As a record written before 1.2 looks: no revision. Only the set without a digest runs again.
+    with services.store.db.transaction() as tx:
+        for t in (nameless, plain):
+            record = json.loads(services.store.target(t.id)["package_signals"])
+            record.pop("mtl")
+            tx.execute("UPDATE targets SET package_signals=? WHERE id=?", (json.dumps(record), t.id))
+    world["clock"].advance(days=1)
+    stats = services.crawler.run()
+    assert stats["packages"]["undigestedAgain"] == 1 and stats["packages"]["unchanged"] == 1
+    assert len(fake.runs) == 3 and fake.runs[-1][1] == nameless.endpoint.split(":", 1)[1]
+    assert json.loads(services.store.target(nameless.id)["package_signals"])["mtl"] == "1.2.0"
+    # Still not digestible under 1.2, and now judged by it: not run again until the revision changes.
+    world["clock"].advance(days=1)
+    stats = services.crawler.run()
+    assert stats["packages"]["undigestedAgain"] == 0 and len(fake.runs) == 3
+    # No security event for the revision marker alone.
+    with services.store.db.read() as tx:
+        events = tx.execute("SELECT target_id FROM security_events WHERE target_id=?", (plain.id,))
+    assert len(events) <= 1

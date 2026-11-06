@@ -71,7 +71,7 @@ def _change_text(body: dict) -> str:
 def _stable(value):
     if isinstance(value, dict):
         return {
-            k: _stable(v) for k, v in value.items() if k not in ("observedAt", "seconds", "payloadSha256")
+            k: _stable(v) for k, v in value.items() if k not in ("observedAt", "seconds", "payloadSha256", "mtl")
         }
     if isinstance(value, list):
         return [_stable(v) for v in value]

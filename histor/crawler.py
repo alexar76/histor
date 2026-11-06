@@ -42,7 +42,7 @@ from histor.config import Settings
 from histor.declared import DeclarationError, DeclarationFetcher
 from histor.exit_reasons import NODE_RUNTIMES, classify, excerpt
 from histor.extras import extras_diff, tool_extras
-from histor.labels import LabelIssuer
+from histor.labels import PROFILE_REVISION, LabelIssuer
 from histor.launch_profiles import package_launch_defaults
 from histor.logbook import Logbook, utcnow
 from histor.mcpclient import USER_AGENT, McpReader, Observation
@@ -811,6 +811,7 @@ class Crawler:
         seen_by_id: dict[str, str] = {}
         config: dict[str, dict[str, list[str]]] = {}
         unchanged = refresh = outdated = incomplete_retries = with_config = settled = with_pins = retraced = rereadable = 0
+        undigested_again = 0
         current = self.settings.sandbox_observer
         # An ok, complete observation by an observer listed here stands: what changed since is how a
         # failing package is started, not what a running one reports.
@@ -849,6 +850,18 @@ class Crawler:
                 if reason:
                     signals = {**signals, "exit": reason}
             complete = (signals.get("behaviour") or {}).get("complete") is True
+            if (seen == version and state.get("current_subject") and not state.get("current_toolset")
+                    and signals.get("mtl") != PROFILE_REVISION):
+                # Read, and declined by an older revision of MTL/1 (1.0 refused fractions, empty sets
+                # and repeated names; 1.1 digests them). The version did not change, so nothing else
+                # would run it again, and its record would keep a "not digestible" the current rules
+                # may not give. Once per revision: the run records the revision that judged it.
+                plan = _config_for(t, signals)
+                if plan:
+                    config[t.id] = plan
+                undigested_again += 1
+                renewed.append((t, version))
+                continue
             if seen == version and _unplaced_sends(signals.get("behaviour")):
                 # Traced again with what started it the last time (a placeholder key, a start
                 # argument): without it a server that needs a key exits, and a page that was right
@@ -887,7 +900,8 @@ class Crawler:
             plan = _config_for(t, signals)
             if plan:
                 config[t.id] = plan
-            if seen == version and state.get("last_status") in SETTLED and observer == current:
+            judged_now = state.get("last_status") == "undigestible" and signals.get("mtl") == PROFILE_REVISION
+            if seen == version and (state.get("last_status") in SETTLED or judged_now) and observer == current:
                 if not plan or plan == (signals.get("supplied") or {}):
                     settled += 1  # nothing new to try until the package or the observer changes
                     continue
@@ -953,7 +967,7 @@ class Crawler:
                              "neverObserved": len(never), "olderObserver": outdated, "incompleteRetries": incomplete_retries, "unchanged": unchanged,
                              "withConfig": with_config, "withPins": with_pins, "settled": settled,
                              "renewed": len(renewed), "renewable": renewable, "retraced": len(retrace), "retraceable": retraced,
-                             "reread": len(reread), "rereadable": rereadable,
+                             "reread": len(reread), "rereadable": rereadable, "undigestedAgain": undigested_again,
                              "versionUnknown": unknown, "versionUnknownBy": dict(unknown_by),
                              "versionsAsked": len(known) + looked_up,
                              "lookupSeconds": {"state": state_seconds, "known": known_seconds, "neverObserved": never_seconds}}
@@ -1325,6 +1339,9 @@ class Crawler:
                 # Facts about the version, the observer that ran it, and what the package did.
                 record = dict(p.signals or {})
                 record["observer"] = p.obs.package_observer
+                # The MTL revision this run's tool set was judged under: a set an older revision
+                # declined is run once more under a newer one (_plan_packages, MTL/1.2 section 7.4).
+                record["mtl"] = PROFILE_REVISION
                 if p.obs.behaviour is not None:
                     record["behaviour"] = p.obs.behaviour
                 if p.obs.package_conditions:
@@ -1384,6 +1401,9 @@ class Crawler:
                             prior_subject_ref=prior["credentialSubject"]["verifiedWork"],
                             prior_tool_digest=prior["credentialSubject"]["mcpTrustLabel"].get("toolSet", {}).get("digestSRI"),
                             unchanged_since=None, observed_at=p.observed_at, issued_at=issued_at, no_digest_code=code,
+                            prior_no_digest_code=(self._no_digest_reason(tx, prior, prior["credentialSubject"]["verifiedWork"])
+                                                  if not prior["credentialSubject"]["mcpTrustLabel"].get("toolSet", {}).get("digestSRI")
+                                                  else None),
                         ))
                     if state.get("current_subject"):
                         changed = 1
@@ -1462,8 +1482,7 @@ class Crawler:
                     prior_tool_digest=prior_tool_digest,
                     unchanged_since=None if new_subject else state.get("unchanged_since"),
                     observed_at=p.observed_at, issued_at=issued_at,
-                    prior_no_digest_code=(self._no_digest_reason(tx, prior, prior_ref)
-                                          if not prior_tool_digest and subject.tool_set_digest else None),
+                    prior_no_digest_code=(self._no_digest_reason(tx, prior, prior_ref) if not prior_tool_digest else None),
                 )
                 row = append(cont)
                 update.update(chain_label=row["id"], last_continuity_at=p.observed_at)
