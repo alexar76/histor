@@ -1,8 +1,10 @@
 """Public protocol readers reject an oversized chunked body before buffering it."""
 import asyncio
+
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
+
 from histor.app import read_bounded_body
 
 

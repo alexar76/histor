@@ -10,7 +10,9 @@ from histor.app import create_app
 from histor.logbook import verify_document
 from histor.security_events import append_event, census, deliver, events
 from tests.conftest import tool
-from tests.test_app import api, target_id  # noqa: F401  (fixture)
+from tests.test_app import target_id
+
+pytest_plugins = ["tests.test_app"]
 
 PUBLIC = "93.184.215.14"
 
@@ -100,8 +102,8 @@ def test_census_keeps_incomplete_packages_in_denominator(world):
     assert report["toolsAdvertised"] == 4 and report["toolsSuccessfullyCalled"] == 2
     assert report["phases"]["startup"]["complete"] == 1
     assert verify_document(report, s.key.did, "histor.behaviour-census/v1")
-    api = TestClient(create_app(s))
-    feed = api.get("/security-feed.xml")
+    desk = TestClient(create_app(s))
+    feed = desk.get("/security-feed.xml")
     assert feed.status_code == 200 and "<entry>" in feed.text
 
 
@@ -113,7 +115,10 @@ def test_a_webhook_destination_that_resolves_inward_is_not_called(world):
         append_event(tx, s.key, "target", "2026-10-10T00:00:00Z", {}, {"v": 1})
     calls = []
     client = httpx.Client(transport=httpx.MockTransport(lambda req: calls.append(req) or httpx.Response(204)))
-    inward = lambda host, port, *a, **k: [(2, 1, 6, "", ("10.0.0.5", port))]
+
+    def inward(host, port, *a, **k):
+        return [(2, 1, 6, "", ("10.0.0.5", port))]
+
     sub = {"id": "inward", "url": "https://hooks.customer.example/x", "secret": "s" * 32}
     assert deliver(s.store, sub, client=client, now=100, resolver=inward)["status"] == "retry"
     assert calls == []

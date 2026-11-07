@@ -11,8 +11,8 @@ dependencies = [
     # The AWR/2 reference implementation, from PyPI. It is the only code that
     # canonicalizes, digests and signs a label: HISTOR never reimplements the format.
     "awr>=2.0,<3",
-    "cryptography>=44",
-    "fastapi>=0.115",
+    "cryptography>=50.0.2",
+    "fastapi>=0.162.0",
     "httpx>=0.27",
     "uvicorn>=0.34",
 ]

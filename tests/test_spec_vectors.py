@@ -92,7 +92,11 @@ def test_negative_vectors_are_rejected(v):
 
 def test_checkpoint_vectors_verify(v):
     from histor.checkpoint import (
-        VerifierKey, parse_checkpoint_text, parse_note, verify_cosignature, verify_log_signature,
+        VerifierKey,
+        parse_checkpoint_text,
+        parse_note,
+        verify_cosignature,
+        verify_log_signature,
     )
 
     c = v["checkpoints"]

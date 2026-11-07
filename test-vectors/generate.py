@@ -20,8 +20,15 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from histor import merkle  # noqa: E402
-from histor.checkpoint import COSIGNATURE_V1_TYPE, LOG_KEY_TYPE, checkpoint_text, cosign, sign_checkpoint, vkey  # noqa: E402
-from histor.logbook import STH_TYPE, b64url, sign_document, verification_method  # noqa: E402
+from histor.checkpoint import (  # noqa: E402
+    COSIGNATURE_V1_TYPE,
+    LOG_KEY_TYPE,
+    checkpoint_text,
+    cosign,
+    sign_checkpoint,
+    vkey,
+)
+from histor.logbook import STH_TYPE, sign_document, verification_method  # noqa: E402
 
 SEED = hashlib.sha256(b"histor-tlog/1 test vectors").digest()  # 32 bytes, fixed
 WITNESS_SEED = hashlib.sha256(b"histor-tlog/2 witness test vectors").digest()
@@ -103,8 +110,11 @@ def main() -> None:
     # negatives — each MUST be rejected
     tampered = json.loads(json.dumps(docs[2]))
     tampered["credentialSubject"]["verdict"] = "fail"
-    wrong_type = dict(heads["8"]); wrong_type["type"] = "histor.check/v1"
-    moved = dict(heads["5"]); moved["treeSize"] = 8; moved["rootHash"] = roots["8"]
+    wrong_type = dict(heads["8"])
+    wrong_type["type"] = "histor.check/v1"
+    moved = dict(heads["5"])
+    moved["treeSize"] = 8
+    moved["rootHash"] = roots["8"]
     negatives = [
         {"name": "tampered-leaf", "document": tampered, "claimedLeafHash": leaves[2]["leafHash"],
          "expect": "leaf hash does not match: SHA-256(0x00 || JCS(document)) differs"},
@@ -131,7 +141,7 @@ def main() -> None:
         "checkpointNote": cp_note,
         "cosignatureLine": cosig.render(),
         "cosignedNote": cp_note + cosig.render(),
-        "cosignatureMessage": ("cosignature/v1\ntime %d\n" % COSIGN_TIME) + cp_text,
+        "cosignatureMessage": f"cosignature/v1\ntime {COSIGN_TIME}\n" + cp_text,
     }
 
     out = {

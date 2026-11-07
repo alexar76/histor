@@ -22,8 +22,9 @@ import os
 import re
 import sys
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 SITE = "https://histor.modelmarket.dev"
 BASE = f"{SITE}/datasets"

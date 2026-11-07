@@ -15,8 +15,7 @@ from fastapi.testclient import TestClient
 
 from histor import watch_paid
 from histor.app import create_app
-from tests.conftest import tool
-from tests.conftest import make_target
+from tests.conftest import make_target, tool
 from tests.test_app import TOOLS, target_id
 from tests.test_security_events import public_resolver
 
@@ -252,7 +251,7 @@ def test_renewal_extends_from_the_current_end_and_a_refund_takes_its_period_back
 
 def test_a_reversal_before_the_paid_event_blocks_the_late_settlement(shop):
     client, world = shop
-    s, stripe = world["services"], world["services"].stripe
+    stripe = world["services"].stripe
     sub = opened(client, world)
     session = stripe.pay(next(iter(stripe.sessions)))
     refund = {"id": "ch_2", "object": "charge", "payment_intent": session["payment_intent"], "amount_refunded": 2900}
@@ -266,7 +265,7 @@ def test_a_reversal_before_the_paid_event_blocks_the_late_settlement(shop):
 
 def test_team_edits_its_server_list_and_sends_a_test_event(shop):
     client, world = shop
-    s, stripe = world["services"], world["services"].stripe
+    stripe = world["services"].stripe
     sub = opened(client, world)
     token = sub["manageToken"]
     both = [target_id(world, "io.example/weather"), target_id(world, "io.example/drain-wallet")]

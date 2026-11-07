@@ -26,9 +26,10 @@ from __future__ import annotations
 import hashlib
 import re
 import threading
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Iterable
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from urllib.parse import quote, urlsplit
 
 import httpx
@@ -51,11 +52,11 @@ def _iso(ts: datetime) -> str:
 
 
 def _parse_iso(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
 
 
 def _now() -> str:
-    return _iso(datetime.now(timezone.utc))
+    return _iso(datetime.now(UTC))
 
 
 # --- the file ----------------------------------------------------------------------------------------------

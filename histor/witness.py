@@ -26,7 +26,6 @@ from histor.checkpoint import (
     LOG_KEY_TYPE,
     Note,
     NoteError,
-    SignatureLine,
     VerifierKey,
     b64decode_strict,
     cosign,

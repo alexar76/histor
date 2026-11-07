@@ -34,5 +34,11 @@ docker cp "$APP:/data" - > "$keys.part"  # a tar stream of the data volume: issu
 tar -tf "$keys.part" | grep -q 'issuer.key$' || { echo "no issuer.key in the data volume copy" >&2; rm -f "$keys.part"; exit 1; }
 mv "$keys.part" "$keys"
 
-find "$DIR" -maxdepth 1 -type f \( -name 'histor-*.dump' -o -name 'keys-*.tar' \) -mtime +"$KEEP_DAYS" -delete
+# Keep the newest KEEP_DAYS + 1 of each (the last three nights by default). By count, not age:
+# `find -mtime +2` rounds down to whole days, and a run a few minutes earlier than the night
+# before kept a fourth 2.8 GB dump (2026-11-07: four, 10.7 GB, with the host at 92 %).
+for pattern in 'histor-*.dump' 'keys-*.tar'; do
+  find "$DIR" -maxdepth 1 -type f -name "$pattern" -printf '%T@ %p\n' | sort -rn | tail -n +"$((KEEP_DAYS + 2))" \
+    | cut -d' ' -f2- | while IFS= read -r old; do rm -f -- "$old"; done
+done
 echo "histor backup: $(du -h "$dump" | cut -f1) log, keys copied → $DIR"

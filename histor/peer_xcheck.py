@@ -26,8 +26,9 @@ import gzip
 import hashlib
 import json
 import re
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 from urllib.parse import urlsplit
 
 PEER = {
@@ -277,7 +278,7 @@ def reads(day: str, peer: dict = PEER) -> tuple[tuple[dt.datetime, dt.datetime],
     """(start, end) of the peer's read before ``day`` and of its read on ``day``."""
     d = dt.date.fromisoformat(day)
     run = dt.timedelta(minutes=peer["run_minutes"])
-    start = dt.datetime.combine(d, dt.time.fromisoformat(peer["run_start"]), dt.timezone.utc)
+    start = dt.datetime.combine(d, dt.time.fromisoformat(peer["run_start"]), dt.UTC)
     prev = start - dt.timedelta(days=1)
     first = tuple(ts(x) for x in peer["first_run"])
     if prev.date() <= first[0].date():
@@ -554,7 +555,11 @@ def run(store: Any, out: Path, *, days: int = 7, http: Any = None, peer: dict = 
 
     raw_changes, raw_panel = get(peer["changes"]), get(peer["panel"])
     doc = json.loads(raw_changes)
-    panel = [l.strip() for l in raw_panel.decode("utf-8", "replace").splitlines() if l.strip() and not l.startswith("#")]
+    panel = [
+        line.strip()
+        for line in raw_panel.decode("utf-8", "replace").splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
     all_days = sorted(d["day"] for d in doc["days"])
     chosen = all_days[-days:]
     endpoints = set(panel) | {c["endpoint"] for d in doc["days"] for c in d["changes"]}
@@ -578,7 +583,7 @@ def run(store: Any, out: Path, *, days: int = 7, http: Any = None, peer: dict = 
 
     result = compare(data, doc, panel, chosen, robots, peer)
     result["robotsRead"] = {h: (hashlib.sha256(t.encode()).hexdigest() if t else None) for h, t in sorted(texts.items())}
-    now = iso(dt.datetime.now(dt.timezone.utc))
+    now = iso(dt.datetime.now(dt.UTC))
     result["generatedAt"] = now
     inputs = {"changes.json.gz": hashlib.sha256(raw_changes).hexdigest(), "panel.txt.gz": hashlib.sha256(raw_panel).hexdigest()}
 

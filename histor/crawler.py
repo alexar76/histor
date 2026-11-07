@@ -36,7 +36,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from histor import diffing
+from histor import cards, diffing
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
 from histor.declared import DeclarationError, DeclarationFetcher
@@ -66,12 +66,19 @@ from histor.registry import (
     with_curated,
 )
 from histor.remote_schedule import RemoteSchedule
-from histor import cards
 from histor.robots import Fetcher as RobotsFetcher
 from histor.robots import Policy
 from histor.scanner import RuleSets, Scanner, ScannerError
 from histor.store import Store, dumps, sum_counts
-from histor.subject import MTL_SUBJ_001, REGISTRY_CURATED, MtlError, Subject, build_subject, fallback_subject, tool_set_digest
+from histor.subject import (
+    MTL_SUBJ_001,
+    REGISTRY_CURATED,
+    MtlError,
+    Subject,
+    build_subject,
+    fallback_subject,
+    tool_set_digest,
+)
 from histor.untrusted import clean_text
 
 CONTINUITY_MIN_INTERVAL_S = 20 * 3600

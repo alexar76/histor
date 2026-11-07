@@ -34,6 +34,7 @@ def target_id(world, name):
 
 def test_health_and_issuer(api):
     client, world = api
+    assert client.head("/health").status_code == 200
     health = client.get("/health").json()
     assert health["ok"] and health["tree_size"] > 0 and health["store"] in {"sqlite", "postgresql"}
     issuer = client.get("/api/v1/issuer").json()

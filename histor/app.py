@@ -27,7 +27,6 @@ from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge, fingerprints, toolcost, watch_paid
 from histor.check import MAX_MATCHES, CheckError
-from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
 from histor.checkpoint import (
     COSIGNATURE_V1_TYPE,
     LOG_KEY_TYPE,
@@ -42,6 +41,7 @@ from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
 from histor.server_page_text import CARD_TEXT
 from histor.service import Services, crawl_in_background, scheduler
+from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
 from histor.untrusted import TooDeep, loads_limited
 
 #: Largest id the store can be asked for: SQLite and Postgres both keep ids in a signed 64-bit
@@ -417,7 +417,8 @@ def create_app(services: Services) -> FastAPI:
 
     # -- health + identity ----------------------------------------------------------
 
-    @app.get("/health")
+    # HEAD too: shields.io/website and other probes use HEAD; 405 reads as "live | down".
+    @app.api_route("/health", methods=["GET", "HEAD"])
     def health() -> dict[str, Any]:
         sth = store.latest_sth()
         return {

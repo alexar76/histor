@@ -33,7 +33,7 @@ from histor.checkpoint import (
     vkey,
 )
 from histor.service import build
-from histor.witness import SIZE_MEDIA, Witness, load_known_logs
+from histor.witness import SIZE_MEDIA, load_known_logs
 
 ORIGIN = "example.com/log"
 LOG_KEY = SigningKey.from_seed(hashlib.sha256(b"log").digest())

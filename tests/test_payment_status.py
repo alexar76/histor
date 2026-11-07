@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import httpx
 
-from histor.mcpclient import PAY_PER_CRAWL, PAYMENT_REQUIRED, McpReader, USER_AGENT
+from histor.mcpclient import PAY_PER_CRAWL, PAYMENT_REQUIRED, USER_AGENT, McpReader
 from histor.remote_schedule import RemoteSchedule, after
 from tests.conftest import FakeMcp, make_target, tool
 
