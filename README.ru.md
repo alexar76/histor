@@ -100,6 +100,8 @@ flowchart LR
 
 **Скачать данные.** Раз в неделю всё, что видит журнал, выкладывается файлами на [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): каждый сервер из реестра, каждый показанный им набор инструментов, каждое записанное изменение и сканы WARDEN. Формат — JSON Lines (gzip) и манифест, подписанный ключом журнала; лицензия на подборку — CC BY 4.0. README каждого снимка описывает поля и показывает загрузку в pandas или DuckDB ([histor/dataset.py](histor/dataset.py)). Тот же набор есть на [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); цифру цитируйте по DOI версии того снимка, на котором она посчитана (у каждого архивного снимка свой, список на странице датасетов); [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) обозначает все снимки и открывает самый новый.
 
+**Сверка с другим наблюдателем.** Каждый день HISTOR сравнивает свои дайджесты наборов инструментов с теми, что CrawlCheck публикует для тех же серверов, и выкладывает результат вместе с расхождениями на [histor.modelmarket.dev/datasets/xcheck-crawlcheck/](https://histor.modelmarket.dev/datasets/xcheck-crawlcheck/). Оба сервиса считают один и тот же дайджест независимо: [docs/cross-check.ru.md](docs/cross-check.ru.md).
+
 **Признаки поведения плательщиков.** Команда `histor payer-audit` (с версии 0.4.1)
 проверяет receipts в Base USDC и показывает основания для оценки поведения кошельков, сохраняя
 суммы платежей и категорию unknown. Ей не нужны производственная база или кошелёк:

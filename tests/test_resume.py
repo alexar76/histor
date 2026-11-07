@@ -117,7 +117,10 @@ def test_after_a_restart_the_scheduler_continues_at_once(world):
     interrupt_after_first(world)
     first = s.store.last_run()
     mcp.calls.clear()
-    s.settings = replace(s.settings, crawl_interval_s=86400, crawl_on_start=False)
+    # Interval/gap must dwarf (wall clock − fixture timestamps): due() uses datetime.now, while
+    # run rows carry the test clock. A one-day interval looks long overdue and a second crawl
+    # then overwrites last_successful_run without resumed_from (CI flake).
+    s.settings = replace(s.settings, crawl_interval_s=10**9, crawl_on_start=False, crawl_min_gap_s=10**9)
     t = threading.Thread(target=scheduler, args=(s,), kwargs={"first_wait": 0.01, "tick": 0.05}, daemon=True)
     t.start()
     deadline = time.monotonic() + 10

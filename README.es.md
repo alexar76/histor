@@ -99,6 +99,8 @@ un diff, nunca como una acusación. Detalles: [docs/labels.es.md](docs/labels.es
 
 **Descargar los datos.** Una vez por semana, todo lo que ve el registro se publica como archivos en [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): cada servidor listado, cada conjunto de herramientas que mostró, cada cambio registrado y los escaneos de WARDEN. Son JSON Lines (gzip) con un manifiesto firmado por la clave del registro; la compilación es CC BY 4.0. El README de cada instantánea describe los campos y cómo cargarlos en pandas o DuckDB ([histor/dataset.py](histor/dataset.py)). También en [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); para citar una cifra, use el DOI de versión de la instantánea en la que se contó (cada instantánea archivada tiene el suyo, listado en la página de los conjuntos de datos); [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) designa todas y abre la más reciente.
 
+**Contrastado con otro observador.** Cada día HISTOR compara sus resúmenes (digests) de conjuntos de herramientas con los que CrawlCheck publica para los mismos servidores y publica el resultado, desacuerdos incluidos, en [histor.modelmarket.dev/datasets/xcheck-crawlcheck/](https://histor.modelmarket.dev/datasets/xcheck-crawlcheck/). Ambos servicios calculan el mismo resumen de forma independiente: [docs/cross-check.es.md](docs/cross-check.es.md).
+
 ## Inicio rápido
 
 ```bash
