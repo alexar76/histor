@@ -77,6 +77,8 @@ flowchart LR
 
 每个 ISO 周一次，`histor-export-dataset`（`deploy/export_dataset.sh`，计时器每 10 分钟运行一次）把一轮已完成的抓取复制到 `/var/lib/histor-datasets/<日期>/`，在 `/datasets/` 提供，并在配置了 `/etc/histor-hf/` 时上传到 Hugging Face（标签 `snapshot-<日期>`）。主机上保留最新的八份（`HISTOR_DATASET_KEEP`）；`HISTOR_DATASET_PERIOD=month` 可改回每月一份。每月的第一份快照手动归档到 Zenodo，作为概念记录的新版本：写出时 `histor-notify` 发送一条 Telegram 消息，`histor-zenodo-reminder`（每天 09:00 UTC）会重复提醒，直到 Zenodo 上有这份快照。两者都从 `/etc/histor-notify.env`（0600：`AICOM_ALERT_TELEGRAM_TOKEN`、`AICOM_ALERT_TELEGRAM_CHAT`）读取机器人令牌和聊天 ID；没有这个文件就什么也不发送。`histor-export-dataset --due` 和 `histor-zenodo-reminder --dry` 会说明它们将做什么。
 
+每天 UTC 12:00，`histor-peers`（`deploy/peers_check.sh`、`histor-peers.timer`）在两个由服务镜像启动的一次性容器中运行 `/etc/histor/peers.json` 里的全部核对：方法为 `digest` 的（目前是 CrawlCheck）不访问数据库，通过 loopback 端口读取 HISTOR 的 API，通过网络读取观察者的文件；方法为 `field-diff` 的（目前是 ScraperWatch，2026 年 11 月 7 日之前在每周导出之后运行）在 compose 网络中运行，使用从服务复制的数据库设置，数据卷只读，与导出相同。它们的设置（日志和面板地址、robots.txt 代理名、运行时间、首次运行）写在各自的记录里。结果先写入 `.staging`，再移到 `peers/<slug>/<日期>/`，并更新 `peers/<slug>/latest`；`peers/index.json` 列出文件中的所有观察者，每条记录的 `aliases` 会变成 `xcheck-crawlcheck → peers/crawlcheck` 这样的链接。添加观察者只需在文件中加一条记录：[cross-check.zh.md](cross-check.zh.md)。安装：`deploy/peers_check.sh` → `/usr/local/sbin/histor-peers`，`histor/peers.py` 和 `histor/digest_xcheck.py` → `/usr/local/lib/histor-peers/`，`deploy/peers.json` → `/etc/histor/peers.json`。
+
 轮询观察采样，不是每次变化：两次检查之间的 A→B→A 不可见。独立 remote 队列不表示每 30 分钟重装软件包。积压、每主机限制和 backoff 会拉长实际间隔；查看 `/api/v1/stats` 的 `remotePolling`。[边界说明](measurement-limits.zh.md) 区分配置频率与已测覆盖。
 
 ## 迁移
@@ -258,5 +260,7 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
 9. **关注第一次抓取。** `/api/v1/stats` 显示 `crawl.sandboxHosts`（已配置的主机数），抓取结束后显示 `lastRun.sandboxHosts`：按主机编号列出各自观察了多少个软件包、失败了多少次。在沙箱主机上：`journalctl -u histor-sandbox`。
 
 **立即重新观察单个目标：** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server`（一个或多个地址或目标 id）。它走与抓取相同的路径——沙箱或 MCP 客户端、WARDEN、提交、标签链、安全事件——并把观察结果挂到正在进行的抓取上，否则挂到最近一次抓取上，这样只含一个目标的抓取不会成为公开的“最近一次抓取”。软件包会得到其记录所示它曾要求的内容（占位值、启动参数、运行时）。用于立即替换一条现在错误的记录，而不必等抓取轮到它；旧的观察结果仍留在历史中。
+
+**镜像留在主机上。** 运行软件包的镜像（`histor-node:22`、`:24`、`histor-python:3.12`、`3.13`、`3.14`）只在一次运行期间被使用，所以在清理程序看来它们没人用：11 月 2 日一次磁盘清理删除了它们，11 月 7 日一台主机上的测试运行之后它们又消失了，该主机上所有 npm 和 PyPI 观察都以 `Unable to find image` 失败。因此 `install.sh` 会安装 `histor-sandbox-images`（`sandbox/sandbox_images.sh`）。它用一个小容器占住每个镜像（`histor-sandbox-hold-…`：`sleep`，无网络，无 capabilities，16 MB），这样 `docker image prune -a`、`docker system prune -a` 和不带 `-f` 的 `docker rmi` 都会拒绝删除它；`histor-sandbox-images.timer` 每 2 分钟运行一次，若镜像仍然丢失就重新构建，并把占位容器移到新镜像上。`histor-sandbox-images check` 列出每个镜像及其是否被占住，有任何一个未被占住时以非零状态退出；每次修复都记录在 `journalctl -t histor-sandbox-images`。不要删除这些占位容器：它们几乎不占资源，没有它们，下一次清理就会带走镜像。
 
 **观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3,4`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。由 `gvisor-trace/9` 之前的读取器（看不到重命名和链接）跟踪的成功且完整的记录会再跟踪一次，并与失败的重跑共享这一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。

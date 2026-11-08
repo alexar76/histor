@@ -1,16 +1,16 @@
-"""scripts/xcheck_digests.py: another observer's tool-set digests against HISTOR's timeline, with room for a server
+"""histor/digest_xcheck.py: another observer's tool-set digests against HISTOR's timeline, with room for a server
 that changed between the two reads."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
+from histor import digest_xcheck as xc
+
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "xcheck_digests.py"
-spec = importlib.util.spec_from_file_location("xcheck_digests", SCRIPT)
-xc = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(xc)
 
 A = "sha256-" + "A" * 43 + "="
 B = "sha256-" + "B" * 43 + "="
@@ -100,6 +100,15 @@ def test_input_formats():
         assert xc.read_rows(text) == [{k: str(v) for k, v in data[0].items()}] or xc.read_rows(text) == data
 
 
+def test_a_server_the_other_side_could_not_read_is_its_own_verdict():
+    # CrawlCheck's shared list: digest null and an outcome when tools/list could not be read.
+    report = run([{"name": NAME, "endpoint": URL, "digest": None, "read_at": "2026-11-02T00:00:00Z",
+                   "outcome": "http_503"}])
+    assert report["rows"][0]["verdict"] == "theirs_no_digest"
+    assert report["rows"][0]["note"] == "http_503"
+    assert report["counts"]["theirs_no_digest"] == 1 and report["counts"]["bad_row"] == 0
+
+
 def test_crawlcheck_change_feed_is_read_as_published():
     feed = {"kind": "crawlcheck-mcp-tool-changes", "v": 1, "events": [
         # Recorded before CrawlCheck added RFC 8785 digests: no row.
@@ -135,3 +144,9 @@ def test_cli_exit_status(tmp_path, monkeypatch):
     theirs.write_text(json.dumps([row(A, "2026-11-02T00:00:00Z")]))
     assert xc.main([str(theirs), "--histor", HISTOR, "--pause", "0"]) == 0
     assert xc.main([str(tmp_path / "missing.json")]) == 2
+
+
+def test_the_script_runs_from_a_checkout(tmp_path):
+    """scripts/xcheck_digests.py loads the module by path: no installed package needed."""
+    missing = subprocess.run([sys.executable, "-I", str(SCRIPT), str(tmp_path / "none.json")], capture_output=True, text=True)
+    assert missing.returncode == 2 and "cannot read" in missing.stderr

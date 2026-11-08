@@ -1,0 +1,39 @@
+[
+  {
+    "slug": "crawlcheck",
+    "name": "CrawlCheck",
+    "operator": "VSNARY",
+    "contact": "contact@crawlcheck.io",
+    "page": "https://crawlcheck.io/spec/mcp-lockfile",
+    "since": "2026-11-07",
+    "method": "digest",
+    "schedule": "daily 12:00 UTC (histor-peers.timer)",
+    "window_hours": 24,
+    "sources": [
+      {"name": "feed", "url": "https://crawlcheck.io/api/v1/mcp/changes?limit=500"},
+      {"name": "list", "url": "https://crawlcheck.io/data/xcheck/histor/latest.jsonl"}
+    ],
+    "aliases": [
+      "xcheck-crawlcheck"
+    ]
+  },
+  {
+    "slug": "scraperwatch",
+    "name": "ScraperWatch",
+    "contact": "ops@scraperwatch.com",
+    "page": "https://scraperwatch.com/mcp-changes/",
+    "since": "2026-11-01",
+    "method": "field-diff",
+    "schedule": "daily 12:00 UTC (histor-peers.timer)",
+    "changes": "https://scraperwatch.com/mcp-changes/changes.json",
+    "panel": "https://scraperwatch.com/mcp-changes/panel.txt",
+    "agent": "scraperwatch-mcp-observatory",
+    "run_start": "02:50:00",
+    "run_minutes": 10,
+    "first_run": [
+      "2026-10-30T10:49:43Z",
+      "2026-10-30T10:59:39Z"
+    ],
+    "days": 1
+  }
+]

@@ -89,6 +89,10 @@ services:
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       HISTOR_OPENROUTER_API_KEY: "${HISTOR_OPENROUTER_API_KEY:-}"
       OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+      # glibc gives nearly every thread its own malloc arena and keeps freed memory in it. With the
+      # web threadpool (40) and the crawl workers, prod held 40 arenas = 528 MiB of a 630 MiB heap
+      # at rest and was OOM-killed at its 1 GiB limit six times on 2026-11-06..08. Two arenas.
+      MALLOC_ARENA_MAX: "${HISTOR_MALLOC_ARENA_MAX:-2}"
     user: "65532:65532"
     read_only: true
     tmpfs:

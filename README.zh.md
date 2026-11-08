@@ -88,7 +88,7 @@ flowchart LR
 
 **下载数据。** 每周一次，日志所见的全部内容以文件形式发布在 [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/)：每个已登记的服务器、它展示过的每个工具集、每次记录的变更以及 WARDEN 扫描结果。格式为 JSON Lines（gzip），附带由日志密钥签名的清单；汇编部分采用 CC BY 4.0 许可。每个快照的 README 说明各字段，以及如何用 pandas 或 DuckDB 加载（[histor/dataset.py](histor/dataset.py)）。同一数据集也在 [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions) 上；引用某个数字时，请使用计算该数字所用快照的版本 DOI（每个已归档快照都有自己的 DOI，列在数据集页面上）；[doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) 代表全部快照，并总是打开最新的一个。
 
-**与另一个观察者交叉核对。** HISTOR 每天把自己的工具集摘要与 CrawlCheck 为同一批服务器发布的摘要进行比较，并把结果（包括分歧）发布在 [histor.modelmarket.dev/datasets/xcheck-crawlcheck/](https://histor.modelmarket.dev/datasets/xcheck-crawlcheck/)。两个服务各自独立地计算同一个摘要：[docs/cross-check.zh.md](docs/cross-check.zh.md)。
+**与其他观察者交叉核对。** HISTOR 与读取同一批服务器的其他服务核对自己的记录——每天与 CrawlCheck 和 ScraperWatch——并把每次核对（包括分歧）发布在 [histor.modelmarket.dev/datasets/peers/](https://histor.modelmarket.dev/datasets/peers/)。观察者是配置中的一个列表，添加一个只需一条记录：[docs/cross-check.zh.md](docs/cross-check.zh.md)。
 
 ## 快速开始
 

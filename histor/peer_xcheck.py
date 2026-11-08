@@ -12,9 +12,10 @@ endpoints far more often and keeps every definition it was served. Two direction
 
 ``python -m histor.peer_xcheck OUTDIR [--days N]`` writes ``README.md``, ``results.json``, the two peer files it
 read (``inputs/``) and ``SHA256SUMS`` into OUTDIR, which must not exist. It only reads the database; over the
-network it fetches the peer's two public files and, for the few hosts that need it, robots.txt. The host's weekly
-dataset export runs it after each snapshot (deploy/export_dataset.sh) and publishes the result at
-``/datasets/peers/scraperwatch/``. First run by hand on 2026-11-01; that comparison found a robots.txt bug on the
+network it fetches the peer's two public files and, for the few hosts that need it, robots.txt. Since 2026-11-07 HISTOR
+runs it every day from its list of peers (histor/peers.py, deploy/peers_check.sh; the peer's settings, the ``PEER``
+values below, are in /etc/histor/peers.json) and publishes the result at ``/datasets/peers/scraperwatch/``; until
+then the weekly dataset export ran it. First run by hand on 2026-11-01; that comparison found a robots.txt bug on the
 peer's side (fixed the same day) and a fallback bug in HISTOR's own reader (fixed in 2cf275902).
 """
 
@@ -487,7 +488,7 @@ def compare(data: Data, doc: dict, panel: list[str], days: list[str], robots: Ca
 def readme(result: dict, inputs: dict[str, str], now: str, peer: dict = PEER) -> str:
     f, r = result["forward"], result["reverse"]
     lines = [f"# HISTOR and the {peer['name']} MCP tool-change log, {result['days'][0]} to {result['days'][-1]}", "",
-             f"Generated {now} by `python -m histor.peer_xcheck`, which HISTOR runs after each weekly snapshot. "
+             f"Generated {now} by `histor/peer_xcheck.py`, which HISTOR runs every day from its list of peers (histor-peers). "
              "The classification is automatic and has not been reviewed by a person; read a likely miss as a lead.", "",
              f"{peer['name']} ({peer['page']}) reads a fixed panel of {result['panel']:,} endpoints once a day from "
              f"{peer['run_start'][:5]}Z and publishes daily diffs. HISTOR reads the same endpoints every 30 minutes "

@@ -1,0 +1,9 @@
+[Unit]
+Description=HISTOR cross-checks with the observers in /etc/histor/peers.json (histor/peers.py)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/histor-peers
+TimeoutStartSec=1800
+Nice=10

@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased
+
+- **Two malloc arenas (`MALLOC_ARENA_MAX=2`, compose; `HISTOR_MALLOC_ARENA_MAX` overrides).** glibc gave nearly
+  every thread of the web threadpool and the crawl its own arena and kept freed memory in each: prod held 40
+  arenas = 528 MiB of a ~630 MiB heap at rest, grew to ~700 MiB without a crawl, and was OOM-killed at its
+  1 GiB limit six times between 2026-11-06 and 11-08, interrupting crawls each time. Prod's limit is also
+  1.5 GiB now (`HISTOR_MEM_LIMIT` in the host .env).
+
+## 0.7.0 — 2026-11-08
+
+- **Cross-checks with other observers come from one list**: `/etc/histor/peers.json` (template `deploy/peers.json`).
+  Each observer is one entry: slug, name, contact, method, sources and window. Adding one is a configuration change.
+  `histor/peers.py` runs every entry, including "field-diff" peers whose settings used to be a constant in
+  `peer_xcheck.py`. ScraperWatch's cross-check now runs daily from this list instead of from the weekly dataset
+  export. The digest comparison moved into the package as `histor/digest_xcheck.py`; `scripts/xcheck_digests.py`
+  loads it by path, so it still runs from a checkout.
+- **MTL/1.2** (PROFILE.md "Revision 1.2"): **labels name the revision that decided them, and why a set has no digest.** Every label
+  carries `profileRevision` ("1.2.0"). A read set without a digest says `toolSet.noDigest`
+  `{"reason": "not_digestible", "code": …}`, and a continuity label names each side without one
+  under `noDigest` (`current` / `prior`). A failed read is `not_observed`, and the prior side carries
+  the revision its own label named. The server API returns `noDigest` (reason). The server page adds
+  the code, the revision and `decidedAt`, so a set 1.0 refused (before 2026-10-31) is told from one
+  the current rules refuse (agent-control-standard#38).
+- **A package whose set an older revision declined runs once more.** The version did not change, so
+  nothing else would run it, and its record kept 1.0's "not digestible" for sets 1.1 digests (138 on
+  2026-11-06). Each run records the revision that judged it (`package_signals.mtl`, not a security
+  event), and an `undigestible` package judged by the current revision is settled until its version,
+  observer or the revision changes. Crawl stats: `packages.undigestedAgain`.
+- `/health` answers `HEAD`. Badge services probe with `HEAD` and got 405, so badges showed the service as down.
+
 ## 0.6.2 — 2026-11-04
 
 - **The log is also a tiled log (c2sp.org/tlog-tiles).** Under `https://<origin>/` (the public instance:
@@ -35,19 +65,6 @@
   - A snapshot not archived yet points to the newest archived one and to its own signed manifest; every
     snapshot in the list carries its DOI, and archived snapshots older than the eight kept here stay listed.
   - The dataset card, the READMEs and `CITATION.cff` say to cite the version DOI next to a number.
-
-- **Labels follow MTL/1.2: the revision that decided them, and why a set has no digest.** Every label
-  carries `profileRevision` ("1.2.0"). A read set without a digest says `toolSet.noDigest`
-  `{"reason": "not_digestible", "code": …}`, and a continuity label names each side without one
-  under `noDigest` (`current` / `prior`). A failed read is `not_observed`, and the prior side carries
-  the revision its own label named. The server API returns `noDigest` (reason). The server page adds
-  the code, the revision and `decidedAt`, so a set 1.0 refused (before 2026-10-31) is told from one
-  the current rules refuse (agent-control-standard#38).
-- **A package whose set an older revision declined runs once more.** The version did not change, so
-  nothing else would run it, and its record kept 1.0's "not digestible" for sets 1.1 digests (138 on
-  2026-11-06). Each run records the revision that judged it (`package_signals.mtl`, not a security
-  event), and an `undigestible` package judged by the current revision is settled until its version,
-  observer or the revision changes. Crawl stats: `packages.undigestedAgain`.
 
 - **The crawler follows robots.txt (RFC 9309).** Before an endpoint is read, its origin's robots.txt is
   asked for the product token `histor` (else `*`). A path it does not allow gets no MCP request; the
