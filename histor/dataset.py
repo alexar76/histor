@@ -39,6 +39,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import IO, Any
 
+from histor.dataset_schema import hf_metadata
 from histor.db import Tx
 from histor.logbook import sign_document
 from histor.registry import OPT_OUT, load_opt_out, opted_out
@@ -413,13 +414,6 @@ def dataset_card(m: dict[str, Any], doi: str | None = None) -> str:
         f"| `{name}` | — | {_mb(meta['bytes'])} | `{meta['sha256'][:16]}…` |"
         for name, meta in f.items()
     )
-    configs = "\n".join(
-        f"- config_name: {name.split('.')[0]}\n  data_files: {name}"
-        for name in ("servers.jsonl.gz", "toolsets.jsonl.gz", "changes.jsonl.gz", "scans.jsonl.gz",
-                     "classifications.jsonl.gz", "tool_extras.jsonl.gz", "extras_changes.jsonl.gz",
-                     "package_observations.jsonl.gz")
-        if name in f  # a card regenerated for an older snapshot names only the files it has
-    )
     # Hugging Face filters datasets by task and size; a card without task_categories is found
     # only by free-text search (2026-10-29: 113 downloads next to 3,205 for a census with the
     # same subject). The size bucket follows the largest configuration, as the Hub computes it.
@@ -452,8 +446,7 @@ tags:
 - ai-agents
 size_categories:
 - {size_category}
-configs:
-{configs}
+{hf_metadata(f)}
 ---
 
 # HISTOR snapshot {day}: what MCP servers advertise, and when it changes

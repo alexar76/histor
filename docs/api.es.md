@@ -133,6 +133,14 @@ lo escanea en el acto. Límites: 30 comprobaciones por minuto y 20 escaneos nuev
 dirección; los cuerpos de más de 2 MiB se rechazan. Con `contribute` no se guarda nada salvo el
 recuento del día para ese resumen.
 
+Si falta `endpoint`, el campo `url` se lee como `endpoint`. La misma consulta también responde a un
+GET, para enlaces y clientes de una línea: `GET /api/v1/check?endpoint=https://example.com/mcp` (o
+`url=`, `package=`, `name=`, más un `toolSetDigest=` opcional). Una lista de herramientas no cabe en
+una URL, así que un GET compara un resumen o informa de lo que HISTOR observó. Un GET no escribe nada
+(ni contribución ni recuento de hosts no listados), comparte los límites anteriores y se envía con
+`Cache-Control: no-store`. Un navegador que no nombra ningún servidor se redirige al formulario de
+`/check`; cualquier otro cliente recibe un 400 que dice qué enviar.
+
 Para un servidor stdio (un paquete de npm o PyPI que arranca tu cliente), envía `package` —`npm:<nombre>` o `pypi:<nombre>`— en lugar de `endpoint`; los nombres de PyPI se normalizan por ti. `target.packageVersion` es la última versión que HISTOR observó en su [sandbox de paquetes](operations.es.md#sandbox-de-paquetes). Un nombre de paquete nunca se cuenta como host desconocido. Dos respuestas más para un paquete. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), para cualquier paquete consultado, esté listado o no, nombra el paquete popular al que se parece este nombre —a un carácter, el mismo nombre bajo otro scope u otros separadores— cuando ese se descarga al menos 100 veces más; los nombres genéricos como `mcp-server` no son de nadie. `target.packageSignals` es lo que dice el registro sobre la versión que HISTOR observó: `provenance` (una compilación atestiguada en CI), `publisher` (nunca un correo), `installScripts` y `flags` con lo que cambió desde la versión observada antes: `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies`, las marcas de un token de publicación robado.
 
 `declared` aparece cuando el conjunto que enviaste es uno que declara el editor del servidor (sección siguiente): `toolSetDigest`, `toolCount`, `when` (la condición del editor, con sus palabras), `source` — `registry` si está en la propia entrada del registro, `url` si está en el archivo de declaración al que apunta (entonces con `url`) —, `registryVersion`, `firstDeclared`, `lastDeclared`. `match` sigue diciendo lo que HISTOR observó: un conjunto declarado que HISTOR nunca vio sigue siendo `different`, o `not-observed` si HISTOR no tiene ningún conjunto, y la nota añade que el editor lo declara, y dónde.

@@ -224,6 +224,9 @@
 # -&gt; {"type":"histor.check/v1","match":"same"|"different"|"previously-observed"|…,
 #     "observed":{"unchangedSince":"…","changes":0}, "patternScan":{…}, "signature":{…}}
 
+# Only looking a server up: a GET with its endpoint (writes nothing)
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://example.com/mcp"
+
 # README badge for your server
 [![MCP tool defs](https://histor.modelmarket.dev/badge/&lt;id&gt;.svg)](https://histor.modelmarket.dev/s/&lt;id&gt;)
 

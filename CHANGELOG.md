@@ -7,6 +7,16 @@
   arenas = 528 MiB of a ~630 MiB heap at rest, grew to ~700 MiB without a crawl, and was OOM-killed at its
   1 GiB limit six times between 2026-11-06 and 11-08, interrupting crawls each time. Prod's limit is also
   1.5 GiB now (`HISTOR_MEM_LIMIT` in the host .env).
+- **`/check` answers a GET and reads `url` as the endpoint.** Between 2026-10-27 and 11-08 every outside
+  GET of `/api/v1/check` got 405: a server's own bot asking `?url=` about its endpoint, another author
+  trying `?url=` and `?endpoint=`, and people who followed a link from PyPI. `GET /api/v1/check?endpoint=`
+  (or `url=`, `package=`, `name=`, optional `toolSetDigest=`) returns the same signed answer, writes
+  nothing (no contribution, no unlisted-host count) and is sent with `Cache-Control: no-store`. A browser
+  that names no server is redirected to the form at `/check`. A POST with `url` and no `endpoint` is read
+  as the endpoint, and the 400 for a missing server now shows a POST and a GET example.
+- **READMEs: the `/check` example prints the answer.** The English one read `.verdict`, a field the answer
+  does not have, and printed `null`; the four translations sent a placeholder that is not JSON and got a
+  400. All five now run as written and add the GET lookup.
 
 ## 0.7.0 — 2026-11-08
 

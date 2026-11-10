@@ -113,9 +113,16 @@ Schema 变更以编号迁移的形式进行（`python -m histor migrate up|statu
 ## 向日志提问
 
 ```bash
-# Is what my client received what HISTOR observed at that endpoint?
-curl -sS https://histor.modelmarket.dev/api/v1/check -H 'Content-Type: application/json' \
-  -d '{"endpoint":"https://example.com/mcp","tools":[ …the tools/list result… ]}'
+# Is what my client received what HISTOR observed at that endpoint? Three lines that run as
+# written: take a listed server, send its endpoint and tool list to /check, read the signed answer.
+# With your own client, replace the second line by the endpoint and the tools/list result it received.
+H=https://histor.modelmarket.dev/api/v1
+S=$(curl -sS "$H/servers?limit=1" | jq -r '.servers[0].id')
+curl -sS "$H/servers/$S" | jq '{endpoint: .server.endpoint, tools: .tools}' > received.json
+curl -sS "$H/check" -H 'Content-Type: application/json' -d @received.json | jq '.match, .target.page'
+
+# Only looking a server up: a GET with the endpoint (it writes nothing)
+curl -sS "$H/check?endpoint=$(jq -r .endpoint received.json)" | jq '.observed, .target.page'
 
 # The signed tree head, and a proof that today's log extends yesterday's
 curl -sS https://histor.modelmarket.dev/api/v1/log/sth

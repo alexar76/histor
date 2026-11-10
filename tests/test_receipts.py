@@ -12,13 +12,13 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from awr import SigningKey, canonicalize
 from fastapi.testclient import TestClient
-
-from histor import merkle
 from histor.app import create_app
 from histor.logbook import verify_document
 from histor.receipts import RECEIPT_STH_TYPE, AnchorRefused, ReceiptLog, sign_anchor
+
+from awr import SigningKey, canonicalize
+from histor import merkle
 
 HUB = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-hub").digest())
 STRANGER = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-stranger").digest())
@@ -135,6 +135,38 @@ class TestTheLogItself:
 
 
 class TestHttp:
+    @pytest.mark.parametrize("field, value", [
+        ("issuer", []),
+        ("issuer", {}),
+        ("issuedAt", "2026-02-30T00:00:00Z"),
+        ("issuedAt", "0000-01-01T00:00:00Z"),
+        ("signature", ["invalid"]),
+        ("signature", "invalid"),
+    ])
+    def test_malformed_anchor_is_refused_without_losing_valid_batch_members(self, world, field, value):
+        services = world["services"]
+        services.receipts = ReceiptLog(services.store, services.key, {HUB.did})
+        first = sign_anchor(HUB, receipt_digest=sri(70), issued_at=now_ts())
+        malformed = {**sign_anchor(HUB, receipt_digest=sri(71), issued_at=now_ts()), field: value}
+        last = sign_anchor(HUB, receipt_digest=sri(72), issued_at=now_ts())
+        with TestClient(create_app(services), raise_server_exceptions=False) as client:
+            response = client.post("/api/v1/receipts/anchors", json={"anchors": [first, malformed, last]})
+            assert response.status_code == 200, response.text
+            assert [r["status"] for r in response.json()["results"]] == ["logged", "refused", "logged"]
+            assert response.json()["sth"]["treeSize"] == 2
+            for digest in (sri(70), sri(72)):
+                assert verify_inclusion(client.get("/api/v1/receipts/proof", params={"digest": digest}).json())
+
+    def test_signed_digest_with_a_trailing_newline_is_refused(self, world):
+        services = world["services"]
+        services.receipts = ReceiptLog(services.store, services.key, {HUB.did})
+        anchor = sign_anchor(HUB, receipt_digest=sri(73) + "\n", issued_at=now_ts())
+        with TestClient(create_app(services)) as client:
+            response = client.post("/api/v1/receipts/anchors", json={"anchors": [anchor]})
+            assert response.status_code == 200
+            assert response.json()["results"][0]["status"] == "refused"
+            assert response.json()["sth"] is None
+
     def test_submit_and_prove_over_http(self, world):
         services = world["services"]
         services.receipts = ReceiptLog(services.store, services.key, {HUB.did})

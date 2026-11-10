@@ -31,7 +31,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from awr import SigningKey, canonicalize
-
 from histor import merkle
 from histor.db import RECEIPT_LOG_LOCK
 from histor.logbook import sign_document, utcnow, verify_document
@@ -81,14 +80,17 @@ class ReceiptLog:
         if set(anchor) != {"type", "issuer", "receiptDigest", "issuedAt", "signature"}:
             raise AnchorRefused("an anchor carries exactly type, issuer, receiptDigest, issuedAt and signature")
         issuer = anchor["issuer"]
-        if issuer not in self.issuers:
+        if not isinstance(issuer, str) or issuer not in self.issuers:
             raise AnchorRefused("issuer is not accepted by this log")
-        if not isinstance(anchor["receiptDigest"], str) or not _SRI.match(anchor["receiptDigest"]):
+        if not isinstance(anchor["receiptDigest"], str) or not _SRI.fullmatch(anchor["receiptDigest"]):
             raise AnchorRefused("receiptDigest must be a sha256- SRI digest")
         stamp = anchor["issuedAt"]
-        if not isinstance(stamp, str) or not _TS.match(stamp):
+        if not isinstance(stamp, str) or not _TS.fullmatch(stamp):
             raise AnchorRefused("issuedAt must be RFC 3339 UTC with whole seconds")
-        when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        try:
+            when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        except ValueError as exc:
+            raise AnchorRefused("issuedAt must be a valid RFC 3339 UTC date") from exc
         if when > now + MAX_FUTURE or when < now - MAX_AGE:
             raise AnchorRefused("issuedAt is outside the window this log accepts")
         if not verify_document(anchor, issuer, ANCHOR_TYPE):

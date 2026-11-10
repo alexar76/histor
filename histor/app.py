@@ -21,7 +21,7 @@ from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -271,7 +271,7 @@ def create_app(services: Services) -> FastAPI:
         # credentials are ever accepted, so the wildcard origin is safe.
         return Response(status_code=204, headers={
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type",
             "Access-Control-Max-Age": "86400",
         })
@@ -1065,8 +1065,11 @@ def create_app(services: Services) -> FastAPI:
         # spend the shared ceiling for the others.
         return all(limiter.allow(f"{kind}:{key}", per_min, 60) for key, per_min in reversed(buckets))
 
-    def run_check(body: dict[str, Any], who: list[tuple[str, int]]) -> dict[str, Any]:
-        """Synchronous on purpose: callers run it in the threadpool, never on the event loop."""
+    def run_check(body: dict[str, Any], who: list[tuple[str, int]], *, count_unlisted: bool = True) -> dict[str, Any]:
+        """Synchronous on purpose: callers run it in the threadpool, never on the event loop.
+
+        *count_unlisted* False keeps a lookup from writing anything: a GET stays a safe method, so
+        a link a crawler follows cannot add a host to the operator's list of unlisted ones."""
         if not allow_all("check", who):
             raise HTTPException(status_code=429, detail="too many checks; slow down")
         addr = who[0][0]  # the bare address — always first, and not forgeable by a header
@@ -1090,7 +1093,7 @@ def create_app(services: Services) -> FastAPI:
 
         def may_count_unlisted(host: str) -> bool:
             # Once per address, host and day: the count says how many callers asked, not how often one did.
-            return limiter.allow(f"unlisted:{addr}:{host}", 1, 86400)
+            return count_unlisted and limiter.allow(f"unlisted:{addr}:{host}", 1, 86400)
 
         try:
             return services.checker.check(body, allow_scan=may_scan, may_contribute=may_contribute,
@@ -1102,6 +1105,29 @@ def create_app(services: Services) -> FastAPI:
     async def check(request: Request) -> dict[str, Any]:
         body = await read_json(request)
         return await run_in_threadpool(run_check, body, limit_key(request))
+
+    CHECK_QUERY_FIELDS = ("endpoint", "url", "package", "name", "toolSetDigest")
+
+    @app.get("/api/v1/check")
+    async def check_by_query(request: Request) -> Response:
+        """The same lookup from a query string, for links, browsers and one-line clients.
+
+        Outside callers asked ``GET /api/v1/check?url=…`` and ``?endpoint=…`` and got 405, and
+        people who followed a link to /api/v1/check got 405 too (2026-10-27..11-08 logs). A tool
+        list does not fit a URL, so a GET compares a ``toolSetDigest`` or reports what HISTOR
+        observed; a GET writes nothing (no contribution, no unlisted-host count). A browser that
+        names no server is sent to the form."""
+        params = request.query_params
+        body: dict[str, Any] = {k: params[k] for k in CHECK_QUERY_FIELDS if params.get(k)}
+        if not body and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/check", status_code=303)
+        if "toolSetDigest" in body:
+            # base64: a link that forgot to percent-encode it arrives with '+' read as a space,
+            # and a digest never holds a space, so reading it back is lossless.
+            body["toolSetDigest"] = body["toolSetDigest"].replace(" ", "+")
+        who = limit_key(request)
+        result = await run_in_threadpool(lambda: run_check(body, who, count_unlisted=False))
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     # -- the receipts log (histor.receipts) --------------------------------------------
     # Submissions authenticate themselves: every anchor is signed by its issuer, and only the

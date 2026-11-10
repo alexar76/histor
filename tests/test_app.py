@@ -149,6 +149,63 @@ def test_check_validates_its_input(api):
     assert client.post("/api/v1/check", content=b"x" * (2 * 1024 * 1024 + 1)).status_code == 413
 
 
+def test_check_answers_a_get_the_way_outside_callers_asked(api):
+    """2026-10-27..11-08: GET ?url=, GET ?endpoint= and a followed link all got 405."""
+    client, world = api
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    posted = check(client, endpoint=endpoint).json()
+    for params in ({"endpoint": endpoint}, {"url": endpoint}):
+        r = client.get("/api/v1/check", params=params)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+        assert r.headers["access-control-allow-origin"] == "*"
+        got = r.json()
+        assert verify_document(got, world["services"].key.did, CHECK_TYPE)
+        assert got["target"]["id"] == posted["target"]["id"] and got["observed"] == posted["observed"]
+        assert got["query"] == {"endpoint": endpoint}, "url is read as the endpoint and echoed as one"
+
+    digest = tool_set_digest(TOOLS)[0]
+    plus_lost = digest.replace("+", " ")  # a link that did not percent-encode the digest
+    same = client.get("/api/v1/check", params={"endpoint": endpoint, "toolSetDigest": plus_lost}).json()
+    assert same["match"] == "same" and same["query"]["toolSetDigest"] == digest
+    assert client.get("/api/v1/check", params={"name": "io.example/weather"}).json()["target"]["id"] == posted["target"]["id"]
+
+
+def test_check_get_without_a_server_points_at_the_form_or_says_what_to_send(api):
+    client, _ = api
+    r = client.get("/api/v1/check", headers={"accept": "text/html,application/xhtml+xml"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/check"
+    r = client.get("/api/v1/check")
+    assert r.status_code == 400 and "for example" in r.json()["detail"] and "/check" in r.json()["detail"]
+    assert "for example" in check(client).json()["detail"]
+    assert client.get("/api/v1/check", params={"endpoint": "x" * 2001}).status_code == 400
+
+
+def test_check_post_reads_url_as_the_endpoint(api):
+    client, _ = api
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    answer = client.post("/api/v1/check", json={"url": endpoint, "tools": TOOLS}).json()
+    assert answer["match"] == "same" and answer["query"]["endpoint"] == endpoint
+    both = client.post("/api/v1/check", json={"endpoint": endpoint, "url": "https://other.example/mcp"}).json()
+    assert both["query"]["endpoint"] == endpoint, "endpoint wins when both are sent"
+    assert client.post("/api/v1/check", json={"url": 5}).json()["detail"].startswith("url must be a string")
+
+
+def test_check_get_writes_nothing(api):
+    client, world = api
+    op = {"x-histor-operator": "t" * 32}
+    answer = client.get("/api/v1/check", params={"url": "https://mcp.linked.dev/mcp"}).json()
+    assert answer["match"] == "not-listed"
+    assert client.get("/api/v1/admin/unlisted", headers=op).json()["hosts"] == [], \
+        "a crawler following a link must not put a host on the operator's list"
+    check(client, url="https://mcp.linked.dev/mcp")
+    assert [h["host"] for h in client.get("/api/v1/admin/unlisted", headers=op).json()["hosts"]] == ["mcp.linked.dev"]
+    tid = target_id(world, "io.example/weather")
+    endpoint = make_target("io.example/weather", "/a").endpoint
+    other = tool_set_digest([tool("get_weather", "per-account variant")])[0]
+    client.get("/api/v1/check", params={"endpoint": endpoint, "toolSetDigest": other, "contribute": "true"})
+    assert world["services"].store.client_reports(tid, "2000-01-01") == []
+
+
 def test_contributions_store_only_a_daily_count(api):
     client, world = api
     tid = target_id(world, "io.example/weather")
@@ -290,6 +347,7 @@ def test_cross_origin_posts_get_a_preflight_answer(api):
         r = client.options(path, headers={"Origin": "https://alexar76.github.io", "Access-Control-Request-Method": "POST"})
         assert r.status_code == 204 and r.headers["access-control-allow-origin"] == "*"
         assert "content-type" in r.headers["access-control-allow-headers"].lower()
+    assert "GET" in client.options("/api/v1/check").headers["access-control-allow-methods"]
 
 
 def test_malformed_input_is_a_400_not_a_500(api):

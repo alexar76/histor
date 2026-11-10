@@ -18,10 +18,12 @@ set -euo pipefail
 
 CONF="${HISTOR_HF_CONF:-/etc/histor-hf}"
 VENV="${HISTOR_HF_VENV:-/opt/histor-hf/venv}"
+SCHEMA_MODULE="${HISTOR_HF_SCHEMA_MODULE:-/usr/local/lib/histor-dataset/dataset_schema.py}"
 HUB_VERSION="2.1.1"
 SNAP="${1:-/var/lib/histor-datasets/latest}"
 
 [[ -r "$CONF/repo" && -r "$CONF/token" ]] || { echo "not set up: $CONF/repo and $CONF/token" >&2; exit 1; }
+[[ -r "$SCHEMA_MODULE" ]] || { echo "missing dataset schema: $SCHEMA_MODULE" >&2; exit 1; }
 if [[ "$SNAP" != --card-only ]]; then
   [[ -f "$SNAP/manifest.json" ]] || { echo "no snapshot at $SNAP" >&2; exit 1; }
   SNAP="$(readlink -f "$SNAP")"
@@ -31,7 +33,8 @@ if [[ ! -x "$VENV/bin/python" ]] || ! "$VENV/bin/python" -c "import huggingface_
   "$VENV/bin/pip" install -q "huggingface_hub==$HUB_VERSION"
 fi
 
-"$VENV/bin/python" - "$CONF" "$SNAP" <<'PY'
+"$VENV/bin/python" - "$CONF" "$SNAP" "$SCHEMA_MODULE" <<'PY'
+import importlib.util
 import json
 import os
 import sys
@@ -39,6 +42,10 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 
 from huggingface_hub import HfApi
+
+spec = importlib.util.spec_from_file_location("histor_dataset_schema", sys.argv[3])
+schema = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(schema)
 
 CARD_LINK = "https://histor.modelmarket.dev/servers?from=hf-dataset"
 CARD_SECTION = f"""## Find your MCP package in the live log
@@ -70,12 +77,14 @@ if source == "--card-only":
         raise RuntimeError("Hugging Face did not return a dataset revision")
     card_path = api.hf_hub_download(repo_id=repo, filename="README.md", repo_type="dataset", revision=revision)
     original = Path(card_path).read_text(encoding="utf-8")
-    updated = linked_card(original)
+    manifest_path = api.hf_hub_download(repo_id=repo, filename="manifest.json", repo_type="dataset", revision=revision)
+    manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+    updated = schema.with_hf_metadata(linked_card(original), manifest["files"])
     if updated != original:
         commit = api.upload_file(
             path_or_fileobj=updated.encode("utf-8"), path_in_repo="README.md",
             repo_id=repo, repo_type="dataset", parent_commit=revision,
-            commit_message="Add live MCP package lookup to the dataset card",
+            commit_message="Declare nullable column types for the HISTOR dataset viewer",
         )
         revision = commit.oid
     print(f"https://huggingface.co/datasets/{repo} · card revision {revision}")
@@ -90,7 +99,7 @@ with TemporaryDirectory(prefix=".hf-upload-", dir=snap.parent) as temporary:
     stage = Path(temporary)
     for name in files:
         if name == "README.md":
-            card = linked_card((snap / name).read_text(encoding="utf-8"))
+            card = schema.with_hf_metadata(linked_card((snap / name).read_text(encoding="utf-8")), manifest["files"])
             (stage / name).write_text(card, encoding="utf-8")
         else:
             os.link(snap / name, stage / name)

@@ -21,9 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from awr import AwrError, SigningKey, canonical_sri, canonicalize, parse_did_key
 from cryptography.exceptions import InvalidSignature
 
+from awr import AwrError, SigningKey, canonical_sri, canonicalize, parse_did_key
 from histor import merkle
 from histor.db import Tx
 from histor.keys import write_head_marker
@@ -58,9 +58,11 @@ def sign_document(key: SigningKey, body: dict[str, Any]) -> dict[str, Any]:
 
 
 def verify_document(document: dict[str, Any], did: str, expected_type: str) -> bool:
-    if document.get("type") != expected_type:
+    if not isinstance(document, dict) or document.get("type") != expected_type:
         return False
     sig = document.get("signature") or {}
+    if not isinstance(sig, dict):
+        return False
     body = {k: v for k, v in document.items() if k != "signature"}
     try:
         from histor.signing import strict_ed25519

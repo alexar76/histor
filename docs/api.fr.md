@@ -135,6 +135,14 @@ sidecar WARDEN l’analyse sur-le-champ. Limites : 30 contrôles par minute et 2
 heure, par adresse ; les corps de plus de 2 MiB sont refusés. Avec `contribute`, rien d’autre que le
 décompte du jour pour cette empreinte n’est stocké.
 
+En l’absence d’`endpoint`, le champ `url` est lu comme `endpoint`. La même consultation répond aussi
+à un GET, pour les liens et les clients d’une ligne : `GET /api/v1/check?endpoint=https://example.com/mcp`
+(ou `url=`, `package=`, `name=`, plus un `toolSetDigest=` facultatif). Une liste d’outils ne tient pas
+dans une URL : un GET compare une empreinte ou indique ce que HISTOR a observé. Un GET n’écrit rien
+(ni contribution ni décompte d’hôtes non listés), partage les limites ci-dessus et est servi avec
+`Cache-Control: no-store`. Un navigateur qui ne nomme aucun serveur est redirigé vers le formulaire
+`/check` ; tout autre client reçoit un 400 qui dit quoi envoyer.
+
 Pour un serveur stdio (un paquet npm ou PyPI que votre client lance), envoyez `package` — `npm:<nom>` ou `pypi:<nom>` — au lieu d’`endpoint` ; les noms PyPI sont normalisés pour vous. `target.packageVersion` est la dernière version qu’HISTOR a observée dans son [bac à sable des paquets](operations.fr.md#bac-à-sable-des-paquets). Un nom de paquet n’est jamais compté comme hôte inconnu. Deux réponses de plus pour un paquet. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), pour tout paquet demandé, listé ou non, nomme le paquet populaire auquel ce nom ressemble — à un caractère près, le même nom sous un autre scope, ou d’autres séparateurs — quand celui-ci est téléchargé au moins 100 fois plus ; les noms génériques comme `mcp-server` ne sont à personne. `target.packageSignals` est ce que dit le registre de la version qu’HISTOR a observée : `provenance` (une compilation attestée en CI), `publisher` (jamais un e-mail), `installScripts`, et `flags` pour ce qui a changé depuis la version observée avant : `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — les marques d’un jeton de publication volé.
 
 `declared` apparaît quand l’ensemble envoyé est un ensemble que déclare l’éditeur du serveur (section suivante) : `toolSetDigest`, `toolCount`, `when` (la condition de l’éditeur, dans ses mots), `source` — `registry` s’il est dans l’entrée du registre elle-même, `url` s’il est dans le fichier de déclaration vers lequel elle pointe (alors avec `url`) —, `registryVersion`, `firstDeclared`, `lastDeclared`. `match` dit toujours ce qu’HISTOR a observé : un ensemble déclaré qu’HISTOR n’a jamais vu reste `different`, ou `not-observed` quand HISTOR n’a aucun ensemble, et la note ajoute que l’éditeur le déclare, et où.

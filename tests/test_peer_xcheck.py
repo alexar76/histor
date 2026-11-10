@@ -6,12 +6,13 @@ import gzip
 import hashlib
 import json
 
+import httpx
 import pytest
-
-from histor import peer_xcheck as px
 from histor.db import open_backend
 from histor.migrations import apply_migrations
 from histor.store import Store
+
+from histor import peer_xcheck as px
 
 EP = "https://seller.example/mcp"
 
@@ -177,7 +178,7 @@ class Client:
     def __init__(self, files):
         self.files, self.asked = files, []
 
-    def get(self, url):
+    def get(self, url, **kwargs):
         self.asked.append(url)
         return Response(*self.files[url]) if url in self.files else Response(b"", 404)
 
@@ -200,10 +201,13 @@ def test_run_reads_the_store_and_writes_the_report(settings, tmp_path, monkeypat
                        ("t1", at, "ok", d, "2025-06-18"))
         tx.execute("INSERT INTO changes(target_id, observed_at, from_toolset, to_toolset, summary) VALUES(?, ?, ?, ?, ?)",
                    ("t1", "2026-11-06T12:00:00Z", "sha256-old", "sha256-new", "{}"))
-    monkeypatch.setattr("histor.netguard.resolve_public", lambda url, **kw: None)
+    from histor.netguard import PinnedTarget
+
+    monkeypatch.setattr("histor.netguard.resolve_public", lambda url, **kw: PinnedTarget(
+        "https://93.184.216.34/robots.txt", "seller.example", "seller.example", "93.184.216.34"))
     changes = json.dumps({"days": [{"day": "2026-11-07", "changes": []}]}).encode()
     client = Client({px.PEER["changes"]: (changes,), px.PEER["panel"]: (f"# panel\n{EP}\n".encode(),),
-                     "https://seller.example/robots.txt": (b"User-agent: *\nAllow: /\n",)})
+                     "https://93.184.216.34/robots.txt": (b"User-agent: *\nAllow: /\n",)})
     out = tmp_path / "report"
     try:
         result = px.run(store, out, days=7, http=client)
@@ -217,6 +221,46 @@ def test_run_reads_the_store_and_writes_the_report(settings, tmp_path, monkeypat
     assert sums["results.json"] == hashlib.sha256((out / "results.json").read_bytes()).hexdigest()
     with pytest.raises(FileExistsError):
         px.run(Store(open_backend(settings.db_path, settings.database_url)), out, http=client)
+
+
+@pytest.mark.parametrize("redirect", [False, True])
+def test_peer_robots_uses_checked_ip_and_never_follows_a_private_redirect(tmp_path, monkeypatch, redirect):
+    from histor.netguard import PinnedTarget
+
+    rows = Rows()
+    rows.target("t1")
+    rows.read("t1", "2026-11-06T02:40:00Z", [tool("a", "old")])
+    rows.read("t1", "2026-11-06T03:30:00Z", [tool("a", "old")])
+    rows.read("t1", "2026-11-06T12:00:00Z", [tool("a", "new")])
+    rows.read("t1", "2026-11-07T02:40:00Z", [tool("a", "new")])
+    rows.change("t1", "2026-11-06T12:00:00Z")
+    monkeypatch.setattr(px, "from_store", lambda *args: rows.data())
+    monkeypatch.setattr("histor.netguard.resolve_public", lambda *args, **kw: PinnedTarget(
+        "https://93.184.216.34/robots.txt", "seller.example", "seller.example", "93.184.216.34"))
+    asked = []
+
+    def handle(request):
+        asked.append(request)
+        if str(request.url) == px.PEER["changes"]:
+            return httpx.Response(200, json=doc(("2026-11-07", [])))
+        if str(request.url) == px.PEER["panel"]:
+            return httpx.Response(200, text=EP)
+        if request.url.host == "127.0.0.1":
+            return httpx.Response(200, text="private service content")
+        if redirect:
+            return httpx.Response(302, headers={"Location": "https://127.0.0.1/admin"})
+        return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+
+    # The caller's client deliberately follows redirects: the untrusted robots request
+    # must override that policy, rather than inherit access to a private second hop.
+    with httpx.Client(transport=httpx.MockTransport(handle), follow_redirects=True) as client:
+        result = px.run(None, tmp_path / "report", http=client)
+    outbound = [r for r in asked if str(r.url) not in (px.PEER["changes"], px.PEER["panel"])]
+    assert [str(r.url) for r in outbound] == ["https://93.184.216.34/robots.txt"]
+    assert outbound[0].headers["host"] == "seller.example"
+    assert outbound[0].extensions["sni_hostname"] == "seller.example"
+    if redirect:
+        assert result["robotsRead"] == {"seller.example": None}
 
 
 def test_a_server_histor_first_read_after_their_read_is_not_counted_as_missed():

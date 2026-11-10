@@ -133,6 +133,13 @@ class CheckError(ValueError):
     pass
 
 
+MISSING_SUBJECT = (
+    "send endpoint, package or name, for example "
+    'POST {"endpoint": "https://example.com/mcp", "tools": [...]} or '
+    "GET /api/v1/check?endpoint=https://example.com/mcp"
+)
+
+
 class Checker:
     def __init__(self, store: Store, key: SigningKey, scanner: Scanner, public_base: str,
                  *, classifier_model: str = "", classifier_enabled: bool = False) -> None:
@@ -148,10 +155,13 @@ class Checker:
               may_count_unlisted: Callable[[str], bool] | None = None) -> dict[str, Any]:
         """*allow_scan* may be a callable: it is asked only when a fresh scan is about to run, so a
         check that needs none does not spend the caller's scan budget."""
-        endpoint = body.get("endpoint")
+        # "url" is what outside callers send most often when they guess the field (2026-11 logs);
+        # it means the endpoint, so it is read as one instead of being refused.
+        endpoint_field = "endpoint" if body.get("endpoint") is not None else "url"
+        endpoint = body.get(endpoint_field)
         name = body.get("name")
         package = body.get("package")
-        for field, value in (("endpoint", endpoint), ("name", name), ("package", package)):
+        for field, value in ((endpoint_field, endpoint), ("name", name), ("package", package)):
             if value is not None and (not isinstance(value, str) or "\x00" in value or len(value) > 2000):
                 raise CheckError(f"{field} must be a string of at most 2000 characters")
         if package:
@@ -163,7 +173,7 @@ class Checker:
                 raise CheckError("package must be npm:<name> or pypi:<name>")
             endpoint = key
         if not endpoint and not name:
-            raise CheckError("send endpoint, package or name")
+            raise CheckError(f"{MISSING_SUBJECT} (the form: {self.public_base}/check)")
 
         client_digest: str | None = None
         client_entries: list[dict[str, Any]] | None = None

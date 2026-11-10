@@ -252,8 +252,8 @@ Sizes are in the table.</p>
 <a href="https://doi.org/{ZENODO_CONCEPT_DOI}">Zenodo</a> (a DOI per archived snapshot; the record names its date, and <a href="latest/">latest/</a> here may be newer) ·
 <a href="latest/">latest/</a> always points at the newest snapshot.</p>
 <h2>Load it</h2>
-<pre>from datasets import load_dataset   # Hugging Face, any snapshot tag
-changes = load_dataset("alexar76/histor-mcp-tool-definitions", data_files="changes.jsonl.gz", split="train")</pre>
+<pre>from datasets import load_dataset   # Hugging Face, typed changes configuration
+changes = load_dataset("alexar76/histor-mcp-tool-definitions", name="changes", split="train")</pre>
 <pre>-- DuckDB: the servers whose tool lists changed most often
 SELECT s.name, count(*) AS changes
 FROM '{BASE}/latest/changes.jsonl.gz' c

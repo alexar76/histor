@@ -153,6 +153,13 @@ set was never scanned and your address still has scan budget, the WARDEN sidecar
 spot. Limits: 30 checks a minute and 20 fresh scans an hour per address; bodies over 2 MiB are
 refused. With `contribute`, nothing but the day's count for that digest is stored.
 
+`url` is read as `endpoint` when `endpoint` is absent. The same lookup also answers a GET, for links
+and one-line clients: `GET /api/v1/check?endpoint=https://example.com/mcp` (or `url=`, `package=`,
+`name=`, plus an optional `toolSetDigest=`). A tool list does not fit in a URL, so a GET compares a
+digest or reports what HISTOR observed. A GET writes nothing (no contribution, no unlisted-host
+count), shares the limits above and is sent with `Cache-Control: no-store`. A browser that names no
+server is redirected to the form at `/check`; any other caller gets a 400 that says what to send.
+
 For a stdio server (an npm or PyPI package your client starts), send `package` — `npm:<name>` or `pypi:<name>` — instead of `endpoint`; PyPI names are normalised for you. `target.packageVersion` is the version HISTOR last observed in its [package sandbox](operations.md#package-sandbox). A package name is never counted as an unlisted host. Two more answers for a package. `packageLookalike` (`of`, `weekly`, `how`, `ownWeekly`), for any package asked about, listed or not, names the popular package this one is named like — one character away, the same name under another scope, or other separators — when that one is downloaded at least 100 times more; generic names such as `mcp-server` are nobody's to imitate. `target.packageSignals` is what the registry says about the version HISTOR observed: `provenance` (an attested CI build), `publisher` (never an email), `installScripts`, and `flags` for what changed since the version observed before it — `provenance-lost`, `publisher-changed`, `install-scripts-added`, `new-dependencies` — the marks of a stolen publishing token.
 
 `declared` appears when the set you sent is one the server's publisher declares (next section): `toolSetDigest`, `toolCount`, `when` (the publisher's condition, in its words), `source` — `registry` for the registry entry itself, `url` for the declaration file it points at (then with `url`) — `registryVersion`, `firstDeclared`, `lastDeclared`. `match` still says what HISTOR observed: a declared set HISTOR never saw stays `different`, or `not-observed` when HISTOR holds no set at all, and the note adds that the publisher declares it, and where.

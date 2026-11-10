@@ -544,7 +544,8 @@ def run(store: Any, out: Path, *, days: int = 7, http: Any = None, peer: dict = 
     if out.exists():
         raise FileExistsError(f"{out} exists")
     agent = f"histor/{__version__} (+https://histor.modelmarket.dev/#crawler; peer cross-check)"
-    client = http or httpx.Client(timeout=30, follow_redirects=True, headers={"User-Agent": agent})
+    client = http or httpx.Client(timeout=30, follow_redirects=True, trust_env=False,
+                                  headers={"User-Agent": agent})
 
     def get(url: str, limit: int = MAX_FILE) -> bytes:
         resp = client.get(url)
@@ -574,8 +575,13 @@ def run(store: Any, out: Path, *, days: int = 7, http: Any = None, peer: dict = 
         if host not in texts:
             texts[host] = None
             try:
-                resolve_public(f"https://{host}/robots.txt")
-                resp = client.get(f"https://{host}/robots.txt")
+                # Endpoints come from the peer's panel, not the operator's config.
+                # Connect only to the address that passed the public-IP check;
+                # a redirect must not turn a public robots.txt into a private GET.
+                pinned = resolve_public(f"https://{host}/robots.txt")
+                resp = client.get(pinned.url, headers={"Host": pinned.host_header},
+                                  extensions={"sni_hostname": pinned.sni_hostname}
+                                  if pinned.sni_hostname else {}, follow_redirects=False)
                 if resp.status_code == 200 and len(resp.content) <= 512 * 1024:
                     texts[host] = resp.text
             except (BlockedAddress, httpx.HTTPError, ValueError):

@@ -38,6 +38,7 @@ APP="${HISTOR_APP_CONTAINER:-histor-histor-1}"
 VOLUME="${HISTOR_DATA_VOLUME:-histor_histor-data}"
 NETWORK="${HISTOR_NETWORK:-histor_default}"
 MODULE="${HISTOR_DATASET_MODULE:-/usr/local/lib/histor-dataset/dataset.py}"
+SCHEMA_MODULE="${HISTOR_DATASET_SCHEMA_MODULE:-$(dirname "$MODULE")/dataset_schema.py}"
 UIDGID="65532:65532"
 
 now=0
@@ -98,7 +99,9 @@ prepare
 mounts=(-v "$VOLUME:/data:ro" -v "$DIR/.staging:/export")
 if ! docker run --rm --entrypoint python "$image" -c 'import histor.dataset' 2> /dev/null; then
   [[ -f "$MODULE" ]] || { echo "the image has no histor.dataset and $MODULE is missing" >&2; exit 1; }
+  [[ -f "$SCHEMA_MODULE" ]] || { echo "the dataset schema helper is missing: $SCHEMA_MODULE" >&2; exit 1; }
   mounts+=(-v "$MODULE:/app/histor/dataset.py:ro")
+  mounts+=(-v "$SCHEMA_MODULE:/app/histor/dataset_schema.py:ro")
 fi
 
 set +e

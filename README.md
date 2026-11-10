@@ -177,7 +177,10 @@ service listens; see [docs/operations.md](docs/operations.md).
 H=https://histor.modelmarket.dev/api/v1
 S=$(curl -sS "$H/servers?limit=1" | jq -r '.servers[0].id')
 curl -sS "$H/servers/$S" | jq '{endpoint: .server.endpoint, tools: .tools}' > received.json
-curl -sS "$H/check" -H 'Content-Type: application/json' -d @received.json | jq '.verdict, .target.page'
+curl -sS "$H/check" -H 'Content-Type: application/json' -d @received.json | jq '.match, .target.page'
+
+# Only looking a server up: a GET with the endpoint (it writes nothing)
+curl -sS "$H/check?endpoint=$(jq -r .endpoint received.json)" | jq '.observed, .target.page'
 
 # The signed tree head, and a proof that today's log extends yesterday's
 curl -sS https://histor.modelmarket.dev/api/v1/log/sth
