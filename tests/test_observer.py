@@ -1,6 +1,7 @@
 """Synthetic boundary checks; no third-party code, Docker or external network."""
 
 import importlib.util
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -588,12 +589,37 @@ def test_an_image_built_on_the_host_is_named_by_its_id(monkeypatch):
     assert obs.image_digest("npm") is None
 
 
-def test_every_image_the_observer_names_is_built_by_install_sh():
-    script = (Path(__file__).parents[1] / "sandbox/install.sh").read_text(encoding="utf-8")
-    for image in [*obs.IMAGES.values(), *(i for by in obs.RUNTIMES.values() for i in by.values())]:
-        assert f"build_image {image} " in script, image
+def test_every_observer_image_is_managed_by_the_installed_image_service(tmp_path, monkeypatch):
+    sandbox = Path(__file__).parents[1] / "sandbox"
+    script = (sandbox / "install.sh").read_text(encoding="utf-8")
+    assert '"$HERE"/images/*.Dockerfile /usr/local/lib/histor-sandbox/images/' in script
+    assert '"$HERE/sandbox_images.sh" /usr/local/sbin/histor-sandbox-images' in script
+    assert "/usr/local/sbin/histor-sandbox-images rebuild" in script
+    assert "ExecStart=/usr/local/sbin/histor-sandbox-images ensure" in script
+    assert "systemctl enable --now histor-sandbox-images.timer" in script
+
+    # Exercise the manager's real image list without Docker or a privileged /run lock.
+    # In check mode each image and its holder already exist, so no build/mutation is needed.
+    docker = tmp_path / "docker"
+    docker.write_text(
+        '#!/bin/sh\n'
+        'case "$1 $2" in\n'
+        '  "image inspect") echo sha256:fixture ;;\n'
+        '  "inspect -f") echo "sha256:fixture true" ;;\n'
+        '  *) echo "unexpected Docker mutation: $*" >&2; exit 1 ;;\n'
+        'esac\n', encoding="utf-8",
+    )
+    docker.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{obs.os.environ['PATH']}")
+    checked = subprocess.run(
+        ["bash", str(sandbox / "sandbox_images.sh"), "check"],
+        check=True, capture_output=True, text=True,
+    )
+    expected = {*obs.IMAGES.values(), *(i for by in obs.RUNTIMES.values() for i in by.values())}
+    assert {line.split()[0] for line in checked.stdout.splitlines()} == expected
+    assert all(line.endswith(" held") for line in checked.stdout.splitlines())
     for name in ("node", "python"):
-        dockerfile = (Path(__file__).parents[1] / f"sandbox/images/{name}.Dockerfile").read_text(encoding="utf-8")
+        dockerfile = (sandbox / f"images/{name}.Dockerfile").read_text(encoding="utf-8")
         assert "git" in dockerfile and "temurin:21-jre" in dockerfile
         assert not any(p in dockerfile for p in ("docker.io", "docker-ce", "docker.sock")), "never Docker in the sandbox"
 

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Bundle the published WARDEN 0.25.0 archive whose dist digest matches the accepted MOMUS build,
+  replacing 0.22.3. Ordinary rebuilds now retain ruleset v19. Both Docker targets and `make scanner`
+  verify the archive hashes, lock, installed version and exact build digest; stale scanner copies fail
+  the build. The observer image test now checks the delegated image manager used by installation.
 - **Two malloc arenas (`MALLOC_ARENA_MAX=2`, compose; `HISTOR_MALLOC_ARENA_MAX` overrides).** glibc gave nearly
   every thread of the web threadpool and the crawl its own arena and kept freed memory in each: prod held 40
   arenas = 528 MiB of a ~630 MiB heap at rest, grew to ~700 MiB without a crawl, and was OOM-killed at its

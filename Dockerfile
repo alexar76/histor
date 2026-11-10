@@ -16,9 +16,12 @@ RUN apt-get update -qq \
 WORKDIR /app
 COPY scanner/package.json scanner/package-lock.json ./scanner/
 COPY scanner/vendor ./scanner/vendor
-RUN npm ci --prefix scanner --omit=dev --no-audit --no-fund && npm cache clean --force
-COPY scanner/scan.mjs ./scanner/
+COPY scanner/check-build.mjs ./scanner/
 COPY scanner/quality ./scanner/quality
+RUN npm ci --prefix scanner --omit=dev --no-audit --no-fund \
+ && npm --prefix scanner run check:build \
+ && npm cache clean --force
+COPY scanner/scan.mjs ./scanner/
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY histor ./histor
 COPY docs/landing ./docs/landing
@@ -52,6 +55,7 @@ FROM application AS with-live-scanner
 USER root
 RUN rm -rf /app/scanner/node_modules
 COPY --from=accepted-scanner /app/scanner/node_modules /app/scanner/node_modules
+RUN npm --prefix scanner run check:build
 USER 65532:65532
 
 # Keep the regular, reproducible vendored build as the default target.

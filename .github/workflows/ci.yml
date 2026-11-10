@@ -47,6 +47,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: npm ci --prefix scanner --no-audit --no-fund
+      - name: verify pinned scanner and rollback rejection
+        run: npm --prefix scanner run check:build && npm --prefix scanner test
       - run: uv sync --extra dev --project .
       - run: uv run --project . ruff check .
       - name: unit tests (both backends)

@@ -1,15 +1,17 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.22.3",
-  "sourceCommit": "213d1f9426031afd62ed68ef579ddc770070c60b",
-  "buildDigest": "d7cc677ef85fb4c274b5247779dfd0362509cfb00913f4c3a7e385af4a3c6f83",
-  "tarball": "aimarket-warden-0.22.3.tgz",
-  "sha256": "183e60ef4435dbd63acb3c2c2299ee446241635aa5002316b8a6d16c903b50b7",
-  "distribution": "the npm 0.22.3 archive as packed for release (docs/evidence/warden-release-0.22.3-2026-11-01); prod HISTOR runs this build since 2026-11-01",
+  "version": "0.25.0",
+  "sourceCommit": "8b5dcf1ca13eabf43ce6764ff32ad937cbc6a102",
+  "registryGitHead": "f29312db4bf71fea7658ae0e73ef45a34d0ff2a1",
+  "buildDigest": "6c6d85a732825d19e56646b24a679268ae6bf86516fc24cc71ccf31872404a4d",
+  "tarball": "aimarket-warden-0.25.0.tgz",
+  "sha256": "2a4d006f685099139db72a5cc74c0dbb370f0213fd633bb696b0a1175676062c",
+  "integrity": "sha512-hJlRVpnPSWLfPsBZ/NAlzJPas6dWnCeRKb93gWaMY2TSLMui/gcSejr7/c9BdnkcuF0SjftiXxISJfeh2K6j6A==",
+  "distribution": "Published npm 0.25.0 archive; dist digest matches the signed accepted MOMUS build.",
+  "qualityRun": "20261110T142549",
   "changes": [
-    "MTL/1.1 tool-set digest (fractions, exponents, empty sets, repeated names)",
-    "CI marker in the --histor User-Agent",
-    "warden-mcp --help",
-    "packaged docs link to public URLs"
-  ]
+    "Ruleset v19 (43 rules: 32 block, 11 advise), replacing bundled v16",
+    "Retain the accepted 0.25.0 Warden build in ordinary reproducible Histor rebuilds"
+  ],
+  "packageJsonSha256": "69acc394ba0a97a97afd6808075cbb2fb3f9d94533808602026f33efc24a3efb"
 }

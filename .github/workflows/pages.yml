@@ -31,6 +31,8 @@ jobs:
       # shields.io/endpoint, so they show what this commit's run measured, not a number
       # somebody typed into the README.
       - run: npm ci --prefix scanner --no-audit --no-fund
+      - name: verify pinned scanner and rollback rejection
+        run: npm --prefix scanner run check:build && npm --prefix scanner test
       - run: uv sync --extra dev --project .
       - name: measure tests and coverage for the badges
         id: measure
