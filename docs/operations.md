@@ -19,7 +19,7 @@ flowchart LR
 From the monorepo root, on a laptop:
 
 ```bash
-./scripts/deploy_histor.sh --remote admin-vps   # syncs histor/ to /opt/histor, then deploys there
+./scripts/deploy_histor.sh --remote root@82.47.146.138   # syncs histor/ to /opt/histor, then deploys there
 ```
 
 `.env` is never copied from a laptop: the host keeps its own. The first run creates it (random operator

@@ -19,7 +19,7 @@ flowchart LR
 Из корня монорепозитория, с ноутбука:
 
 ```bash
-./scripts/deploy_histor.sh --remote admin-vps   # синхронизирует histor/ в /opt/histor и деплоит там
+./scripts/deploy_histor.sh --remote root@82.47.146.138   # синхронизирует histor/ в /opt/histor и деплоит там
 ```
 
 `.env` никогда не копируется с ноутбука: у хоста он свой. Первый запуск создаёт его (случайные токен оператора и

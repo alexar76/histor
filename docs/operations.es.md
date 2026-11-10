@@ -19,7 +19,7 @@ flowchart LR
 Desde la raíz del monorepo, en un portátil:
 
 ```bash
-./scripts/deploy_histor.sh --remote admin-vps   # sincroniza histor/ en /opt/histor y despliega allí
+./scripts/deploy_histor.sh --remote root@82.47.146.138   # sincroniza histor/ en /opt/histor y despliega allí
 ```
 
 `.env` nunca se copia desde un portátil: el host conserva el suyo. La primera ejecución lo crea (token de operador y

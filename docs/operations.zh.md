@@ -19,7 +19,7 @@ flowchart LR
 在笔记本上，从 monorepo 根目录执行：
 
 ```bash
-./scripts/deploy_histor.sh --remote admin-vps   # 把 histor/ 同步到 /opt/histor，然后在那里部署
+./scripts/deploy_histor.sh --remote root@82.47.146.138   # 把 histor/ 同步到 /opt/histor，然后在那里部署
 ```
 
 `.env` 从不从笔记本复制：主机保留自己的那份。首次运行会创建它（随机的运营者令牌和 Postgres 密码，权限 0600，只打印名称）；

@@ -24,15 +24,18 @@ mkdir -p "$DIR"
 chmod 700 "$DIR"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
-dump="$DIR/histor-$stamp.dump"
-docker exec "$PG" pg_dump -U histor -d histor -Fc > "$dump.part"
-docker exec -i "$PG" pg_restore --list < "$dump.part" > /dev/null  # a dump that does not list is not a backup
-mv "$dump.part" "$dump"
-
+# Capture the marker before the database snapshot. The append-only database may be newer
+# than this marker, but a marker copied after pg_dump could refer to a newer tree than
+# the dump contains and would correctly make a restore refuse to start.
 keys="$DIR/keys-$stamp.tar"
 docker cp "$APP:/data" - > "$keys.part"  # a tar stream of the data volume: issuer.key, provider keys, sth-marker.json
 tar -tf "$keys.part" | grep -q 'issuer.key$' || { echo "no issuer.key in the data volume copy" >&2; rm -f "$keys.part"; exit 1; }
 mv "$keys.part" "$keys"
+
+dump="$DIR/histor-$stamp.dump"
+docker exec "$PG" pg_dump -U histor -d histor -Fc > "$dump.part"
+docker exec -i "$PG" pg_restore --list < "$dump.part" > /dev/null  # a dump that does not list is not a backup
+mv "$dump.part" "$dump"
 
 # Keep the newest KEEP_DAYS + 1 of each (the last three nights by default). By count, not age:
 # `find -mtime +2` rounds down to whole days, and a run a few minutes earlier than the night
