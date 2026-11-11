@@ -149,6 +149,9 @@ class Settings:
     # Demo mode (HISTOR_WATCH_DEMO=1): the plan, the price and the page are shown, and checkout is
     # closed whatever keys are set — the way the desks run while sales are not open.
     watch_demo: bool = False
+    # Publisher-signed revision indexes (histor.signed_revisions): ``server=https://…/index.json``
+    # pairs, separated by ``;``. Empty = the pilot default (alexar76/histor). ``-`` = none.
+    revision_sources: tuple[tuple[str, str], ...] = ()
 
     @property
     def sandbox_enabled(self) -> bool:
@@ -280,6 +283,7 @@ def load_settings() -> Settings:
         watch_price_cents=_int("HISTOR_WATCH_PRICE_CENTS", 2900, minimum=100),
         watch_days=_int("HISTOR_WATCH_DAYS", 30, minimum=1),
         watch_demo=_truthy("HISTOR_WATCH_DEMO", "0"),
+        revision_sources=_revision_sources(),
     )
     if settings.is_prod:
         # Fail closed: a production instance with a guessable admin surface, a cleartext public
@@ -295,3 +299,9 @@ def load_settings() -> Settings:
         if settings.allow_private_targets:
             raise RuntimeError("HISTOR_ALLOW_PRIVATE_TARGETS is refused under HISTOR_PROFILE=prod")
     return settings
+
+
+def _revision_sources() -> tuple[tuple[str, str], ...]:
+    from histor.signed_revisions import parse_sources
+
+    return parse_sources(os.environ.get("HISTOR_REVISION_SOURCES"))

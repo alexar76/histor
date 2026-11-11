@@ -36,6 +36,7 @@ from histor.checkpoint import (
     vkey,
 )
 from histor.declared import public as declared_public
+from histor import signed_revisions as signed_revisions_mod
 from histor.labels import SHORT
 from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
@@ -661,6 +662,13 @@ def create_app(services: Services) -> FastAPI:
             "declarationFile": store.declaration_file(target_id),
             # The operator's server card, read where robots.txt allows (histor.cards): its word, not an observation.
             "serverCard": store.server_card(target_id),
+            # Latest publisher-signed SUPP-06 revision HISTOR has verified (histor.signed_revisions).
+            "signedRevision": (
+                signed_revisions_mod.public(sr) if (
+                    sr := (signed_revisions_mod.latest_for_target(store, target_id)
+                           or signed_revisions_mod.latest_for_server(store, t["name"]))
+                ) else None
+            ),
         }
         if t["transport"] == "stdio":
             try:

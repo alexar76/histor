@@ -29,6 +29,7 @@ from histor.lookalike import default_index
 from histor.mcpclient import MAX_TOOLS
 from histor.packages import package_key
 from histor.scanner import Scanner, ScannerError
+from histor import signed_revisions
 from histor.store import Store, dumps
 from histor.subject import MtlError, tool_set_digest
 
@@ -104,6 +105,11 @@ NOTE_DECLARED = (
     " The publisher declares this set {where}{when}. That is the publisher's word, not an observation: HISTOR "
     "has not seen this set served."
 )
+NOTE_SIGNED_REVISION = (
+    " The publisher signed revision {revision} of this server's tool manifest (Rekor log index {log_index})."
+)
+NOTE_SIGNED_MATCH = " The tools you sent match that signed revision."
+NOTE_SIGNED_DIFF = " The tools you sent differ from that signed revision."
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
 # lastStatus robots-disallowed / robots-unreachable (histor.robots): HISTOR leaves the server alone.
 NOTE_ROBOTS_SINCE = (
@@ -265,6 +271,16 @@ class Checker:
                 row = self.store.declared_toolset(target["id"], client_digest)
                 if row:
                     result["declared"] = declared_public(row)
+            # Publisher-signed SUPP-06 revision (histor.signed_revisions), when HISTOR has ingested one.
+            signed_row = signed_revisions.latest_for_target(self.store, target["id"])
+            if signed_row is None and target.get("name"):
+                signed_row = signed_revisions.latest_for_server(self.store, target["name"])
+            if signed_row is not None:
+                envelope = signed_revisions.envelope_from_row(signed_row)
+                # SUPP-06 digests the raw tools/list members, not the MTL/1 digest of them.
+                raw_tools = body["tools"] if isinstance(body.get("tools"), list) and digest_error is None else None
+                match = signed_revisions.match_client_tools(envelope, raw_tools)
+                result["signedRevision"] = signed_revisions.public(signed_row, match=match)
             if (body.get("contribute") is True and client_digest
                     and (may_contribute is None or may_contribute(target["id"]))):
                 day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -289,6 +305,13 @@ class Checker:
                      else f"in its server card ({declared['url']})" if declared.get("source") == "card" and declared.get("url")
                      else "in its registry entry")
             note += NOTE_DECLARED.format(where=where, when=f' ("{declared["when"]}")' if declared.get("when") else "")
+        if result.get("signedRevision"):
+            sr = result["signedRevision"]
+            note += NOTE_SIGNED_REVISION.format(revision=sr["revision"], log_index=sr["logIndex"])
+            if sr.get("match") == "same":
+                note += NOTE_SIGNED_MATCH
+            elif sr.get("match") == "different":
+                note += NOTE_SIGNED_DIFF
         last_status = str(target["last_status"] or "") if target is not None else ""
         left_alone = ((NOTE_ROBOTS_NEVER, NOTE_ROBOTS_SINCE) if last_status.startswith("robots-")
                       else (NOTE_PAYCRAWL_NEVER, NOTE_PAYCRAWL_SINCE) if last_status == "pay-per-crawl" else None)

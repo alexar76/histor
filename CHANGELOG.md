@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Publisher-signed revisions on `/check` and a second Merkle tree (OWASP SUPP-06 follow-through).**
+  - `histor.signed_revisions` pulls a publisher's `manifest-revisions` index (default:
+    `alexar76/histor`), verifies the Sigstore bundle + Rekor entry, stores the envelope, and
+    appends a HISTOR-signed leaf to `revision_log_nodes` (own STHs; the label log stays labels-only).
+  - `/api/v1/check` and the server page answer with `signedRevision` (revision, signer, Rekor
+    `logIndex`, optional `match` against the client's raw `tools` under the SUPP-06 digest).
+  - CLI: `histor revision-sync`. Env: `HISTOR_REVISION_SOURCES` (`server=url;…`, empty = pilot
+    default, `-` = none). Migration 022. Checked: unit ingest + `/check`; live pull of revision 1
+    (`logIndex` 3803861704, digest `sha256:4789b5c9…c842`).
+  - Sign workflows for the other seven `io.github.alexar76/*` registry entries (warden, argus,
+    aimarket-hub, aimarket-mcp, oracle-gateway, plugins, attested-memory); generator
+    `histor/scripts/gen_sign_manifest_workflows.py`.
 - Bundle the published WARDEN 0.25.0 archive whose dist digest matches the accepted MOMUS build,
   replacing 0.22.3. Ordinary rebuilds now retain ruleset v19. Both Docker targets and `make scanner`
   verify the archive hashes, lock, installed version and exact build digest; stale scanner copies fail

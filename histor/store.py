@@ -260,9 +260,10 @@ class Store:
                 (target_id, limit),
             )
 
-    # The trees this store holds: the label log and the receipts log (histor.receipts). A table
-    # name reaches SQL only through this set, never from a caller's string.
-    NODE_TABLES = frozenset({"log_nodes", "receipt_log_nodes"})
+    # The trees this store holds: the label log, the receipts log (histor.receipts), and the
+    # publisher-revision log (histor.signed_revisions). A table name reaches SQL only through
+    # this set, never from a caller's string.
+    NODE_TABLES = frozenset({"log_nodes", "receipt_log_nodes", "revision_log_nodes"})
 
     @classmethod
     def _nodes(cls, table: str) -> str:

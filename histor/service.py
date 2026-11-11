@@ -23,6 +23,7 @@ from histor.logbook import Logbook
 from histor.migrations import apply_migrations
 from histor.receipts import ReceiptLog
 from histor.scanner import Scanner
+from histor.signed_revisions import RevisionIngest
 from histor.signing import ProviderSigner
 from histor.store import Store
 from histor.witness import Witness, load_known_logs
@@ -43,6 +44,7 @@ class Services:
     checker: Checker
     provider: ProviderSigner
     receipts: ReceiptLog | None = None
+    revisions: RevisionIngest | None = None
     witness: Witness | None = None
     stop: threading.Event = field(default_factory=threading.Event)
     # Stripe transport for histor.watch_paid; None = the real API (tests put a fake here).
@@ -84,13 +86,18 @@ def build(settings: Settings, *, crawler_kwargs: dict | None = None, backend: Ba
                       classifier_enabled=settings.classifier_enabled)
     provider = ProviderSigner(settings.provider_key_path, pqc=settings.pqc)
     receipts = ReceiptLog(store, key, set(settings.receipt_issuers))
+    revisions = RevisionIngest(
+        store, key, settings.revision_sources,
+        allow_private=settings.allow_private_targets,
+        verify_signatures=True,
+    )
     # histor-tlog/2: the witness has its own key (created on first use) and knows only the
     # logs the operator listed.
     witness_key = SigningKey.from_seed(load_or_create_seed(settings.witness_key_path, create=True))
     witness = Witness(store, witness_key, settings.cosigner_name,
                       load_known_logs(Path(settings.witness_logs) if settings.witness_logs else None))
     return Services(settings, backend, store, key, issuer, logbook, scanner, crawler, checker, provider,
-                    receipts=receipts, witness=witness)
+                    receipts=receipts, revisions=revisions, witness=witness)
 
 
 def crawl_in_background(services: Services, *, include_remote: bool = True) -> bool:

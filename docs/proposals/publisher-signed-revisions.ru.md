@@ -171,3 +171,18 @@ MinimalWitness, CrawlCheck). Но это журнал того, что серв�
 - такие же процессы для остальных 7 записей;
 - проверка в WARDEN;
 - черновик комментария в OWASP #21.
+
+## Сделано 11.11 (после §92)
+
+- Первая подпись: revision 1, Rekor `3803861704`, run
+  https://github.com/alexar76/histor/actions/runs/42968858469
+- `histor.signed_revisions` + migration 022 + `histor revision-sync` + `signedRevision` в `/check`
+  и на странице сервера. Лист — во **втором** дереве (`revision_log_nodes`), со своими STH под
+  ключом HISTOR. Основной лог меток не трогали (спека: только MTL/1). Свидетели C2SP пока
+  соподписывают checkpoint основного лога; Rekor остаётся публичным журналом SUPP-06.
+- Workflows `sign-manifest-revision.yml` для остальных 7 записей (зеркала ещё не гоняли).
+- Черновик комментария в OWASP #21:
+  `PromoMaterials/outreach/owasp-mcpstg-21-public-log-2026-11-11.md` (публикует владелец).
+
+**Ещё не сделано:** монитор (e)/(f); WARDEN gate; прогон Sign на 7 серверах; деплой
+`revision-sync` на prod.

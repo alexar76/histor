@@ -517,6 +517,49 @@ MIGRATION_021: tuple[str, ...] = (
     "UPDATE server_cards SET checked_at = '1970-01-01T00:00:00Z' WHERE status IN ('absent', 'robots')",
 )
 
+# Publisher-signed tool-manifest revisions (OWASP SUPP-06 / histor.signed_revisions): a second Merkle
+# tree whose leaves are HISTOR-signed digests of envelopes the publisher already logged in Rekor.
+# The label log stays labels-only; this tree binds the registry name to the Rekor entry for /check.
+MIGRATION_022: tuple[str, ...] = (
+    """
+    CREATE TABLE revision_log_nodes (
+        level INTEGER NOT NULL,
+        idx BIGINT NOT NULL,
+        hash TEXT NOT NULL,
+        PRIMARY KEY (level, idx)
+    )
+    """,
+    """
+    CREATE TABLE revision_sths (
+        tree_size BIGINT PRIMARY KEY,
+        root TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        body TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE signed_revisions (
+        server TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        target_id TEXT,
+        manifest_digest TEXT NOT NULL,
+        server_version TEXT,
+        signer TEXT NOT NULL,
+        log_index TEXT NOT NULL,
+        created_at TEXT,
+        source_url TEXT NOT NULL,
+        envelope_digest TEXT NOT NULL,
+        body TEXT NOT NULL,
+        leaf_index BIGINT NOT NULL,
+        verified_at TEXT,
+        ingested_at TEXT NOT NULL,
+        PRIMARY KEY (server, revision)
+    )
+    """,
+    "CREATE INDEX signed_revisions_target ON signed_revisions(target_id, revision)",
+    "CREATE INDEX signed_revisions_digest ON signed_revisions(manifest_digest)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -540,6 +583,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (19, "019_robots_txt", MIGRATION_019),
     (20, "020_server_cards", MIGRATION_020),
     (21, "021_card_path_mcp_json", MIGRATION_021),
+    (22, "022_signed_revisions", MIGRATION_022),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

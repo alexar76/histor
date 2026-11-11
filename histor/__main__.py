@@ -129,7 +129,16 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|revision|payer-audit|upgrade-brief|sandboxes|export-dataset DIR]", file=sys.stderr)
+        if command == "revision-sync":
+            # Pull publisher-signed revision indexes (histor.signed_revisions) into the local store
+            # and append a leaf per new envelope. Needs network when indexes are remote.
+            if services.revisions is None:
+                print("revision ingest is not wired", file=sys.stderr)
+                return 1
+            print(json.dumps(services.revisions.sync(), indent=2, ensure_ascii=False))
+            return 0
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|revision|"
+              "revision-sync|payer-audit|upgrade-brief|sandboxes|export-dataset DIR]", file=sys.stderr)
         return 2
     finally:
         services.close()
