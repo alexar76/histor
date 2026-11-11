@@ -2,9 +2,9 @@
 """Write Sign-manifest-revision workflows for the other alexar76 registry servers.
 
 HISTOR's own workflow lives in histor/.github/workflows/ and installs from the checkout.
-Every other satellite installs ``aimarket-histor[sigstore]`` from the live GitHub tip of
-``alexar76/histor`` (PyPI 0.7.0 predates ``histor revision``), then lists tools from its
-released package (stdio) or public HTTP endpoint.
+Every other satellite installs the pinned PyPI release ``aimarket-histor[sigstore]==0.8.0``
+(the first with ``histor revision``), then lists tools from its released package (stdio) or
+public HTTP endpoint.
 
 Run from the monorepo root::
 
@@ -125,11 +125,11 @@ jobs:
         run: |
           [[ "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+([.a-z0-9]*)$ ]] || {{ echo "not a version: $VERSION"; exit 2; }}
 
-      - name: histor revision CLI (from alexar76/histor tip)
+      - name: histor revision CLI (pinned PyPI release)
         run: |
           uv venv --python 3.12 .rv
-          # PyPI 0.7.0 has no `histor revision`; the tip of alexar76/histor does.
-          uv pip install --python .rv "aimarket-histor[sigstore] @ git+https://github.com/alexar76/histor.git"
+          # A pinned release, not a repository tip: what verifies and signs here is a published, fixed version.
+          uv pip install --python .rv "aimarket-histor[sigstore]==0.8.0"
 {npm_install_step}
       - name: The manifest-revisions branch
         run: |

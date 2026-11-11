@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-11
+
 - **Publisher-signed revisions on `/check` and a second Merkle tree (OWASP SUPP-06 follow-through).**
   - `histor.signed_revisions` pulls a publisher's `manifest-revisions` index (default:
     `alexar76/histor`), verifies the Sigstore bundle + Rekor entry, stores the envelope, and
@@ -13,7 +15,8 @@
     (`logIndex` 3803861704, digest `sha256:4789b5c9…c842`).
   - Sign workflows for the other seven `io.github.alexar76/*` registry entries (warden, argus,
     aimarket-hub, aimarket-mcp, oracle-gateway, plugins, attested-memory); generator
-    `histor/scripts/gen_sign_manifest_workflows.py`.
+    `histor/scripts/gen_sign_manifest_workflows.py`. They install the pinned PyPI release
+    `aimarket-histor[sigstore]==0.8.0`, not the repository tip.
   - Monitor SUPP-06 cases (e)/(f): `histor.revision_monitor` writes `security_events`
     (`revision-forked-current`, `revision-unsigned-digest`) and surfaces `signedRevision.alerts`
     on `/check` (Atom feed: `/security-feed.xml`).
