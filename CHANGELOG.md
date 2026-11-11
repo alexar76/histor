@@ -6,6 +6,18 @@
   replacing 0.22.3. Ordinary rebuilds now retain ruleset v19. Both Docker targets and `make scanner`
   verify the archive hashes, lock, installed version and exact build digest; stale scanner copies fail
   the build. The observer image test now checks the delegated image manager used by installation.
+- **`histor revision`: publisher-signed tool-manifest revisions, as OWASP MCPSTG-SUPP-06 describes them.**
+  - `build` reads a server's tools (stdio, HTTP or a saved list) and writes the statement SUPP-06 signs. It uses
+    SUPP-06's canonical form: snapshot fields keyed by tool name, RFC 8785, SHA-256 per manifest and per tool,
+    with the previous digest and a revision number. `--if-changed` skips an unchanged manifest.
+  - `sigstore sign` in the publisher's CI signs the statement with a short-lived identity and records it in Rekor.
+  - `envelope` and `record` keep the envelope as `revisions/<n>.json` plus `index.json`.
+  - `verify` is the admission check, in SUPP-06's order and with its reasons: `unsigned`, `unexpected_signer`,
+    `not_logged`, `digest_mismatch`. For `io.github.<owner>/...` the signer must be a GitHub Actions workflow
+    in a repository of `<owner>`.
+  - Signature checks need the new `sigstore` extra. Checked against a real Sigstore bundle on 2026-11-11.
+  - `.github/workflows/sign-manifest-revision.yml` signs the released `aimarket-histor` server this way on
+    demand and pushes to the `manifest-revisions` branch.
 - **Two malloc arenas (`MALLOC_ARENA_MAX=2`, compose; `HISTOR_MALLOC_ARENA_MAX` overrides).** glibc gave nearly
   every thread of the web threadpool and the crawl its own arena and kept freed memory in each: prod held 40
   arenas = 528 MiB of a ~630 MiB heap at rest, grew to ~700 MiB without a crawl, and was OOM-killed at its

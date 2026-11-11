@@ -1,0 +1,101 @@
+# Signed, logged tool-manifest revision (OWASP MCPSTG-SUPP-06) for io.github.alexar76/histor.
+#
+# Reads the tools the released aimarket-histor MCP server serves (stdio, from PyPI), builds the
+# SUPP-06 statement (RFC 8785, SHA-256 per tool and per manifest) and signs it keyless with this
+# workflow's GitHub OIDC identity. Sigstore records the signature in Rekor. The envelope goes to the
+# manifest-revisions branch: revisions/<n>.json plus index.json. Nothing is signed when the manifest
+# is the same as the last revision's.
+#
+# Run by hand: Actions -> Sign manifest revision -> Run workflow -> version (e.g. 0.7.0).
+# Format and checks: histor/revision.py (`histor revision verify`).
+name: Sign manifest revision
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "aimarket-histor version on PyPI whose MCP server is signed, e.g. 0.7.0"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manifest-revisions
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # push the envelope to the manifest-revisions branch
+      id-token: write   # Sigstore keyless signing with this workflow's identity
+    env:
+      VERSION: ${{ inputs.version }}
+      SERVER: io.github.alexar76/histor
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+
+      - name: Check the version input
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.a-z0-9]*)$ ]] || { echo "not a version: $VERSION"; exit 2; }
+
+      - name: Tools (this checkout's histor + sigstore)
+        run: |
+          uv venv --python 3.12 .rv
+          uv pip install --python .rv ".[sigstore]"
+
+      - name: The manifest-revisions branch
+        run: |
+          if git ls-remote --exit-code --heads origin manifest-revisions >/dev/null; then
+            git fetch --depth 1 origin manifest-revisions:manifest-revisions
+            git worktree add rev manifest-revisions
+          else
+            git worktree add --detach rev
+            git -C rev switch --orphan manifest-revisions
+          fi
+
+      - name: Build the statement
+        id: build
+        run: |
+          index=()
+          [[ -f rev/index.json ]] && index=(--index rev/index.json)
+          .rv/bin/histor revision build --server "$SERVER" \
+            --identity "https://github.com/${GITHUB_WORKFLOW_REF}" \
+            --server-version "$VERSION" --source "pypi:aimarket-histor==${VERSION}" \
+            --stdio "uvx --from aimarket-histor==${VERSION} aimarket-histor" --timeout 120 \
+            "${index[@]}" --if-changed -o statement.json
+
+      - name: Sign (Sigstore keyless; the entry goes to Rekor)
+        if: steps.build.outputs.changed == 'true'
+        run: .rv/bin/python -m sigstore sign --bundle statement.sigstore.json statement.json
+
+      - name: Envelope, index, and a check of what was just written
+        if: steps.build.outputs.changed == 'true'
+        run: |
+          .rv/bin/histor revision envelope statement.json statement.sigstore.json -o envelope.json
+          .rv/bin/histor revision record envelope.json --dir rev
+          n="${{ steps.build.outputs.revision }}"
+          .rv/bin/histor revision verify "rev/revisions/${n}.json" \
+            --stdio "uvx --from aimarket-histor==${VERSION} aimarket-histor" --timeout 120 | tee verify.json
+          {
+            echo "### ${SERVER}: revision ${n} (aimarket-histor ${VERSION})"
+            echo
+            echo '```json'
+            cat verify.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the revision
+        if: steps.build.outputs.changed == 'true'
+        run: |
+          n="${{ steps.build.outputs.revision }}"
+          log_index="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["transparencyLog"]["logIndex"])' "rev/revisions/${n}.json")"
+          cd rev
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.json revisions
+          git commit -m "Revision ${n} of ${SERVER}: aimarket-histor ${VERSION}, Rekor log index ${log_index}"
+          git push origin HEAD:manifest-revisions

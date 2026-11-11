@@ -36,6 +36,13 @@ def main(argv: list[str] | None = None) -> int:
 
         return tool_cost(args[1:])
 
+    if command == "revision":
+        # Runs in a publisher's CI (build, envelope, record) or a client's check (verify):
+        # no settings, no database, no HISTOR keys. The signature is Sigstore's, made by the CI.
+        from histor.revision import main as revision
+
+        return revision(args[1:])
+
     if command == "payer-audit":
         # Offline reducer: no production settings, database, signing keys or wallet access.
         from histor.payer_audit_cli import main as payer_audit
@@ -122,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
         if command == "issuer":
             print(services.key.did)
             return 0
-        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|payer-audit|upgrade-brief|sandboxes|export-dataset DIR]", file=sys.stderr)
+        print("usage: histor [serve|mcp|crawl|migrate [up|status]|issuer|audit URL|tool-cost|revision|payer-audit|upgrade-brief|sandboxes|export-dataset DIR]", file=sys.stderr)
         return 2
     finally:
         services.close()

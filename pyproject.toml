@@ -33,6 +33,11 @@ pqc = [
 cost = [
     "tiktoken>=0.12,<1",
 ]
+# Publisher-signed manifest revisions (`histor revision verify`, OWASP MCPSTG-SUPP-06): Sigstore
+# signature, certificate identity and Rekor inclusion. Signing itself runs `sigstore sign` in CI.
+sigstore = [
+    "sigstore>=4.5,<5",
+]
 dev = [
     "pytest>=8",
     "tiktoken>=0.12,<1",
