@@ -184,5 +184,8 @@ MinimalWitness, CrawlCheck). Но это журнал того, что серв�
 - Черновик комментария в OWASP #21:
   `PromoMaterials/outreach/owasp-mcpstg-21-public-log-2026-11-11.md` (публикует владелец).
 
-**Ещё не сделано:** монитор (e)/(f); WARDEN gate; прогон Sign на 7 серверах; деплой
-`revision-sync` на prod.
+**Сделано 11.11 (прод + клиент):**
+- Sign на всех 8 (histor + 7 спутников); `revision-sync` на `82.47.146.138` принял индексы.
+- Монитор (e)/(f): `histor.revision_monitor` → `security_events` + `signedRevision.alerts` на `/check`.
+- WARDEN gate: `warden wrap --histor-revision <registry-name>` сверяет tools/list с tip HISTOR
+  перед привилегированным `tools/call` (`--histor-revision-all` — перед каждым вызовом).

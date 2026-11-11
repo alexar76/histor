@@ -38,10 +38,17 @@ MAX_INDEX_BYTES = 256 * 1024
 MAX_ENVELOPE_BYTES = 512 * 1024
 FETCH_TIMEOUT_S = 15.0
 
-# Pilot: the first signed index. Operators add more with HISTOR_REVISION_SOURCES.
+# Pilot indexes for our registry entries. Operators override with HISTOR_REVISION_SOURCES.
+_RAW = "https://raw.githubusercontent.com/alexar76/{repo}/manifest-revisions/index.json"
 DEFAULT_SOURCES: tuple[tuple[str, str], ...] = (
-    ("io.github.alexar76/histor",
-     "https://raw.githubusercontent.com/alexar76/histor/manifest-revisions/index.json"),
+    ("io.github.alexar76/histor", _RAW.format(repo="histor")),
+    ("io.github.alexar76/aimarket-hub", _RAW.format(repo="aimarket-hub")),
+    ("io.github.alexar76/aimarket-mcp", _RAW.format(repo="aimarket-mcp")),
+    ("io.github.alexar76/aimarket-oracle-gateway", _RAW.format(repo="aimarket-oracle-gateway")),
+    ("io.github.alexar76/aimarket-plugins", _RAW.format(repo="aimarket-plugins")),
+    ("io.github.alexar76/attested-memory", _RAW.format(repo="attested-memory")),
+    ("io.github.alexar76/warden", _RAW.format(repo="warden")),
+    ("io.github.alexar76/argus3", _RAW.format(repo="argus")),
 )
 
 
@@ -71,7 +78,8 @@ def parse_sources(raw: str | None) -> tuple[tuple[str, str], ...]:
     return tuple(out)
 
 
-def public(row: dict[str, Any], *, match: str | None = None) -> dict[str, Any]:
+def public(row: dict[str, Any], *, match: str | None = None,
+           alerts: list[str] | None = None) -> dict[str, Any]:
     """What ``/check`` and the server page show for one accepted revision."""
     body = {k: v for k, v in (
         ("revision", row["revision"]),
@@ -85,6 +93,7 @@ def public(row: dict[str, Any], *, match: str | None = None) -> dict[str, Any]:
         ("signatureVerified", bool(row.get("verified_at"))),
         ("leafIndex", row.get("leaf_index")),
         ("match", match),
+        ("alerts", alerts or None),
     ) if v is not None}
     return body
 
@@ -249,6 +258,13 @@ class RevisionIngest:
                 accepted += 1
             else:
                 duplicate += 1
+        # SUPP-06 case (e): two tip revisions that share a previous digest.
+        from histor import revision_monitor
+        targets = self.store.targets_by(name=server)
+        target_id = targets[0]["id"] if targets else None
+        revision_monitor.inspect_index(
+            self.store, self.journal.key, server=server, target_id=target_id, entries=entries,
+        )
         return {"accepted": accepted, "duplicate": duplicate, "failed": failed, "errors": errors}
 
     def accept_envelope(self, envelope: dict[str, Any], *, source_url: str,

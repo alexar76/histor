@@ -2,8 +2,9 @@
 """Write Sign-manifest-revision workflows for the other alexar76 registry servers.
 
 HISTOR's own workflow lives in histor/.github/workflows/ and installs from the checkout.
-Every other satellite installs ``aimarket-histor[sigstore]`` from PyPI for the CLI, then lists
-tools from its released package (stdio) or public HTTP endpoint.
+Every other satellite installs ``aimarket-histor[sigstore]`` from the live GitHub tip of
+``alexar76/histor`` (PyPI 0.7.0 predates ``histor revision``), then lists tools from its
+released package (stdio) or public HTTP endpoint.
 
 Run from the monorepo root::
 
@@ -20,10 +21,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SERVERS: list[tuple[str, str, str, dict[str, str]]] = [
     ("warden", "io.github.alexar76/warden", "0.25.0",
      {"kind": "stdio", "source": "npm:@aimarket/warden@{VERSION}",
-      "stdio": "npx -y @aimarket/warden@{VERSION}", "node": "20"}),
+      "npm_global": "@aimarket/warden@{VERSION}", "bin": "warden-mcp",
+      "stdio": "warden-mcp", "node": "20"}),
     ("argus", "io.github.alexar76/argus3", "0.3.6",
      {"kind": "stdio", "source": "npm:@alexar76/argus3@{VERSION}",
-      "stdio": "npx -y @alexar76/argus3@{VERSION}", "node": "20"}),
+      "npm_global": "@alexar76/argus3@{VERSION}", "bin": "argus",
+      "stdio": "argus", "node": "20"}),
     ("aimarket-hub", "io.github.alexar76/aimarket-hub", "3.19.0",
      {"kind": "url", "source": "https://modelmarket.dev/mcp",
       "url": "https://modelmarket.dev/mcp"}),
@@ -69,9 +72,20 @@ def workflow(server: str, version_hint: str, how: dict[str, str]) -> str:
           node-version: "{node}"
 """
 
+    npm_global = how.get("npm_global")
+    npm_install_step = ""
+    if npm_global:
+        npm_install_step = f"""
+      - name: Install MCP server (npm -g)
+        run: |
+          npm install -g "{npm_global}"
+          command -v "{how.get("bin", "mcp")}" >/dev/null
+"""
+
     # Substitute {VERSION} → ${VERSION} for shell; keep the literal for the YAML description.
     list_step = list_step.replace("{VERSION}", "${VERSION}")
     verify = verify.replace("{VERSION}", "${VERSION}")
+    npm_install_step = npm_install_step.replace("{VERSION}", "${VERSION}")
 
     return f'''# Signed, logged tool-manifest revision (OWASP MCPSTG-SUPP-06) for {server}.
 #
@@ -111,11 +125,12 @@ jobs:
         run: |
           [[ "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+([.a-z0-9]*)$ ]] || {{ echo "not a version: $VERSION"; exit 2; }}
 
-      - name: histor revision CLI (from PyPI)
+      - name: histor revision CLI (from alexar76/histor tip)
         run: |
           uv venv --python 3.12 .rv
-          uv pip install --python .rv "aimarket-histor[sigstore]==0.7.0"
-
+          # PyPI 0.7.0 has no `histor revision`; the tip of alexar76/histor does.
+          uv pip install --python .rv "aimarket-histor[sigstore] @ git+https://github.com/alexar76/histor.git"
+{npm_install_step}
       - name: The manifest-revisions branch
         run: |
           if git ls-remote --exit-code --heads origin manifest-revisions >/dev/null; then

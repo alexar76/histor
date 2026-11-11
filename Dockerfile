@@ -31,7 +31,7 @@ COPY docs/landing ./docs/landing
 # running service never downloads it.
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir uv==0.11.17 \
  && UV_PROJECT_ENVIRONMENT=/opt/venv /opt/venv/bin/uv sync --frozen --no-dev --no-editable \
-      --extra postgres --extra pqc --extra cost --python /opt/venv/bin/python \
+      --extra postgres --extra pqc --extra cost --extra sigstore --python /opt/venv/bin/python \
  && TIKTOKEN_CACHE_DIR=/opt/tiktoken /opt/venv/bin/python -c "import tiktoken; tiktoken.get_encoding('o200k_base')" \
  && /opt/venv/bin/pip uninstall -y -q uv && rm -rf /root/.cache \
  && mkdir -p /data && chown 65532:65532 /data

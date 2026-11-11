@@ -14,6 +14,9 @@
   - Sign workflows for the other seven `io.github.alexar76/*` registry entries (warden, argus,
     aimarket-hub, aimarket-mcp, oracle-gateway, plugins, attested-memory); generator
     `histor/scripts/gen_sign_manifest_workflows.py`.
+  - Monitor SUPP-06 cases (e)/(f): `histor.revision_monitor` writes `security_events`
+    (`revision-forked-current`, `revision-unsigned-digest`) and surfaces `signedRevision.alerts`
+    on `/check` (Atom feed: `/security-feed.xml`).
 - Bundle the published WARDEN 0.25.0 archive whose dist digest matches the accepted MOMUS build,
   replacing 0.22.3. Ordinary rebuilds now retain ruleset v19. Both Docker targets and `make scanner`
   verify the archive hashes, lock, installed version and exact build digest; stale scanner copies fail

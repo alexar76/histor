@@ -109,7 +109,13 @@ NOTE_SIGNED_REVISION = (
     " The publisher signed revision {revision} of this server's tool manifest (Rekor log index {log_index})."
 )
 NOTE_SIGNED_MATCH = " The tools you sent match that signed revision."
-NOTE_SIGNED_DIFF = " The tools you sent differ from that signed revision."
+NOTE_SIGNED_DIFF = (
+    " The tools you sent differ from that signed revision "
+    "(SUPP-06 case f: unsigned digest; see signedRevision.alerts and /security-feed.xml)."
+)
+NOTE_SIGNED_FORK = (
+    " HISTOR also saw two tip revisions for this name (SUPP-06 case e: forked_current)."
+)
 NOTE_DELISTED = " This endpoint is no longer listed in the registry; HISTOR's record stops at {day}."
 # lastStatus robots-disallowed / robots-unreachable (histor.robots): HISTOR leaves the server alone.
 NOTE_ROBOTS_SINCE = (
@@ -280,7 +286,17 @@ class Checker:
                 # SUPP-06 digests the raw tools/list members, not the MTL/1 digest of them.
                 raw_tools = body["tools"] if isinstance(body.get("tools"), list) and digest_error is None else None
                 match = signed_revisions.match_client_tools(envelope, raw_tools)
-                result["signedRevision"] = signed_revisions.public(signed_row, match=match)
+                alerts: list[str] = []
+                if raw_tools is not None and match == "different" and target.get("name"):
+                    # Case (f): served digest is not among the publisher's signed revisions.
+                    from histor import revision_monitor
+                    alerts = revision_monitor.observe_tools(
+                        self.store, self.key, server=target["name"], target_id=target["id"],
+                        tools=raw_tools,
+                    )
+                result["signedRevision"] = signed_revisions.public(
+                    signed_row, match=match, alerts=alerts or None,
+                )
             if (body.get("contribute") is True and client_digest
                     and (may_contribute is None or may_contribute(target["id"]))):
                 day = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -312,6 +328,8 @@ class Checker:
                 note += NOTE_SIGNED_MATCH
             elif sr.get("match") == "different":
                 note += NOTE_SIGNED_DIFF
+            if "forked_current" in (sr.get("alerts") or []):
+                note += NOTE_SIGNED_FORK
         last_status = str(target["last_status"] or "") if target is not None else ""
         left_alone = ((NOTE_ROBOTS_NEVER, NOTE_ROBOTS_SINCE) if last_status.startswith("robots-")
                       else (NOTE_PAYCRAWL_NEVER, NOTE_PAYCRAWL_SINCE) if last_status == "pay-per-crawl" else None)
