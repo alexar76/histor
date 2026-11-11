@@ -1,0 +1,15 @@
+{
+ "format": "histor.manifest-revisions/v1",
+ "server": "io.github.alexar76/histor",
+ "revisions": [
+  {
+   "revision": 1,
+   "manifestDigest": "sha256:4789b5c9bad0783da958e9a99ca16dccf41e4e836edfaeb48734653c55e6c842",
+   "serverVersion": "0.7.0",
+   "createdAt": "2026-11-11T05:55:21Z",
+   "signer": "https://github.com/alexar76/histor/.github/workflows/sign-manifest-revision.yml@refs/heads/main",
+   "logIndex": "3803861704",
+   "envelope": "revisions/1.json"
+  }
+ ]
+}
