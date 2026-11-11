@@ -204,6 +204,7 @@ export default {
   js_h_entries: "Последние записи",
   js_paste: "Вставьте результат tools/list (или только массив tools)",
   js_check_go: "Проверить",
+  js_check_watch: "Следить за изменениями",
   js_bad_json: "Это не результат tools/list и не массив tools.",
   js_match_same: "Совпадает с наблюдением",
   js_match_different: "Отличается от всех наблюдавшихся наборов",

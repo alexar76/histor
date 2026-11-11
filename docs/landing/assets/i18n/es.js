@@ -252,6 +252,7 @@ export default {
   js_h_entries: "Últimas entradas",
   js_paste: "Pegue un resultado de tools/list (o solo su array tools)",
   js_check_go: "Comprobar",
+  js_check_watch: "Seguir los cambios",
   js_bad_json: "Eso no es un resultado de tools/list ni un array tools.",
   js_match_same: "Igual a lo observado",
   js_match_different: "Distinto de todos los conjuntos observados",

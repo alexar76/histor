@@ -252,6 +252,7 @@ export default {
   js_h_entries: "最新条目",
   js_paste: "粘贴 tools/list 的结果（或仅其 tools 数组）",
   js_check_go: "检查",
+  js_check_watch: "关注变更",
   js_bad_json: "这既不是 tools/list 的结果，也不是 tools 数组。",
   js_match_same: "与观测一致",
   js_match_different: "与所有观测过的工具集都不同",

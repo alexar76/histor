@@ -252,6 +252,7 @@ export default {
   js_h_entries: "Dernières entrées",
   js_paste: "Collez un résultat tools/list (ou seulement son tableau tools)",
   js_check_go: "Contrôler",
+  js_check_watch: "Suivre les changements",
   js_bad_json: "Ce n’est ni un résultat tools/list ni un tableau tools.",
   js_match_same: "Identique à l’observation",
   js_match_different: "Différent de tous les ensembles observés",

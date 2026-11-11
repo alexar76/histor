@@ -119,6 +119,7 @@ export const JS_EN = {
   js_h_entries: "Latest entries",
   js_paste: "Paste a tools/list result (or just its tools array)",
   js_check_go: "Check",
+  js_check_watch: "Follow changes",
   js_bad_json: "That is not a tools/list result or a tools array.",
   js_match_same: "Same as observed",
   "js_match_different": "Different from every observed set",

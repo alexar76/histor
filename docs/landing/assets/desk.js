@@ -947,7 +947,15 @@ async function checkView(done) {
         }
         box.append(el("p", { class: "faint", text: c.note || "" }));
       }
-      box.append(el("p", {}, verdictLine(sig, "js_check_sig_ok", "js_check_sig_bad")), el("details", {}, el("summary", { text: "JSON" }), el("pre", { text: JSON.stringify(res, null, 2) })));
+      box.append(el("p", {}, verdictLine(sig, "js_check_sig_ok", "js_check_sig_bad")));
+      if (res.target?.id) {
+        box.append(el("p", {}, el("a", {
+          class: "btn btn-ghost",
+          href: `${API}/feed.xml?watch=${encodeURIComponent(res.target.id)}`,
+          text: t("js_check_watch"),
+        })));
+      }
+      box.append(el("details", {}, el("summary", { text: "JSON" }), el("pre", { text: JSON.stringify(res, null, 2) })));
       out.replaceChildren(box);
     } catch (err) {
       out.replaceChildren(el("p", { class: "bad-t", text: err.status === 429 ? t("js_slow_down") : (err.body?.detail || t("js_unreachable")) }));
