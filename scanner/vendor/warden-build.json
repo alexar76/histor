@@ -1,17 +1,17 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.25.0",
-  "sourceCommit": "8b5dcf1ca13eabf43ce6764ff32ad937cbc6a102",
-  "registryGitHead": "f29312db4bf71fea7658ae0e73ef45a34d0ff2a1",
-  "buildDigest": "6c6d85a732825d19e56646b24a679268ae6bf86516fc24cc71ccf31872404a4d",
-  "tarball": "aimarket-warden-0.25.0.tgz",
-  "sha256": "2a4d006f685099139db72a5cc74c0dbb370f0213fd633bb696b0a1175676062c",
-  "integrity": "sha512-hJlRVpnPSWLfPsBZ/NAlzJPas6dWnCeRKb93gWaMY2TSLMui/gcSejr7/c9BdnkcuF0SjftiXxISJfeh2K6j6A==",
-  "distribution": "Published npm 0.25.0 archive; dist digest matches the signed accepted MOMUS build.",
-  "qualityRun": "20261110T142549",
+  "version": "0.26.0",
+  "sourceCommit": "52fffde67532419fa86582c26cff91ce648a595f",
+  "registryGitHead": null,
+  "buildDigest": "de9f98d627832446e0433cd112898d1106758f89f31506feeed71a7903530ec8",
+  "tarball": "aimarket-warden-0.26.0.tgz",
+  "sha256": "ff8e9fc959caf1ec2184592bb4cde9ea34d475ea42ce0b380c803afe97331f6b",
+  "integrity": "sha512-ANwHhvYBKRcI29I6tx/ahmKtBsnedWxNlJB6+09qkKQqTmU4m04eKnFbXVTmC2zd4Y1R1+HxNWTCnis/by3F/g==",
+  "distribution": "Published npm 0.26.0 archive (dist.shasum 12170b8b\u2026); dist digest matches the signed accepted MOMUS build. npm records no gitHead for it: it was published from a detached worktree of 52fffde67.",
+  "qualityRun": "20261111T110826",
   "changes": [
-    "Ruleset v19 (43 rules: 32 block, 11 advise), replacing bundled v16",
-    "Retain the accepted 0.25.0 Warden build in ordinary reproducible Histor rebuilds"
+    "Ruleset v19 unchanged from 0.25.0",
+    "SUPP-06 gate (wrap --histor-revision), TaskAdapter long operations, projectRoots, field regressions in the release gate"
   ],
-  "packageJsonSha256": "69acc394ba0a97a97afd6808075cbb2fb3f9d94533808602026f33efc24a3efb"
+  "packageJsonSha256": "6a4f697f49c344b4f25e9cd4ba1e01641bc62f598d65f89a8bf9680fcb42d2d4"
 }

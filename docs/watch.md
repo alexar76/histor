@@ -47,9 +47,9 @@ it is recorded: a Slack incoming webhook, a ticketing system, or your own servic
 **Status on histor.modelmarket.dev: demo.** The plan and the price are real, and the whole path
 — checkout, Stripe webhook, delivery, refund — is built and tested against the Stripe sandbox
 (below), but card payment is switched off on the public instance for now
-(`HISTOR_WATCH_DEMO=1`). To start a subscription before it opens, open an issue at
-<https://github.com/alexar76/histor/issues> with the server list; the operator sets it up by hand
-(see *Operators* below).
+(`HISTOR_WATCH_DEMO=1`). Select **Request a team pilot** on [the Watch page](https://histor.modelmarket.dev/watch)
+to discuss the servers your team wants to follow. The [sample server record](https://histor.modelmarket.dev/s/236eb5f0481cc99c)
+shows a tool-definition diff and its inclusion proof.
 
 ### Buying and managing
 

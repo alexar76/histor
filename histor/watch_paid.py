@@ -258,6 +258,20 @@ def _subscription(tx, sub_id: str) -> dict[str, Any] | None:
     return tx.one("SELECT * FROM watch_subscriptions WHERE id=?", (sub_id,))
 
 
+def _locked_subscription(tx, sub_id: str) -> dict[str, Any] | None:
+    """Read a subscription to change its period, holding its row until the transaction ends.
+
+    settle() and _take_back() read active_until, compute the new end in Python and write it
+    back. On SQLite the write lock serializes them; on PostgreSQL (READ COMMITTED) two
+    transactions settling two payments of one team both read the same end and both wrote
+    end + 30 d, so one paid period vanished, and a settle racing a refund could undo the
+    refund (audit 2026-11-11, desks-stripe-6). A no-op UPDATE takes the row lock on both
+    backends, and the read after it sees whatever the transaction it waited for committed.
+    """
+    tx.execute("UPDATE watch_subscriptions SET updated_at=updated_at WHERE id=?", (sub_id,))
+    return _subscription(tx, sub_id)
+
+
 def _authorized(store, sub_id: str, token: str) -> dict[str, Any]:
     if not _SUB_ID.fullmatch(sub_id or "") or not token:
         raise NotFound(sub_id)
@@ -467,7 +481,7 @@ def settle(store, settings, payment_id: str, session: dict[str, Any]) -> str:
         )
         if not won:
             return tx.one("SELECT status FROM watch_payments WHERE id=?", (payment_id,))["status"]
-        sub = _subscription(tx, payment["subscription_id"])
+        sub = _locked_subscription(tx, payment["subscription_id"])
         current = _parse(sub["active_until"])
         if sub["status"] == "pending" or current is None or current <= now:
             _start_cursor(tx, sub)
@@ -532,6 +546,24 @@ def sweep(store, settings, *, stripe: StripeCall | None = None) -> int:
 # ------------------------------------------------------------------------------ reversals
 
 
+def _period_end(tx, subscription_id: str):
+    """The end of the paid period the subscription's standing ('paid') payments add up to, by
+    the rule settle() applies: each payment extends from the current end, or from when it was
+    paid if the subscription had lapsed by then. None when no payment stands."""
+    rows = tx.execute(
+        "SELECT paid_at, days FROM watch_payments WHERE subscription_id=? AND status='paid' "
+        "ORDER BY paid_at, id", (subscription_id,))
+    end = None
+    for row in rows:
+        paid = _parse(row["paid_at"])
+        if paid is None:
+            continue
+        if end is None or end <= paid:
+            end = paid
+        end = end + timedelta(days=int(row["days"]))
+    return end
+
+
 def _take_back(store, payment: dict[str, Any], kind: str, note: str) -> None:
     """The money went back, so the period it bought goes too."""
     now = _now()
@@ -543,11 +575,13 @@ def _take_back(store, payment: dict[str, Any], kind: str, note: str) -> None:
         if before != "paid":
             # Reversed before HISTOR saw it paid: marking it is enough, settle() now refuses it.
             return
-        sub = _subscription(tx, payment["subscription_id"])
-        until = _parse(sub["active_until"])
-        if until is not None:
-            until -= timedelta(days=int(payment["days"]))
-            until = max(until, now)
+        sub = _locked_subscription(tx, payment["subscription_id"])
+        # Rebuilt from the payments that still stand, with settle()'s own rule, rather than
+        # "the current end minus this payment's days": refunding an old payment whose period
+        # was already used up took the days out of the NEW period a later payment bought
+        # (audit 2026-11-11, desks-stripe-2).
+        until = _period_end(tx, sub["id"])
+        until = max(until, now) if until is not None else now
         status = "ended" if kind == "disputed" else sub["status"]
         tx.execute("UPDATE watch_subscriptions SET status=?, active_until=?, note=?, updated_at=? WHERE id=?",
                    (status, _ts(until) if until else None, f"{kind}: {note}"[:300], _ts(now), sub["id"]))

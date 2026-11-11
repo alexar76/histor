@@ -9,7 +9,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@aimarket/warden": "file:vendor/aimarket-warden-0.25.0.tgz"
+    "@aimarket/warden": "file:vendor/aimarket-warden-0.26.0.tgz"
   },
   "scripts": {
     "check:build": "node check-build.mjs",

@@ -11,6 +11,7 @@
  * consistency proofs against RFC 9162, label leaf hashes over RFC 8785 JCS.
  */
 import { DICT, JS_EN } from "./i18n.js";
+import { track, trackDeskVisit, trackSuccessfulCheck } from "./journey.js";
 
 const HOST_RE = /(^|\.)histor\.modelmarket\.dev$|^localhost$|^127\.0\.0\.1$/;
 const SERVED = HOST_RE.test(location.hostname);
@@ -226,10 +227,15 @@ function cardLanguage() {
   const requested = new URLSearchParams(location.search).get("lang");
   return LANGS.includes(requested) ? requested : "en";
 }
+function deskFirst(route) {
+  return route === "/watch" || route === "/check" || route.startsWith("/s/");
+}
 function go(route, push = true) {
   if (push) {
     if (SERVED) {
       const url = new URL(route + location.search, location.origin);
+      // A recorded example belongs to its direct link, not the general Check navigation.
+      url.searchParams.delete("sample");
       if (route.startsWith("/s/")) {
         if (lang === "en") url.searchParams.delete("lang");
         else url.searchParams.set("lang", lang);
@@ -238,7 +244,8 @@ function go(route, push = true) {
     } else location.hash = route;
   }
   render();
-  if (route !== "/") document.getElementById("desk").scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+  if (route === "/" || deskFirst(route)) window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  else desk.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
 }
 document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-route]");
@@ -256,18 +263,25 @@ window.addEventListener("popstate", () => {
 window.addEventListener("hashchange", () => { if (!SERVED) render(); });
 
 const view = document.getElementById("view");
+const desk = document.getElementById("desk");
+const deskHome = document.getElementById("desk-home");
 let renderToken = 0;
 
 function render() {
   const route = currentRoute();
+  if (deskFirst(route)) {
+    if (desk.parentElement.firstElementChild !== desk) desk.parentElement.prepend(desk);
+  } else if (deskHome && desk.nextElementSibling !== deskHome) deskHome.before(desk);
+  trackDeskVisit(route);
   document.querySelectorAll("[data-route]").forEach((a) => {
     const r = a.dataset.route;
     a.setAttribute("href", href(r));
     a.classList.toggle("on", r !== "/" && (route === r || (r === "/servers" && route.startsWith("/s/"))));
   });
+  const keepPrerender = renderToken === 0 && view.hasChildNodes();
   const token = ++renderToken;
   const done = (node) => { if (token === renderToken) view.replaceChildren(node); };
-  view.replaceChildren(el("p", { class: "muted", text: t("js_loading") }));
+  if (!keepPrerender) view.replaceChildren(el("p", { class: "muted", text: t("js_loading") }));
   if (route.startsWith("/s/")) return serverView(route.slice(3), done);
   if (route === "/changes") return changesView(done);
   if (route === "/log") return logView(done);
@@ -468,10 +482,25 @@ async function serverView(id, done) {
   const badgeUrl = `${DESK || location.origin}/badge/${s.id}.svg`;
   const pageUrl = `${DESK || location.origin}/s/${s.id}`;
   const md = `[![MCP tool defs](${badgeUrl})](${pageUrl})`;
+  const latest = data.changes?.[0];
+  const labelId = latest ? latest.label_id : data.labels.find((label) => label.methodShort === "observation")?.id;
+  const entry = el("div", { class: "desk-entry" },
+    el("h2", { class: "desk-heading" }, ...visible(s.title || s.name).nodes),
+    el("p", { class: "mono muted" }, ...visible(s.name).nodes, " · ", ...visible(s.endpoint).nodes));
+  if (latest) entry.append(el("p", {}, el("strong", { text: t("js_latest_change") }), " · ",
+    el("time", { datetime: latest.observed_at, text: `${fmt(latest.observed_at)} UTC` }), versions(latest)));
+  const actions = el("div", { class: "cta" },
+    el("a", { class: "btn btn-primary", href: `${API}/feed.xml?watch=${encodeURIComponent(s.id)}`,
+      "data-journey": "watch_feed_clicked", text: t("js_server_atom") }));
+  if (s.toolSetDigest) actions.append(el("a", { class: "btn btn-ghost",
+    href: `${DESK}/check?sample=${encodeURIComponent(s.id)}&lang=${lang}`, text: t("js_server_check") }));
+  if (labelId) actions.append(el("a", { class: "btn btn-ghost",
+    href: `${API}/api/v1/labels/${encodeURIComponent(labelId)}/proof`, text: t("js_server_proof") }));
+  entry.append(actions);
+  if (latest) entry.append(el("details", { class: "result" },
+    el("summary", { text: t("js_server_diff") }), renderDiff(latest.summary)));
   const root = el("div", { class: "detail" },
-    el("p", {}, el("a", { href: href("/servers"), "data-route": "/servers", class: "faint", text: `← ${t("nav_servers")}` })),
-    el("h2", {}, ...visible(s.title && s.title !== s.name ? s.title : s.name).nodes),
-    el("p", { class: "mono faint" }, ...visible(s.name).nodes, " · ", s.endpoint),
+    entry,
     el("p", {}, stateChip(s), safeHref(s.repository) ? el("a", { class: "pill", href: safeHref(s.repository), rel: "noopener noreferrer", text: "repository" }) : "",
       s.delisted ? el("span", { class: "pill", text: t("js_delisted") }) : ""),
     data.description ? el("p", { class: "muted", text: data.description }) : "",
@@ -555,9 +584,9 @@ async function serverView(id, done) {
     root.append(el("div", { class: "empty", text: s.transport === "stdio" && s.packageVersion
       ? t("js_unobserved_pkg", { status: s.lastStatus || "—" }) : t("js_unobserved_why", { status: reasonText(s) }) }));
   }
-  if (data.changes?.length) {
+  if (data.changes?.length > 1) {
     root.append(el("h3", { class: "block-h", text: t("js_h_changes") }));
-    for (const c of data.changes) root.append(el("div", { class: "result" }, el("p", { class: "warn-t mono", text: `${fmt(c.observed_at)} · ${t("js_changed")}${versions(c)}` }), renderDiff(c.summary)));
+    for (const c of data.changes.slice(1)) root.append(el("div", { class: "result" }, el("p", { class: "warn-t mono", text: `${fmt(c.observed_at)} · ${t("js_changed")}${versions(c)}` }), renderDiff(c.summary)));
   }
   const clsByIndex = new Map();
   if (data.classifier?.findings) for (const f of data.classifier.findings) {
@@ -800,19 +829,32 @@ async function watchView(done) {
     return done(el("div", { class: "result" }, el("h3", { class: "block-h", text: t("js_w_title") }),
       el("p", {}, el("a", { href: "https://histor.modelmarket.dev/watch", text: t("js_w_pages_only") }))));
   }
-  let plan;
-  try { plan = await api("/api/v1/watch/plan"); } catch (e) { return unreachable(done, e); }
-  const root = el("div", {});
-  if (plan.demo) root.append(el("div", { class: "result" }, el("p", { class: "warn-t", text: t("js_w_demo") })));
-  root.append(el("h3", { class: "block-h", text: t("js_w_title") }),
+  const sample = "/s/236eb5f0481cc99c";
+  const price = el("p", { hidden: true });
+  const status = el("p", { class: "muted", text: t("js_loading") });
+  const root = el("div", {}, el("div", { class: "desk-entry" },
+    el("h2", { class: "desk-heading", text: t("js_w_title") }),
     el("p", {}, t("js_w_lead")),
-    el("p", {}, el("b", { text: t("js_w_price", { price: plan.priceUsd, days: plan.days, n: plan.maxServers }) })),
+    price,
+    el("div", { class: "cta" },
+      el("a", { class: "btn btn-primary", href: "mailto:qwezzy721@gmail.com?subject=HISTOR%20Watch%20team%20pilot",
+        "data-journey": "pilot_contact_clicked", text: t("js_w_pilot") }),
+      el("a", { class: "btn btn-ghost", href: href(sample), "data-route": sample, text: t("js_w_sample") })),
     el("p", { class: "muted" }, t("js_w_free"), " ",
-      el("a", { href: "https://github.com/alexar76/histor/blob/main/docs/watch.md", text: "docs/watch.md" })));
-  const mine = watchFromUrl();
-  if (mine) root.append(await watchManage(mine, plan));
-  root.append(watchBuy(plan));
+      el("a", { href: "https://github.com/alexar76/histor/blob/main/docs/watch.md", text: "docs/watch.md" }))), status);
   done(root);
+  let plan;
+  try { plan = await api("/api/v1/watch/plan"); }
+  catch { status.textContent = t("js_unreachable"); return; }
+  status.remove();
+  price.append(el("b", { text: t("js_w_price", { price: plan.priceUsd, days: plan.days, n: plan.maxServers }) }));
+  price.hidden = false;
+  if (plan.demo) root.append(el("div", { class: "result" }, el("p", { class: "warn-t", text: t("js_w_demo") })));
+  const mine = watchFromUrl();
+  const manage = mine ? el("div", { class: "muted", text: t("js_loading") }) : null;
+  if (manage) root.append(manage);
+  root.append(watchBuy(plan));
+  if (manage) manage.replaceWith(await watchManage(mine, plan));
 }
 
 function watchBuy(plan) {
@@ -898,23 +940,26 @@ async function watchManage(mine, plan, attempt = 0) {
   return box;
 }
 
+// The earliest set used by the verified HISTOR/LEGION comparison (19 October 2026).
+const AIAPPLYD_SAMPLE = {
+  endpoint: "https://mcp.aiapplyd.com/mcp",
+  toolSetDigest: "sha256-wuZWX7qbI0g+c23O3piVs3EnVH0D0F7Lh0MZHp6vJSw=",
+};
+
 async function checkView(done) {
   const endpoint = el("input", { type: "text", placeholder: "https://example.com/mcp", "aria-label": "endpoint" });
   const area = el("textarea", { placeholder: t("js_paste"), spellcheck: "false" });
   const contribute = el("input", { type: "checkbox", id: "contrib" });
   const out = el("div", {});
-  const submit = el("button", { class: "btn btn-primary", type: "button", text: t("js_check_go"), onclick: async () => {
+  const sampleId = new URLSearchParams(location.search).get("sample") || "";
+  const selectedSample = /^[0-9a-f]{16}$/.test(sampleId);
+  async function runCheck(body, sample = false) {
+    track(sample ? "sample_started" : "check_started");
     out.replaceChildren(el("p", { class: "muted", text: t("js_checking") }));
-    const body = {};
-    const ep = endpoint.value.trim();
-    if (/^https?:\/\//.test(ep)) body.endpoint = ep; else if (ep) body.name = ep;
-    if (area.value.trim()) {
-      try { body.tools = parseTools(area.value); } catch { return out.replaceChildren(el("p", { class: "bad-t", text: t("js_bad_json") })); }
-    }
-    if (contribute.checked) body.contribute = true;
     try {
       const [res, issuer] = await Promise.all([api("/api/v1/check", { method: "POST", headers: { "content-type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }), api("/api/v1/issuer")]);
       const sig = await verifySigned(res, issuer.did);
+      if (sig === "ok") trackSuccessfulCheck(sample);
       const box = el("div", { class: "result" },
         el("h3", { class: "block-h", text: t(`js_match_${res.match}`) }),
         el("p", { class: "muted", text: res.note }),
@@ -952,6 +997,7 @@ async function checkView(done) {
         box.append(el("p", {}, el("a", {
           class: "btn btn-ghost",
           href: `${API}/feed.xml?watch=${encodeURIComponent(res.target.id)}`,
+          "data-journey": "watch_feed_clicked",
           text: t("js_check_watch"),
         })));
       }
@@ -960,17 +1006,39 @@ async function checkView(done) {
     } catch (err) {
       out.replaceChildren(el("p", { class: "bad-t", text: err.status === 429 ? t("js_slow_down") : (err.body?.detail || t("js_unreachable")) }));
     }
+  }
+  const submit = el("button", { class: "btn btn-primary", type: "button", text: t("js_check_go"), onclick: async () => {
+    const body = {};
+    const ep = endpoint.value.trim();
+    if (/^https?:\/\//.test(ep)) body.endpoint = ep; else if (ep) body.name = ep;
+    if (area.value.trim()) {
+      try { body.tools = parseTools(area.value); } catch { return out.replaceChildren(el("p", { class: "bad-t", text: t("js_bad_json") })); }
+    }
+    if (contribute.checked) body.contribute = true;
+    submit.disabled = example.disabled = true;
+    try { await runCheck(body); } finally { submit.disabled = example.disabled = false; }
   } });
-  const example = el("button", { class: "btn btn-ghost", type: "button", text: t("js_try_example"), onclick: async () => {
+  const example = el("button", { class: selectedSample ? "btn btn-primary" : "btn btn-ghost", type: "button", text: t(selectedSample ? "js_check_recorded" : "js_try_example"), onclick: async () => {
+    submit.disabled = example.disabled = true;
+    out.replaceChildren(el("p", { class: "muted", text: t("js_checking") }));
     try {
-      const list = await api("/api/v1/servers?state=pinned&limit=1");
-      const one = list.servers[0];
-      if (!one) return out.replaceChildren(el("p", { class: "muted", text: t("js_no_example") }));
-      const detail = await api(`/api/v1/servers/${encodeURIComponent(one.id)}`);
-      endpoint.value = one.endpoint;
-      area.value = JSON.stringify({ tools: detail.tools }, null, 2);
-      submit.click();
+      if (sampleId === "236eb5f0481cc99c") {
+        await runCheck(AIAPPLYD_SAMPLE, true);
+      } else if (selectedSample) {
+        const detail = await api(`/api/v1/servers/${sampleId}`);
+        const digest = detail.changes?.find(c => c.from_toolset && c.from_toolset !== detail.server.toolSetDigest)?.from_toolset
+          || detail.server.toolSetDigest;
+        if (!digest) return out.replaceChildren(el("p", { class: "muted", text: t("js_no_example") }));
+        await runCheck({ endpoint: detail.server.endpoint, toolSetDigest: digest }, true);
+      } else {
+        const list = await api("/api/v1/servers?state=pinned&limit=1");
+        const one = list.servers[0];
+        if (!one) return out.replaceChildren(el("p", { class: "muted", text: t("js_no_example") }));
+        const detail = await api(`/api/v1/servers/${encodeURIComponent(one.id)}`);
+        await runCheck({ endpoint: one.endpoint, tools: detail.tools }, true);
+      }
     } catch { out.replaceChildren(el("p", { class: "bad-t", text: t("js_unreachable") })); }
+    finally { submit.disabled = example.disabled = false; }
   } });
   const help = el("details", { class: "help" }, el("summary", { text: t("js_help_where") }),
     el("p", { class: "muted", text: t("js_help_text") }),
@@ -988,11 +1056,15 @@ async function checkView(done) {
       "npx @modelcontextprotocol/inspector",
     ].join("\n") }));
   done(el("div", {}, el("p", { class: "muted", text: t("js_check_intro") }),
+    selectedSample ? el("div", { class: "result" }, el("p", { text: t("js_check_recorded_note") }),
+      el("div", { class: "btn-row" }, example,
+        el("a", { class: "btn btn-ghost", href: href(`/s/${sampleId}`), text: t("js_check_record_link") }))) : null,
+    selectedSample ? out : null,
     el("div", { class: "check-grid" },
       el("div", {}, el("p", {}, el("b", { text: t("js_endpoint") })), endpoint, el("p", {}, el("b", { text: t("js_tools_json") })), area,
         el("p", {}, contribute, " ", el("label", { for: "contrib", text: t("js_contribute") })),
-        el("div", { class: "btn-row" }, submit, example), help),
-      out)));
+        el("div", { class: "btn-row" }, submit, selectedSample ? null : example), help),
+      selectedSample ? null : out)));
 }
 
 async function statsView(done) {
@@ -1121,7 +1193,7 @@ async function startLoom() {
 let initial = "en";
 try { initial = cardLanguage() || new URLSearchParams(location.search).get("lang") || localStorage.getItem("histor-lang") || (navigator.language || "en").slice(0, 2); } catch { /* storage blocked */ }
 applyLang(initial, false);
-if (currentRoute() !== "/") {
+if (currentRoute() !== "/" && !deskFirst(currentRoute())) {
   // A deep link (/s/<id>, /log …) lands on the desk, not on the hero above it.
   setTimeout(() => { document.getElementById("desk").scrollIntoView({ block: "start", inline: "nearest" }); window.scrollTo({ left: 0 }); }, 0);
 }

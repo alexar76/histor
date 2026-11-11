@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from awr import canonicalize
@@ -748,7 +749,7 @@ def test_server_pages_carry_the_record_in_the_html(api):
     client, world = api
     page = client.get(f"/s/{target_id(world, 'io.example/weather')}").text
     view = page.split('<div id="view" aria-live="polite">')[1].split("</section>")[0]
-    assert "<h2>weather</h2>" in view and "<code>get_weather</code> — Return the weather." in view
+    assert '<h2 class="desk-heading">weather</h2>' in view and "<code>get_weather</code> — Return the weather." in view
     assert "Tool definitions as last observed (2)" in view and "list_cities" not in page.split('<div id="view"')[0]
     assert "safe" not in view.lower()
 
@@ -759,6 +760,34 @@ def test_server_pages_carry_the_record_in_the_html(api):
     assert "<script>alert" not in view and "&lt;script&gt;alert(1)&lt;/script&gt;" in view
     assert "Ignore⟨U+200B⟩ all" in view, "an invisible character is named, as on the desk"
     assert '<div id="view" aria-live="polite"></div>' in client.get("/s/0000000000000000").text, "unknown id: the plain desk"
+
+
+def test_direct_desk_entries_lead_with_their_actions_in_initial_html(api):
+    client, world = api
+    watched = target_id(world, "io.example/weather")
+    world["mcp"].tools["/a"] = [tool("get_weather", "Return temperature, wind and rain.")]
+    world["clock"].advance(days=1)
+    world["services"].crawler.run()
+
+    page = client.get(f"/s/{watched}?lang=ru").text
+    assert page.index('id="desk"') < page.index('class="hero"')
+    assert "Последнее зафиксированное изменение" in page
+    assert f'href="/feed.xml?watch={watched}"' in page
+    assert f'href="/check?sample={watched}&amp;lang=ru"' in page
+    change = client.get(f"/api/v1/changes?watch={watched}").json()["changes"][0]
+    assert f'href="/api/v1/changes/{change["id"]}"' in page
+    proof = re.search(r'href="(/api/v1/labels/[^\"]+/proof)"', page)
+    assert proof and client.get(proof[1]).json()["labelId"] == change["label_id"]
+
+    page = client.get("/watch?lang=es").text
+    assert page.index('id="desk"') < page.index('class="hero"')
+    assert "HISTOR Watch para equipos" in page
+    assert "Solicitar un piloto para el equipo" in page and "mailto:" in page
+    assert '/s/236eb5f0481cc99c?lang=es' in page
+    page = client.get("/check").text
+    assert page.index('id="desk"') < page.index('class="hero"')
+    page = client.get("/").text
+    assert page.index('class="hero"') < page.index('id="desk"')
 
 
 def test_server_summary_carries_package_facts(api):

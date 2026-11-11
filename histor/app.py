@@ -18,6 +18,7 @@ from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 from xml.sax.saxutils import escape as xml_escape
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -26,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge, fingerprints, toolcost, watch_paid
+from histor import signed_revisions as signed_revisions_mod
 from histor.check import MAX_MATCHES, CheckError
 from histor.checkpoint import (
     COSIGNATURE_V1_TYPE,
@@ -36,11 +38,12 @@ from histor.checkpoint import (
     vkey,
 )
 from histor.declared import public as declared_public
-from histor import signed_revisions as signed_revisions_mod
+from histor.journey import EVENTS as JOURNEY_EVENTS
+from histor.journey import SOURCES as JOURNEY_SOURCES
 from histor.labels import SHORT
 from histor.lookalike import default_index
 from histor.receipts import AnchorRefused
-from histor.server_page_text import CARD_TEXT
+from histor.server_page_text import CARD_TEXT, WATCH_TEXT
 from histor.service import Services, crawl_in_background, scheduler
 from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
 from histor.untrusted import TooDeep, loads_limited
@@ -127,6 +130,8 @@ _INVISIBLE = re.compile("[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f­�
                         "\U000e0000-\U000e007f]")
 PRERENDER_TOOLS = 100
 PRERENDER_CHARS = 400
+WATCH_SAMPLE = "236eb5f0481cc99c"
+WATCH_CONTACT = "mailto:qwezzy721@gmail.com?subject=HISTOR%20Watch%20team%20pilot"
 
 
 def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
@@ -136,7 +141,7 @@ def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
     return xml_escape(_INVISIBLE.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", s))
 
 
-def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str) -> str:
+def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str, change: dict[str, Any] | None) -> str:
     """What the desk shows for one server, as plain HTML inside #view.
 
     Without it all /s/<id> pages were the landing page with another <title> — 99.7% the same
@@ -150,8 +155,22 @@ def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str) -> s
     values = (day(t["first_pinned"]), day(t["unchanged_since"]), day(t["last_ok"]),
               t["ok_observations"], t["changes"], "—" if t["current_count"] is None else t["current_count"])
     facts = zip(copy["facts"], values, strict=True)
-    out = [f'<div class="detail"><h2>{_shown(name, 200)}</h2>',
-           f'<p class="mono faint">{_shown(t["name"], 200)} · {_shown(t["endpoint"], 300)}</p>']
+    out = [f'<div class="detail"><div class="desk-entry"><h2 class="desk-heading">{_shown(name, 200)}</h2>',
+           f'<p class="mono muted">{_shown(t["name"], 200)} · {_shown(t["endpoint"], 300)}</p>']
+    target_id = t["id"]
+    if change:
+        out.append(f'<p><strong>{copy["latest"]}</strong> · {_shown(change["observed_at"])}</p>')
+    out.append('<div class="cta">')
+    out.append(f'<a class="btn btn-primary" data-journey="watch_feed_clicked" href="/feed.xml?watch={target_id}">'
+               f'{copy["follow"]}</a>')
+    if t["current_toolset"]:
+        out.append(f'<a class="btn btn-ghost" href="/check?sample={target_id}&amp;lang={lang}">{copy["check"]}</a>')
+    if change:
+        out.append(f'<a class="btn btn-ghost" href="/api/v1/changes/{change["id"]}">{copy["diff"]}</a>')
+    proof_label = change.get("label_id") if change else t["chain_label"]
+    if proof_label:
+        out.append(f'<a class="btn btn-ghost" href="/api/v1/labels/{quote(proof_label, safe="")}/proof">{copy["proof"]}</a>')
+    out.append('</div></div>')
     if t["description"]:
         out.append(f'<p class="muted">{_shown(t["description"])}</p>')
     out.append('<dl class="facts">' + "".join(f"<div class=\"fact\"><dt class=\"k\">{k}</dt><dd class=\"v\">{_shown(v)}</dd></div>"
@@ -258,10 +277,10 @@ def create_app(services: Services) -> FastAPI:
             # week's desk against this week's API; fonts and the pinned three.js never change.
             immutable = path.startswith(("/assets/fonts/", "/assets/vendor/"))
             response.headers["Cache-Control"] = "public, max-age=604800" if immutable else "no-cache"
-        if path.startswith(("/api/", "/badge/", "/.well-known/", "/ai-market/", "/feed.xml")) and not path.startswith("/api/v1/watch/"):
+        if path.startswith(("/api/", "/badge/", "/.well-known/", "/ai-market/", "/feed.xml")) and not path.startswith(("/api/v1/watch/", "/api/v1/journey/")):
             # Public, unauthenticated, read-only data: any origin may read it (the GitHub Pages
-            # landing reads the live counters from here). Not the paid Watch: it answers only its
-            # own page, with a token, so no other origin gets to read a subscription's secret.
+            # landing reads the live counters from here). Watch and browser events stay same-origin:
+            # Watch has a private subscription token and event attribution is local to this desk.
             response.headers.setdefault("Access-Control-Allow-Origin", "*")
         return response
 
@@ -292,6 +311,21 @@ def create_app(services: Services) -> FastAPI:
                 return real
         return peer
 
+    @app.post("/api/v1/journey/{source}/{event}", status_code=204, include_in_schema=False)
+    async def desk_journey(source: str, event: str, request: Request) -> Response:
+        """The access log counts accepted events. No payload, cookie, or event store."""
+        if (source not in JOURNEY_SOURCES or event not in JOURNEY_EVENTS or request.url.query
+                or request.headers.get("dnt") == "1" or request.headers.get("sec-gpc") == "1"):
+            return Response(status_code=404)
+        if (request.headers.get("origin") != settings.public_base
+                or request.headers.get("sec-fetch-site", "same-origin") != "same-origin"):
+            return Response(status_code=403)
+        if not limiter.allow(f"journey:{client_ip(request)}", 60, 60):
+            return Response(status_code=429)
+        if await read_bounded_body(request, 1):
+            return Response(status_code=400)
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
     def last_crawl_error() -> str | None:
         """The newest crawl's error, from memory or — after a restart — from the runs table.
 
@@ -315,12 +349,30 @@ def create_app(services: Services) -> FastAPI:
 
     index_file = settings.landing_dir / "index.html"
 
-    def spa() -> Response:
+    def spa(request: Request) -> Response:
         """The desk. One file serves both the service and GitHub Pages: relative asset paths
         work under /histor/ on Pages, and here a <base href="/"> makes them resolve from /s/<id>."""
         if not index_file.is_file():
             raise HTTPException(status_code=404, detail="landing missing")
         page = index_file.read_text(encoding="utf-8").replace("<!--HISTOR:BASE-->", '<base href="/">', 1)
+        path = request.url.path
+        if path in ("/watch", "/check") or path.startswith("/s/"):
+            before, start, rest = page.partition("<!--HISTOR:DESK-START-->")
+            desk, end, after = rest.partition("<!--HISTOR:DESK-END-->")
+            if start and end:
+                page = (before + after).replace("<!--HISTOR:DESK-FIRST-->", desk, 1)
+        if path == "/watch":
+            lang = request.query_params.get("lang", "en")
+            if lang not in WATCH_TEXT:
+                lang = "en"
+            title, lead, pilot, sample = WATCH_TEXT[lang]
+            card = (f'<div class="desk-entry"><h2 class="desk-heading">{title}</h2><p>{lead}</p>'
+                    f'<div class="cta"><a class="btn btn-primary" data-journey="pilot_contact_clicked" '
+                    f'href="{WATCH_CONTACT}">{pilot}</a>'
+                    f'<a class="btn btn-ghost" href="/s/{WATCH_SAMPLE}?lang={lang}">{sample}</a></div></div>')
+            page = page.replace('<html lang="en">', f'<html lang="{lang}">', 1)
+            page = page.replace('<div id="view" aria-live="polite"></div>',
+                                f'<div id="view" aria-live="polite">{card}</div>', 1)
         return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     for route in SPA_ROUTES:
@@ -336,10 +388,10 @@ def create_app(services: Services) -> FastAPI:
         return Response(mongodb_guide.read_text(encoding="utf-8"), media_type="text/html")
 
     @app.get("/s/{target_id}", include_in_schema=False)
-    def server_page(target_id: str, lang: str = "en") -> Response:
+    def server_page(request: Request, target_id: str, lang: str = "en") -> Response:
         """The desk, with this server's own title and description in the HTML: what a search engine
         and a link preview read. Facts only — HISTOR never calls a server safe."""
-        page = spa()
+        page = spa(request)
         t = store.target(target_id) if re.fullmatch(r"[0-9a-f]{16}", target_id) else None
         if t is None:
             return page
@@ -376,8 +428,9 @@ def create_app(services: Services) -> FastAPI:
                 html, count=1,
             )
         tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
+        latest = store.changes(limit=1, target_id=target_id) if t["changes"] else []
         html = html.replace('<div id="view" aria-live="polite"></div>',
-                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools, lang)}</div>', 1)
+                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools, lang, latest[0] if latest else None)}</div>', 1)
         return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     SITEMAP_PAGE = 40_000

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.9.0 — 2026-11-11
+
+- **HISTOR Watch: a refund or dispute takes back only the reversed payment's own period** (money-flow audit
+  2026-11-11, desks-stripe-2). The end date used to be cut by the reversed payment's days. Refunding an old payment
+  whose 30 days were already used removed the period a newer, unrefunded payment had bought, and the team stopped
+  getting alerts. The end is now rebuilt from the payments that still stand, with `settle()`'s own extension rule.
+- **HISTOR Watch: settle and refund lock the subscription row before reading its period** (desks-stripe-6), so two
+  payments settling at once on PostgreSQL both add their period.
+- **Desk journey events.**
+  - `POST /api/v1/journey/{source}/{event}` answers 204 to a fixed list of anonymous browser events from the desk:
+    record, check and Watch views; check started, succeeded and repeated; sample; Watch feed click; pilot contact.
+  - No payload, query, cookie or event store: the access log counts accepted events, at most 60 a minute per
+    client.
+  - The server page gets a "latest observed change" block linking the change record, its inclusion proof, the Atom
+    feed and a check, in five languages.
+- **The scanner bundles the published WARDEN 0.26.0** in place of 0.25.0:
+  - npm `dist.shasum` `12170b8b…`;
+  - build digest `de9f98d6…`, which is the build MOMUS accepted in run `20261111T110826`.
+
+  `check-build.mjs` verifies the archive, the lock, the installed version and the digest. A HISTOR image built from
+  this tree keeps the WARDEN that production runs.
+
 ## 0.8.0 — 2026-11-11
 
 - **Publisher-signed revisions on `/check` and a second Merkle tree (OWASP SUPP-06 follow-through).**
