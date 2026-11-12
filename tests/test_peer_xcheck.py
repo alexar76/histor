@@ -8,11 +8,11 @@ import json
 
 import httpx
 import pytest
+
+from histor import peer_xcheck as px
 from histor.db import open_backend
 from histor.migrations import apply_migrations
 from histor.store import Store
-
-from histor import peer_xcheck as px
 
 EP = "https://seller.example/mcp"
 

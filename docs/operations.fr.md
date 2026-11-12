@@ -19,7 +19,7 @@ flowchart LR
 Depuis la racine du monorepo, sur un portable :
 
 ```bash
-./scripts/deploy_histor.sh --remote root@82.47.146.138   # synchronise histor/ vers /opt/histor, puis déploie là-bas
+./scripts/deploy_histor.sh --remote root@histor.example.net   # synchronise histor/ vers /opt/histor, puis déploie là-bas
 ```
 
 `.env` n’est jamais copié depuis un portable : l’hôte garde le sien. La première exécution le crée (jeton d’opérateur

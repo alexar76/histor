@@ -23,13 +23,13 @@ from urllib.parse import urlsplit
 
 from awr import SigningKey
 
+from histor import signed_revisions
 from histor.declared import public as declared_public
 from histor.logbook import sign_document, utcnow
 from histor.lookalike import default_index
 from histor.mcpclient import MAX_TOOLS
 from histor.packages import package_key
 from histor.scanner import Scanner, ScannerError
-from histor import signed_revisions
 from histor.store import Store, dumps
 from histor.subject import MtlError, tool_set_digest
 

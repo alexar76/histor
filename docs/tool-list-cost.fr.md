@@ -35,8 +35,8 @@ des tokens. Les « environ 24 outils par serveur » de l’étude étaient la mo
 
 ## En argent
 
-La liste est renvoyée à chaque requête, donc son coût vaut tokens × prix × requêtes. Pour 1 000 requêtes, aux prix
-catalogue du 2026-10-19 (OpenRouter) :
+Si le client envoie la liste complète à chaque requête, l’estimation hors cache vaut tokens × prix × requêtes.
+Le tableau estime 1 000 requêtes de ce type aux prix d’OpenRouter du 19 octobre 2026, selon les hypothèses de mise en cache indiquées.
 
 | La liste d’un serveur | Tokens | 0,10 $ le million (Claude Haiku 5.5) | 2 $ le million (Claude Sonnet 5.5) | Sonnet 5.5 avec cache, requêtes à moins de 5 minutes d’intervalle | Idem, à plus de 5 minutes |
 |---|---|---|---|---|---|

@@ -321,6 +321,8 @@ def _write(store: Store, key: Any, d: Path, *, opt_out: tuple[str, ...], now: st
         "changesUntil": last_change,
         # Whether changes carry server and registry versions on both sides (migration 016).
         "changeVersions": _has_migration(store, 16),
+        # How toolExtrasDigest is written (histor.extras): "legacy" or "rfc8785".
+        "extrasDigest": _extras_scheme(store),
         "counts": tally,
         "files": files,
     }
@@ -337,16 +339,29 @@ def _extras_counting(f: dict[str, Any]) -> str:
     return "this snapshot does not record them, so a change to them alone is not in it."
 
 
-def _extras_fields(f: dict[str, Any]) -> str:
+def _extras_scheme(store: Store) -> str:
+    with store.db.read() as tx:
+        return Store.extras_scheme(tx)
+
+
+def _extras_digest_text(scheme: str) -> str:
+    if scheme == "rfc8785":
+        return ("its digest is SHA-256 over the RFC 8785 text of the body (the extras digest of\n"
+                "  mcp-tool-set-digest/1, section 8, in its bounded form, section 8.1).")
+    return ("its digest is SHA-256 over sorted-key JSON, not RFC 8785: `1.0`, integers beyond 2^53 and member\n"
+            "  names outside the Basic Multilingual Plane are written differently.")
+
+
+def _extras_fields(f: dict[str, Any], scheme: str = "legacy") -> str:
     """The card's lines for the extras files, when the snapshot has them."""
     if "tool_extras.jsonl.gz" not in f:
         return ""
-    return """
-- **tool_extras** — `digest`, `extrasJson`: `{"tools": {name: {member: value}}}`, every member a tool
+    return f"""
+- **tool_extras** — `digest`, `extrasJson`: `{{"tools": {{name: {{member: value}}}}}}`, every member a tool
   carried beyond those four (`annotations`, `_meta`, `title`, `icons`, `execution`, vendor fields),
   only for tools that carried one. Join from `servers.toolExtrasDigest`: `""` there means observed with
   none, null not observed since HISTOR keeps them (2026-10-22). Not part of the MTL/1 digest or of any
-  label; its digest is SHA-256 over sorted-key JSON, not RFC 8785 (prices in `_meta` are fractions).
+  label; {_extras_digest_text(scheme)}
 - **extras_changes** — `serverId`, `observedAt`, `fromExtrasDigest` → `toExtrasDigest`, `summaryJson`:
   per tool, every annotation that moved (`[before, after]`) and every other member added, removed or
   changed; `escalations` names tools that stopped saying `readOnlyHint: true` or started saying
@@ -488,7 +503,7 @@ table. Digests are SRI strings (`sha256-…`) over the RFC 8785 form of the valu
   toolsets), `firstPinned`, `unchangedSince`, `attempts`, `observations`, `changes`,
   `blockMatches`/`adviseMatches`/`recordMatches`, `classifierFlags`, `chainLabel` (latest label id), `page`.
 - **toolsets** — `digest`, `toolsJson`: per tool the four members the digest covers, as served
-  (`name`, `description`, `inputSchema`, and `outputSchema` when sent).{_extras_fields(f)}
+  (`name`, `description`, `inputSchema`, and `outputSchema` when sent).{_extras_fields(f, m.get('extrasDigest', 'legacy'))}
 - **changes** — `serverId`, `observedAt`, `fromToolSetDigest` → `toToolSetDigest`, `summaryJson`
   (tools added, removed and changed, with the field that moved), `labelId` (the signed continuity label).{_package_change_fields(f)}{_version_change_fields(m)}
 - **scans** — `toolSetDigest`, `patternSet`, `matchesJson` (rule code, tier, severity, tool, where).

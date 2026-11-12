@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from histor import revision, revision_monitor, signed_revisions
+from histor import revision, revision_monitor
 from histor.signed_revisions import RevisionIngest
 
 SIGNER = "https://github.com/alexar76/histor/.github/workflows/sign-manifest-revision.yml@refs/heads/main"

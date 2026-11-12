@@ -37,6 +37,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from histor import cards, diffing
+from histor import extras as extras_mod
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
 from histor.declared import DeclarationError, DeclarationFetcher
@@ -563,7 +564,6 @@ class Crawler:
         if self.robots is not None and not self.robots.loaded:
             self.robots.load(self.store.robots_rows())
         per_host: Counter[str] = Counter(urlsplit(e).hostname or "" for e in every)
-        urls = sorted({u for t in due for u in cards.candidates(t["endpoint"])})
         locks: dict[str, threading.Semaphore] = defaultdict(lambda: threading.Semaphore(self.settings.crawl_per_host))
         guard = threading.Lock()
 
@@ -575,15 +575,37 @@ class Crawler:
                     return url, self.cards.read(url)
                 except Exception as exc:  # noqa: BLE001 - one site's card must not stop the pass
                     return url, cards.Read("error", detail=f"internal: {type(exc).__name__}")
+
+        def catalogue(url: str) -> tuple[str, cards.Listed]:
+            try:
+                return url, cards.walk_catalog(url, lambda u: one(u)[1])
+            except Exception as exc:  # noqa: BLE001 - one site's catalogue must not stop the pass
+                return url, cards.Listed("error", detail=f"internal: {type(exc).__name__}")
+
+        # Each host's AI Catalog first: it says where that host's Server Cards are (SEP-2127 discovery).
+        catalogues = sorted({cards.catalog_url(t["endpoint"]) for t in due})
         try:
+            with ThreadPoolExecutor(max_workers=min(16, len(catalogues)), thread_name_prefix="histor-catalogs") as pool:
+                listed = dict(pool.map(catalogue, catalogues))
+            urls = sorted({u for t in due for u in cards.candidates(t["endpoint"])}
+                          | {u for found in listed.values() for u in found.urls})
             with ThreadPoolExecutor(max_workers=min(16, len(urls)), thread_name_prefix="histor-cards") as pool:
                 reads = dict(pool.map(one, urls))
         finally:
             if self.robots is not None:
                 self.store.save_robots(self.robots.take_dirty())
+        for found in listed.values():
+            reads.update({key: cards.Read("ok", doc=doc) for key, doc in found.inline})
         results = []
         for t in due:
-            verdict = cards.judge(t["endpoint"], reads, per_host[urlsplit(t["endpoint"]).hostname or ""])
+            found = listed[cards.catalog_url(t["endpoint"])]
+            verdict = cards.judge(t["endpoint"], reads, per_host[urlsplit(t["endpoint"]).hostname or ""], found.cards)
+            if (verdict.status == cards.ABSENT and found.status == "error" and t.get("card_url")
+                    and t.get("card_status") not in (None, cards.ABSENT, cards.ROBOTS)
+                    and t["card_url"] not in cards.candidates(t["endpoint"])):
+                # The card recorded for this endpoint came from its host's AI Catalog, and the catalogue
+                # could not be read this time: that is a failed read, which withdraws nothing.
+                verdict = cards.Verdict(cards.ERROR, detail=f"the AI Catalog that listed the card: {found.detail}"[:300])
             digest = entries = None
             if verdict.status == cards.DECLARED:
                 try:
@@ -593,7 +615,9 @@ class Crawler:
             results.append((t, verdict, digest, entries))
         counts = self.store.apply_cards(results, now)
         return {"checked": len(due), "urls": len(urls), **counts,
-                "statuses": dict(Counter(v.status for _, v, _, _ in results))}
+                "statuses": dict(Counter(v.status for _, v, _, _ in results)),
+                "catalogs": dict(Counter(found.status for found in listed.values())),
+                "catalog_cards": sum(len(found.cards) for found in listed.values())}
 
     def refresh_declarations(self) -> dict[str, Any]:
         """Read every declaration file again, between crawls: a publisher who ships a runner adds its
@@ -1317,7 +1341,7 @@ class Crawler:
             extras_digest: str | None = None
             extras_body: dict[str, Any] | None = None
             if p.obs.status == "ok":
-                found, extras_body = tool_extras(p.obs.tools)
+                found, extras_body = tool_extras(p.obs.tools, Store.extras_scheme(tx))
                 extras_digest = found or ""
                 if found:
                     Store.put_blob(tx, found, "toolextras", extras_body)
@@ -1637,6 +1661,11 @@ class Crawler:
         if previous:
             row = tx.one("SELECT body FROM blobs WHERE digest=? AND kind='toolextras'", (previous,))
             old_body = json.loads(row["body"]) if row else None
+            # The same body under the other extras scheme: the log changed how it writes the digest
+            # (histor.extras_rekey), the server changed nothing. Not a change.
+            if old_body is not None and digest and any(
+                    extras_mod.digest_of(old_body, scheme) == digest for scheme in extras_mod.SCHEMES):
+                return
         tx.execute(
             "INSERT INTO extras_changes(target_id, observed_at, from_extras, to_extras, summary) VALUES(?, ?, ?, ?, ?)",
             (target_id, observed_at, previous or None, digest or None, dumps(extras_diff(old_body, body))),

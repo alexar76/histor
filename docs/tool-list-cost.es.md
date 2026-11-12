@@ -35,8 +35,8 @@ tokens. Las «unas 24 herramientas por servidor» del estudio eran la media de l
 
 ## En dinero
 
-La lista se reenvía con cada petición, así que su coste es tokens × precio × peticiones. Por cada 1 000 peticiones,
-a precios de lista del 2026-10-19 (OpenRouter):
+Si el cliente envía la lista completa en cada petición, la estimación sin caché es tokens × precio × peticiones.
+La tabla calcula 1 000 peticiones de este tipo con los precios de OpenRouter del 19 de octubre de 2026 y los supuestos de caché indicados.
 
 | La lista de un servidor | Tokens | 0,10 USD por millón (Claude Haiku 5.5) | 2 USD por millón (Claude Sonnet 5.5) | Sonnet 5.5 con caché, peticiones a menos de 5 minutos | Lo mismo, a más de 5 minutos |
 |---|---|---|---|---|---|

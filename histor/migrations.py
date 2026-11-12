@@ -560,6 +560,12 @@ MIGRATION_022: tuple[str, ...] = (
     "CREATE INDEX signed_revisions_digest ON signed_revisions(manifest_digest)",
 )
 
+# The extras digest can be written two ways (histor.extras: legacy, rfc8785). python -m histor.extras_rekey
+# moves the stored digests from one to the other; this table holds one page of old -> new while it does.
+MIGRATION_023: Statements = (
+    "CREATE TABLE extras_rekey (old TEXT PRIMARY KEY, new TEXT NOT NULL)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -584,6 +590,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (20, "020_server_cards", MIGRATION_020),
     (21, "021_card_path_mcp_json", MIGRATION_021),
     (22, "022_signed_revisions", MIGRATION_022),
+    (23, "023_extras_rekey", MIGRATION_023),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

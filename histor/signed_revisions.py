@@ -19,7 +19,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import httpx
-from awr import SigningKey, canonicalize, canonical_sri
+from awr import SigningKey, canonical_sri, canonicalize
 
 from histor import merkle, revision
 from histor.db import Tx

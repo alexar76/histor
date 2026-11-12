@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+- **The extras digest can be written as RFC 8785** (`histor/extras.py`, `histor/extras_rekey.py`, migration 023).
+  - Two schemes, kept in `meta` as `extras_digest_scheme`: `legacy` (sorted-key JSON, the only form until now and
+    still the default) and `rfc8785` (the extras digest of `mcp-tool-set-digest/1`, section 8, in its bounded form).
+    They differ only for integral floats such as `1.0`, integers beyond 2^53 and member names outside the Basic
+    Multilingual Plane. Both hash the same stored body.
+  - `python -m histor.extras_rekey to rfc8785` records the scheme first, then gives every stored body its new digest
+    and rewrites `observations.extras`, `targets.current_extras` and both columns of `extras_changes`, in pages and
+    ranges, beside the running service; it repeats until a pass moves nothing. `to legacy` is the way back,
+    `status` counts bodies under another digest, `prune` drops them once nothing points at them.
+  - No extras change is recorded by a move: a body seen again under the other scheme is the same body.
+  - An integer with no double (beyond 1.8e308) is stored as null, as `1e400` already was.
+  - A dataset manifest names its scheme (`extrasDigest`) and its card says how `toolExtrasDigest` was written.
+  - Not switched on in production: CrawlCheck's daily cross-check builds its `extras_sha256` the way HISTOR builds
+    the legacy form, so the move waits for a date agreed with them.
+
+- **Server cards are also found through a host's AI Catalog** (`/.well-known/ai-catalog.json`, the format MCP's
+  Server Card extension, SEP-2127, uses for domain-level discovery; `histor/cards.py`, `docs/api.md`).
+  - Each entry typed `application/mcp-server-card+json` is read: a linked card on any host over https, or a card
+    carried inline. Nested catalogues are followed four levels deep; at most 8 catalogue documents and 20 cards
+    are read for one host, the catalogue once per pass. A catalogue of another major `specVersion` is refused.
+  - A card is requested by its media type (`Accept: application/mcp-server-card+json, …`), as the extension asks.
+  - A card in the extension's schema lists no tools by design. It is recorded as `no-tools` with a detail that says
+    so, which tells such cards apart from older cards that happen to lack a tool list.
+  - With several cards for one host, a card that describes the endpoint is now reported before a card that
+    describes another endpoint (`no-tools` before `other-endpoint`). Neither declares a set, so declared sets do
+    not change; the `status` of some endpoints in the dataset can.
+  - A catalogue that cannot be read withdraws nothing: the endpoint's card read is recorded as `error`.
+  - `refresh_cards` reports `catalogs` (how the catalogue reads ended) and `catalog_cards`.
+
 ## 0.9.1 — 2026-11-12
 
 - **`payer-audit` sets a second number beside the distinct-payer count:** how many external payers also paid at

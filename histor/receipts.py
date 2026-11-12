@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from awr import SigningKey, canonicalize
+
 from histor import merkle
 from histor.db import RECEIPT_LOG_LOCK
 from histor.logbook import sign_document, utcnow, verify_document

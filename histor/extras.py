@@ -8,9 +8,19 @@ whether a client asks before a call, and prices, payment terms and vendor flags 
 in members of their own. So HISTOR keeps them beside the tool set, under a digest of their own, and
 records when they change. Never in a label: these members are not part of the MTL/1 subject.
 
-The digest here is HISTOR's own, not RFC 8785: ``_meta`` routinely carries prices as fractions, which
-the AWR canonicalizer refuses. It is SHA-256 over ``json.dumps(sort_keys=True, separators=(",", ":"),
-ensure_ascii=False)`` of the stored body, which is deterministic for the JSON HISTOR stores.
+How the body is written before hashing is the log's **extras scheme**, kept in ``meta`` under
+``extras_digest_scheme`` (``python -m histor.extras_rekey`` sets it and re-keys what is stored):
+
+* ``legacy`` (the default, and the only form before 2026-11-12): SHA-256 over
+  ``json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)``. It differs from RFC 8785
+  in three narrow cases: ``1.0`` and other integral floats, integers beyond 2^53, and member names
+  outside the Basic Multilingual Plane (sorted by code point, not UTF-16 code unit).
+* ``rfc8785``: SHA-256 over the RFC 8785 text, every number read as an IEEE 754 double (MTL/1.1, the
+  serialiser of the tool-set digest; fractions are fine). This is the extras digest of
+  ``mcp-tool-set-digest/1`` section 8, in its bounded form (section 8.1).
+
+Both hash the same body, so one body has one digest per scheme and a change of scheme is not a
+change of extras (``Crawler._settle_extras``).
 """
 
 from __future__ import annotations
@@ -20,7 +30,14 @@ import hashlib
 import json
 from typing import Any
 
+from histor.subject import canonical_tool_bytes
 from histor.untrusted import clean_text
+
+LEGACY = "legacy"
+RFC8785 = "rfc8785"
+SCHEMES = (LEGACY, RFC8785)
+META_KEY = "extras_digest_scheme"
+_LARGEST_DOUBLE = 1.7976931348623157e308
 
 DIGESTED = frozenset({"name", "description", "inputSchema", "outputSchema"})
 MAX_TOOL_BYTES = 16_384      # one tool's extra members; a larger value is replaced by its size
@@ -41,6 +58,8 @@ def _clean(value: Any, depth: int = 0) -> Any:
         return [_clean(v, depth + 1) for v in value]
     if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
         return None
+    if isinstance(value, int) and not isinstance(value, bool) and abs(value) > _LARGEST_DOUBLE:
+        return None     # a number with no double, as 1e400 already is (it parses as infinity)
     return value
 
 
@@ -48,14 +67,27 @@ def _dumps(value: Any) -> str:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
-def digest_of(body: Any) -> str:
-    return "sha256-" + base64.b64encode(hashlib.sha256(_dumps(body).encode("utf-8")).digest()).decode("ascii")
+def scheme_problem(scheme: Any) -> str:
+    return "" if scheme in SCHEMES else f"extras scheme must be one of {', '.join(SCHEMES)}, not {scheme!r}"
 
 
-def tool_extras(tools: Any) -> tuple[str | None, dict[str, Any] | None]:
+def digest_of(body: Any, scheme: str = LEGACY) -> str:
+    """The SRI digest of a stored extras body under *scheme* (see the module text)."""
+    if scheme == RFC8785:
+        data = canonical_tool_bytes(body)
+    elif scheme == LEGACY:
+        data = _dumps(body).encode("utf-8")
+    else:
+        raise ValueError(scheme_problem(scheme))
+    return "sha256-" + base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+
+
+def tool_extras(tools: Any, scheme: str = LEGACY) -> tuple[str | None, dict[str, Any] | None]:
     """``(digest, body)`` for the extra members of a tools/list result, or ``(None, None)`` when no
     tool has any. ``body`` is ``{"tools": {name: {member: value}}}`` with only the tools that carry
-    something, plus ``"omitted"`` (names) and ``"oversized"`` ({name: bytes}) when caps applied."""
+    something, plus ``"omitted"`` (names) and ``"oversized"`` ({name: bytes}) when caps applied.
+    The caps measure the compact JSON HISTOR stores, whatever the scheme, so the body never depends
+    on it: only the digest does."""
     if not isinstance(tools, list):
         return None, None
     per_tool: dict[str, dict[str, Any]] = {}
@@ -85,7 +117,7 @@ def tool_extras(tools: Any) -> tuple[str | None, dict[str, Any] | None]:
         body["oversized"] = oversized
     if omitted:
         body["omitted"] = omitted
-    return digest_of(body), body
+    return digest_of(body, scheme), body
 
 
 def _annotation_flips(old: Any, new: Any) -> dict[str, list[Any]]:

@@ -55,6 +55,17 @@ class Store:
         return row["value"] if row else None
 
     @staticmethod
+    def extras_scheme(tx: Tx) -> str:
+        """How this log writes extras digests (histor.extras): ``legacy`` until
+        ``python -m histor.extras_rekey`` moves it."""
+        from histor.extras import LEGACY, META_KEY, SCHEMES
+        row = tx.one("SELECT value FROM meta WHERE key=?", (META_KEY,))
+        value = row["value"] if row else LEGACY
+        if value not in SCHEMES:
+            raise RuntimeError(f"meta {META_KEY}={value!r} is not a scheme this build knows")
+        return value
+
+    @staticmethod
     def set_meta(tx: Tx, key: str, value: str) -> None:
         tx.execute(
             "INSERT INTO meta(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -523,7 +534,8 @@ class Store:
         listed = "t.delisted = 0 AND t.skip_reason IS NULL AND t.transport = 'streamable-http'"
         with self.db.read() as tx:
             due = tx.execute(
-                "SELECT t.id, t.name, t.endpoint, t.version FROM targets t LEFT JOIN server_cards c ON c.target_id = t.id "
+                "SELECT t.id, t.name, t.endpoint, t.version, c.url AS card_url, c.status AS card_status "
+                "FROM targets t LEFT JOIN server_cards c ON c.target_id = t.id "
                 f"WHERE {listed} AND (c.target_id IS NULL OR (c.status IN ('absent', 'robots') AND c.checked_at < ?) "
                 "OR (c.status NOT IN ('absent', 'robots') AND c.checked_at < ?)) "
                 "ORDER BY CASE WHEN c.checked_at IS NULL THEN 0 ELSE 1 END, c.checked_at, t.id LIMIT ?",

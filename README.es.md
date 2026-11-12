@@ -95,7 +95,7 @@ solo falla en el sentido mecánico de que dos resúmenes difieren. No se lee có
 resuelve ningún paquete, no se observa ningún comportamiento. Un cambio se muestra como una fecha y
 un diff, nunca como una acusación. Detalles: [docs/labels.es.md](docs/labels.es.md).
 
-**Cuánto cuesta una lista de herramientas.** Un cliente reenvía la lista de herramientas de cada servidor conectado con cada petición al modelo. Sobre los 18 204 paquetes y 16 170 servidores remotos del registro, la mediana de una lista ronda los 1 300 tokens, el percentil 90 los 8 000, y 31 paquetes listan más de 100 000: [docs/tool-list-cost.es.md](docs/tool-list-cost.es.md). Cada recuento se desglosa en nombres, descripciones y esquemas de entrada; cada cambio lleva su diferencia de coste (`/api/v1/changes/<id>/cost`), y `histor tool-cost check` hace el mismo recuento en el CI de un paquete y hace fallar una versión que vuelve la lista más pesada.
+**Cuánto cuesta una lista de herramientas.** En la [captura del 19 de octubre de 2026](docs/tool-list-cost.es.md), HISTOR contó con `o200k_base` los nombres, las descripciones y los esquemas de entrada de todas las herramientas de 18 204 paquetes y 16 170 servidores remotos. La mediana fue de 1 272 tokens para los paquetes y de 1 328 para los servidores remotos. Los percentiles 90 fueron 8 361 y 7 425, respectivamente, y 31 paquetes superaron los 100 000 tokens. Lo que recibe el modelo y lo que cobra el proveedor depende de la selección de herramientas, el formato de la petición y la caché. Cada cambio registra la diferencia de tokens en `/api/v1/changes/<id>/cost`, y `histor tool-cost check` permite comprobar el presupuesto en CI.
 
 **Descargar los datos.** Una vez por semana, todo lo que ve el registro se publica como archivos en [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/): cada servidor listado, cada conjunto de herramientas que mostró, cada cambio registrado y los escaneos de WARDEN. Son JSON Lines (gzip) con un manifiesto firmado por la clave del registro; la compilación es CC BY 4.0. El README de cada instantánea describe los campos y cómo cargarlos en pandas o DuckDB ([histor/dataset.py](histor/dataset.py)). También en [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions); para citar una cifra, use el DOI de versión de la instantánea en la que se contó (cada instantánea archivada tiene el suyo, listado en la página de los conjuntos de datos); [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) designa todas y abre la más reciente.
 
@@ -150,9 +150,11 @@ make test          # unit tests; set HISTOR_TEST_DATABASE_URL to run each storag
 make integration   # real sockets: a loopback registry and MCP servers, uvicorn, the real WARDEN sidecar
 ```
 
-Las insignias de pruebas y de cobertura de arriba las mide la CI en cada despliegue de Pages y se
-leen a través de shields.io, y las insignias del registro leen el servicio en vivo, así que todas
-las cifras que muestran están al día.
+Las insignias de pruebas y cobertura muestran los resultados de las pruebas unitarias del último
+despliegue de [Pages](https://github.com/alexar76/histor/actions/workflows/pages.yml). Consulta
+el flujo de [CI](https://github.com/alexar76/histor/actions/workflows/ci.yml) para ver el análisis
+estático y las pruebas de Postgres, integración y Docker de un commit. Las insignias del registro
+consultan el servicio en vivo.
 
 ## Identidad ERC-8004
 

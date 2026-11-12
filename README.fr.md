@@ -97,7 +97,7 @@ pas un constat. Trois des quatre méthodes ne peuvent jamais renvoyer `fail` ; l
 aucun paquet résolu, aucun comportement observé. Un changement s’affiche comme une date et un diff,
 jamais comme une accusation. Détails : [docs/labels.fr.md](docs/labels.fr.md).
 
-**Ce que coûte une liste d’outils.** Un client renvoie la liste d’outils de chaque serveur connecté à chaque requête au modèle. Sur les 18 204 paquets et 16 170 serveurs distants du journal, la médiane d’une liste avoisine 1 300 tokens, le 90e centile 8 000, et 31 paquets en listent plus de 100 000 : [docs/tool-list-cost.fr.md](docs/tool-list-cost.fr.md). Chaque compte est réparti entre noms, descriptions et schémas d’entrée ; chaque changement porte sa différence de coût (`/api/v1/changes/<id>/cost`), et `histor tool-cost check` fait le même compte dans la CI d’un paquet et fait échouer une version qui alourdit la liste.
+**Ce que coûte une liste d’outils.** Dans l’[instantané du 19 octobre 2026](docs/tool-list-cost.fr.md), HISTOR a compté avec `o200k_base` les noms, les descriptions et les schémas d’entrée de tous les outils de 18 204 paquets et de 16 170 serveurs distants. La médiane était de 1 272 tokens pour les paquets et de 1 328 pour les serveurs distants. Les 90es centiles étaient de 8 361 et de 7 425 respectivement, et 31 paquets dépassaient 100 000 tokens. Ce que reçoit le modèle et ce que facture le fournisseur dépendent des outils sélectionnés, du format de la requête et du cache. Chaque changement expose l’écart en tokens sur `/api/v1/changes/<id>/cost`, et `histor tool-cost check` permet de vérifier un budget dans la CI.
 
 **Télécharger les données.** Une fois par semaine, tout ce que voit le journal est publié sous forme de fichiers sur [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/) : chaque serveur listé, chaque ensemble d’outils qu’il a montré, chaque changement enregistré et les analyses WARDEN. Ce sont des JSON Lines (gzip) avec un manifeste signé par la clé du journal ; la compilation est sous CC BY 4.0. Le README de chaque instantané décrit les champs et le chargement dans pandas ou DuckDB ([histor/dataset.py](histor/dataset.py)). Aussi sur [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions) ; pour citer un chiffre, donnez le DOI de version de l'instantané sur lequel il a été compté (chaque instantané archivé a le sien, listé sur la page des jeux de données) ; [doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) désigne tous les instantanés et ouvre le plus récent.
 
@@ -153,9 +153,11 @@ make test          # unit tests; set HISTOR_TEST_DATABASE_URL to run each storag
 make integration   # real sockets: a loopback registry and MCP servers, uvicorn, the real WARDEN sidecar
 ```
 
-Les badges de tests et de couverture ci-dessus sont mesurés par la CI à chaque déploiement Pages et
-lus via shields.io, et les badges du journal interrogent le service en direct : chaque chiffre
-affiché est donc à jour.
+Les badges de tests et de couverture affichent les résultats des tests unitaires du dernier
+déploiement [Pages](https://github.com/alexar76/histor/actions/workflows/pages.yml). Le workflow
+de [CI](https://github.com/alexar76/histor/actions/workflows/ci.yml) donne, pour chaque commit,
+les résultats du lint et des tests Postgres, d’intégration et Docker. Les badges du journal
+interrogent le service en direct.
 
 ## Identité ERC-8004
 

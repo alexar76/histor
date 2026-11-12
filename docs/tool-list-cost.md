@@ -35,8 +35,8 @@ larger set the mean is 18.5 and the median 8.
 
 ## In money
 
-The list is resent with every request, so its cost is tokens × price × requests. Per 1,000 requests, at list prices
-on 2026-10-19 (OpenRouter):
+For a client that sends the full list with every request, the uncached estimate is tokens × price × requests.
+The table models 1,000 such requests at the stated 2026-10-19 OpenRouter prices and cache assumptions.
 
 | One server's list | Tokens | $0.10 per million (Claude Haiku 5.5) | $2 per million (Claude Sonnet 5.5) | Sonnet 5.5 with a prompt cache, requests under 5 minutes apart | The same, more than 5 minutes apart |
 |---|---|---|---|---|---|

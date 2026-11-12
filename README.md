@@ -108,7 +108,7 @@ four methods can never return `fail`; the fourth (continuity) fails only in the 
 that two digests differ. No source is read, no package resolved, no behaviour observed. A change
 is shown as a date and a diff, never as an accusation. Details: [docs/labels.md](docs/labels.md).
 
-**What a tool list costs.** A client resends every connected server's tool list with each model request. Over the 18,204 packages and 16,170 remote servers in the log, a list's median is about 1,300 tokens, the 90th percentile about 8,000, and 31 packages list over 100,000: [docs/tool-list-cost.md](docs/tool-list-cost.md). Each count is split into names, descriptions and input schemas; every change carries its cost diff (`/api/v1/changes/<id>/cost`), and `histor tool-cost check` runs the same count in a package's CI and fails a release that makes the list heavier: [docs/tool-list-cost.md](docs/tool-list-cost.md#where-the-tokens-are-and-what-a-release-changed).
+**What a tool list costs.** In the [2026-10-19 snapshot](docs/tool-list-cost.md), HISTOR counted names, descriptions and input schemas across the full lists of 18,204 packages and 16,170 remote servers using `o200k_base`. The median was 1,272 tokens for packages and 1,328 for remote servers. The 90th percentiles were 8,361 and 7,425 respectively, and 31 packages exceeded 100,000 tokens. What a model receives and what the provider bills depend on tool selection, request format and caching. Each recorded change has a token diff (`/api/v1/changes/<id>/cost`), and [`histor tool-cost check`](docs/tool-list-cost.md#where-the-tokens-are-and-what-a-release-changed) can enforce a token budget in CI.
 
 **Watch the servers you use.** `https://histor.modelmarket.dev/feed.xml?watch=<id>,<id>` is a feed of the changes of up to 100 servers you follow; `/api/v1/changes?watch=…&after=<cursor>` is the same for a program, oldest first, resumable. Teams can have each change pushed, signed, to Slack or their own endpoint: [docs/watch.md](docs/watch.md). Registries, scanners and rating services: [docs/data-feed.md](docs/data-feed.md).
 
@@ -197,8 +197,10 @@ make test          # unit tests; set HISTOR_TEST_DATABASE_URL to run each storag
 make integration   # real sockets: a loopback registry and MCP servers, uvicorn, the real WARDEN sidecar
 ```
 
-The tests and coverage badges above are measured by CI on every Pages deploy and read through
-shields.io, and the log badges read the live service, so every number there is current.
+The test and coverage badges show the unit test results from the last deployment by the
+[Pages workflow](https://github.com/alexar76/histor/actions/workflows/pages.yml). See the
+[CI workflow](https://github.com/alexar76/histor/actions/workflows/ci.yml) for lint, Postgres,
+integration and Docker checks on a specific commit. The log badges query the live service.
 
 ## ERC-8004 identity
 

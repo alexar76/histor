@@ -13,7 +13,7 @@ from histor.app import create_app
 from tests.conftest import make_target
 from tests.test_app import TOOLS, target_id
 from tests.test_security_events import public_resolver
-from tests.test_watch_paid import FakeStripe, WHSEC, HOOK, signed, auth
+from tests.test_watch_paid import HOOK, WHSEC, FakeStripe, auth, signed
 
 
 def _setup(world, monkeypatch):

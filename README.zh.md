@@ -84,7 +84,7 @@ flowchart LR
 （连续性）只在两个摘要不同这一机械意义上返回 `fail`。不读取源码，不解析软件包，不观测行为。变更以
 日期和差异呈现，绝不作为指控。详见：[docs/labels.zh.md](docs/labels.zh.md)。
 
-**一份工具列表要花多少钱。** 客户端每次请求模型时都会重新发送每个已连接服务器的工具列表。在日志中的 18,204 个软件包和 16,170 个远程服务器上，列表的中位数约为 1,300 token，第 90 百分位约为 8,000，有 31 个软件包超过 100,000：[docs/tool-list-cost.zh.md](docs/tool-list-cost.zh.md)。每次计数都拆分为名称、描述和输入 schema；每次变更都带有成本差异（`/api/v1/changes/<id>/cost`），`histor tool-cost check` 在软件包的 CI 中做同样的计数，并让使列表变重的发布失败。
+**一份工具列表要花多少钱。** HISTOR 在 [2026 年 10 月 19 日的快照](docs/tool-list-cost.zh.md)中，使用 `o200k_base` 统计了 18,204 个软件包和 16,170 个远程服务器中所有工具的名称、描述和输入 schema。软件包和远程服务器的中位数分别是 1,272 和 1,328 token，第 90 百分位分别是 8,361 和 7,425 token，有 31 个软件包超过 100,000 token。模型实际收到的内容和服务商的账单取决于所选工具、请求格式和缓存。每次变更的 token 差值可通过 `/api/v1/changes/<id>/cost` 查询，`histor tool-cost check` 可在 CI 中检查 token 预算。
 
 **下载数据。** 每周一次，日志所见的全部内容以文件形式发布在 [histor.modelmarket.dev/datasets/](https://histor.modelmarket.dev/datasets/)：每个已登记的服务器、它展示过的每个工具集、每次记录的变更以及 WARDEN 扫描结果。格式为 JSON Lines（gzip），附带由日志密钥签名的清单；汇编部分采用 CC BY 4.0 许可。每个快照的 README 说明各字段，以及如何用 pandas 或 DuckDB 加载（[histor/dataset.py](histor/dataset.py)）。同一数据集也在 [Hugging Face](https://huggingface.co/datasets/alexar76/histor-mcp-tool-definitions) 上；引用某个数字时，请使用计算该数字所用快照的版本 DOI（每个已归档快照都有自己的 DOI，列在数据集页面上）；[doi:10.5281/zenodo.23512759](https://doi.org/10.5281/zenodo.23512759) 代表全部快照，并总是打开最新的一个。
 
@@ -139,8 +139,9 @@ make test          # unit tests; set HISTOR_TEST_DATABASE_URL to run each storag
 make integration   # real sockets: a loopback registry and MCP servers, uvicorn, the real WARDEN sidecar
 ```
 
-上方的测试与覆盖率徽章由 CI 在每次 Pages 部署时测得，经 shields.io 读取；日志徽章读取的是在线
-服务，因此那里的每个数字都是最新的。
+测试和覆盖率徽章显示最近一次 [Pages 部署](https://github.com/alexar76/histor/actions/workflows/pages.yml)的单元测试结果。
+要查看指定提交的代码检查、Postgres 测试、集成测试和 Docker 检查结果，请参阅
+[CI 工作流](https://github.com/alexar76/histor/actions/workflows/ci.yml)。日志徽章查询在线服务。
 
 ## ERC-8004 身份
 

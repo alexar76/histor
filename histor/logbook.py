@@ -21,9 +21,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from awr import AwrError, SigningKey, canonical_sri, canonicalize, parse_did_key
 from cryptography.exceptions import InvalidSignature
 
-from awr import AwrError, SigningKey, canonical_sri, canonicalize, parse_did_key
 from histor import merkle
 from histor.db import Tx
 from histor.keys import write_head_marker

@@ -9,10 +9,18 @@ publisher declares, with ``source = 'card'`` beside the registry entry and the d
 reads the server, the page shows the card and the served set side by side; on 2026-11-02, 49 of 137 cards
 differed from what their server served.
 
-Where a card is looked for, in this order: the endpoint's own ``<endpoint>/server-card``, the host's
-``/.well-known/mcp/server-card.json``, and the host's ``/.well-known/mcp.json``. The last has no standard
-behind it but is where many sites put theirs: on 2026-11-02, 34 of 400 hosts with neither of the first two
-served one there, 4 of them with a full tool list (aicom artifacts/histor-card-paths-2026-11-02).
+Where a card is looked for, in this order: the endpoint's own ``<endpoint>/server-card``, the cards the
+host's AI Catalog lists, the host's ``/.well-known/mcp/server-card.json``, and the host's
+``/.well-known/mcp.json``. The last has no standard behind it but is where many sites put theirs: on
+2026-11-02, 34 of 400 hosts with neither of the first two served one there, 4 of them with a full tool list
+(aicom artifacts/histor-card-paths-2026-11-02).
+
+The AI Catalog (https://ai-catalog.io/, ``/.well-known/ai-catalog.json``) is where MCP's Server Card
+extension (SEP-2127, Final) sends a client that knows only a domain: each entry typed
+``application/mcp-server-card+json`` links to a card (``url``, on any host) or carries one (``data``). A card
+in that extension's schema says where to connect and lists no tools on purpose, so it declares no set here;
+HISTOR records that the card exists and which endpoint it names. Nested catalogues are followed four levels
+deep, at most ``MAX_CATALOG_DOCUMENTS`` documents and ``MAX_CATALOG_CARDS`` cards for one host.
 
 Which card belongs to which endpoint:
 
@@ -20,7 +28,7 @@ Which card belongs to which endpoint:
   ``remote.url``, ``remotes[]``, ``servers[]``, ``aliases[]``, ``endpoints`` as a list or as a map of
   transports; relative ones against the card's URL) describes those and no other.
 * A card that names none describes the endpoint whose path it extends (``<endpoint>/server-card``), or the
-  host's only listed remote endpoint when it is one of the host-wide cards.
+  host's only listed remote endpoint when it is one of the host-wide cards or the only card its catalogue lists.
 
 Reading: only paths the site's robots.txt allows HISTOR (histor.robots), through the same address checks as
 every request, no redirects, at most 1 MiB, once a day per endpoint; a host without a card is asked again
@@ -31,9 +39,10 @@ withdraws nothing.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 import httpx
 
@@ -44,6 +53,18 @@ from histor.robots import origin_of
 WELL_KNOWN = "/.well-known/mcp/server-card.json"
 MCP_JSON = "/.well-known/mcp.json"
 HOST_WIDE = (WELL_KNOWN, MCP_JSON)
+AI_CATALOG = "/.well-known/ai-catalog.json"
+SERVER_CARD_TYPE = "application/mcp-server-card+json"
+CATALOG_TYPE = "application/ai-catalog+json"
+CATALOG_MAJOR = 1                 # the specVersion major this reader understands
+MAX_CATALOG_DEPTH = 4             # the specification's recommended limit for nested catalogues
+MAX_CATALOG_DOCUMENTS = 8         # catalogue documents read for one host
+MAX_CATALOG_CARDS = 20            # hosted cards read for one host's catalogue
+MAX_CATALOG_ENTRIES = 5000        # entries looked at across one host's catalogues
+# A card is asked for by its media type (SEP-2127 discovery: the client "SHOULD request that URL expressing
+# the application/mcp-server-card+json media type"); plain JSON stays acceptable for the older cards.
+ACCEPT = f"{SERVER_CARD_TYPE}, {CATALOG_TYPE}, application/json;q=0.9"
+SERVER_CARD_SCHEMA_PREFIX = "https://static.modelcontextprotocol.io/schemas/"
 MAX_CARD_BYTES = 1024 * 1024
 MAX_TOOLS = 5000
 FETCH_TIMEOUT_S = 10.0
@@ -146,7 +167,7 @@ class CardReader:
             pinned = resolve_public(url, allow_private=self.allow_private)
         except BlockedAddress as exc:
             return Read("error", detail=f"refused: {exc}")
-        headers = {"Host": pinned.host_header, "Accept": "application/json", "User-Agent": USER_AGENT,
+        headers = {"Host": pinned.host_header, "Accept": ACCEPT, "User-Agent": USER_AGENT,
                    "Accept-Encoding": "identity"}
         extensions = {"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {}
         try:
@@ -179,27 +200,158 @@ class CardReader:
         return Read("ok", doc=doc)
 
 
-def judge(endpoint: str, reads: dict[str, Read], hosts_endpoints: int) -> Verdict:
-    """What the card reads say about *endpoint*. *reads* maps each candidate URL to its read."""
+def catalog_url(endpoint: str) -> str:
+    """Where the AI Catalog of *endpoint*'s host is looked for."""
+    return f"{origin_of(endpoint)}{AI_CATALOG}"
+
+
+@dataclass(frozen=True)
+class Listed:
+    """The MCP Server Cards one host's AI Catalog lists."""
+    status: str = "absent"                                  # the root catalogue's read: ok | absent | robots | error
+    urls: tuple[str, ...] = ()                              # hosted cards, absolute, in catalogue order
+    inline: tuple[tuple[str, dict[str, Any]], ...] = ()     # (catalogue URL # identifier, the card)
+    detail: str = ""
+
+    @property
+    def cards(self) -> tuple[str, ...]:
+        """Every listed card's key in *reads*: the hosted ones, then the inline ones."""
+        return self.urls + tuple(key for key, _doc in self.inline)
+
+
+def _media_type(value: Any) -> str:
+    return value.split(";", 1)[0].strip().lower() if isinstance(value, str) else ""
+
+
+def catalog_version_problem(doc: dict[str, Any]) -> str:
+    """Why this document is not a catalogue this reader may use; "" when it is one. A consumer accepts
+    its own major version whatever the minor, and refuses a higher major instead of guessing at it
+    (specification, "Version Handling")."""
+    version = doc.get("specVersion")
+    if not isinstance(version, str) or not isinstance(doc.get("entries"), list):
+        return "not an AI Catalog (no specVersion and entries)"
+    major, _, minor = version.partition(".")
+    if not (major.isdigit() and minor.isdigit()):
+        return f"specVersion {version[:20]!r} is not Major.Minor"
+    if int(major) != CATALOG_MAJOR:
+        return f"specVersion {version} is not supported (this reader understands {CATALOG_MAJOR}.x)"
+    return ""
+
+
+def walk_catalog(url: str, read: Callable[[str], Read]) -> Listed:
+    """Read the AI Catalog at *url* and the catalogues it nests, and return the Server Cards they list.
+
+    *read* is the reader every card goes through (robots.txt, address checks, no redirects, size limit).
+    An entry counts when its ``type`` is the Server Card media type and it has exactly one of ``url`` and
+    ``data``. A hosted card may be on any host; it must be https unless the catalogue itself was read over
+    http. A catalogue is never read twice in one walk, so a catalogue that nests itself ends the walk.
+    """
+    root = read(url)
+    if root.status != "ok":
+        return Listed(root.status, detail=root.detail)
+    problem = catalog_version_problem(root.doc)
+    if problem:
+        return Listed("absent", detail=problem)
+    urls: list[str] = []
+    inline: list[tuple[str, dict[str, Any]]] = []
+    notes: list[str] = []
+    visited = {url}
+    budget = {"documents": 1, "entries": 0}
+    allowed = {"https", urlsplit(url).scheme}
+
+    def absolute(value: Any, base: str) -> str | None:
+        if not isinstance(value, str) or not value.strip() or len(value) > 2048:
+            return None
+        target = urljoin(base, value.strip())
+        return target if urlsplit(target).scheme in allowed else None
+
+    def walk(doc: dict[str, Any], base: str, depth: int) -> None:
+        for index, entry in enumerate(doc.get("entries") or []):
+            budget["entries"] += 1
+            if budget["entries"] > MAX_CATALOG_ENTRIES:
+                notes.append(f"stopped after {MAX_CATALOG_ENTRIES} entries")
+                return
+            if not isinstance(entry, dict) or ("url" in entry) == ("data" in entry):
+                continue        # exactly one of url and data, or the entry says nothing usable
+            kind = _media_type(entry.get("type"))
+            if kind == SERVER_CARD_TYPE:
+                if "data" in entry:
+                    if isinstance(entry["data"], dict):
+                        name = entry.get("identifier") if isinstance(entry.get("identifier"), str) else str(index)
+                        inline.append((f"{base}#{quote(name, safe=':@._-')}", entry["data"]))
+                    continue
+                target = absolute(entry.get("url"), base)
+                if target and target not in urls:
+                    if len(urls) >= MAX_CATALOG_CARDS:
+                        if not any(n.startswith("more than") for n in notes):
+                            notes.append(f"more than {MAX_CATALOG_CARDS} cards listed; the first {MAX_CATALOG_CARDS} were read")
+                        continue
+                    urls.append(target)
+            elif kind == CATALOG_TYPE:
+                if depth >= MAX_CATALOG_DEPTH:
+                    notes.append(f"catalogues nested deeper than {MAX_CATALOG_DEPTH} were not followed")
+                    continue
+                if "data" in entry:
+                    if isinstance(entry["data"], dict) and not catalog_version_problem(entry["data"]):
+                        walk(entry["data"], base, depth + 1)
+                    continue
+                target = absolute(entry.get("url"), base)
+                if not target or target in visited:
+                    continue
+                if budget["documents"] >= MAX_CATALOG_DOCUMENTS:
+                    if not any(n.startswith("only") for n in notes):
+                        notes.append(f"only {MAX_CATALOG_DOCUMENTS} catalogue documents were read")
+                    continue
+                visited.add(target)
+                budget["documents"] += 1
+                nested = read(target)
+                if nested.status == "ok" and not catalog_version_problem(nested.doc):
+                    walk(nested.doc, target, depth + 1)
+
+    walk(root.doc, url, 1)
+    return Listed("ok", tuple(urls), tuple(inline), "; ".join(notes)[:300])
+
+
+def _no_tools_detail(doc: dict[str, Any]) -> str:
+    schema = doc.get("$schema")
+    if isinstance(schema, str) and schema.startswith(SERVER_CARD_SCHEMA_PREFIX) and "server-card" in schema:
+        return "a Server Card in the MCP schema (SEP-2127): it lists no tools by design"
+    return "no complete tool list (each tool needs a name and an inputSchema)"
+
+
+def judge(endpoint: str, reads: dict[str, Read], hosts_endpoints: int, listed: tuple[str, ...] = ()) -> Verdict:
+    """What the card reads say about *endpoint*. *reads* maps each candidate URL to its read; *listed* are
+    the cards the host's AI Catalog lists (their keys in *reads*), looked at after the endpoint's own path
+    and before the host-wide cards. The first card with a full tool list for this endpoint decides; without
+    one, a card that describes this endpoint (and lists no tools) is reported before a card that describes
+    another."""
     target = normalise(endpoint)
-    seen_card = None
-    for url in candidates(endpoint):
+    about_this = elsewhere = None     # a card that describes this endpoint outranks one that describes another
+    origin = origin_of(endpoint)
+    path = (urlsplit(endpoint).path or "/").rstrip("/")
+    own = f"{origin}{path}/server-card" if path else None
+    host_wide = [f"{origin}{p}" for p in HOST_WIDE]
+    from_catalog = [u for u in listed if u != own and u not in host_wide]
+    for url in [u for u in (own, *from_catalog, *host_wide) if u]:
         r = reads.get(url)
         if r is None or r.status != "ok":
             continue
         named = named_endpoints(r.doc, url)
-        own_path = not is_host_wide(url)
         if named and target not in named:
-            seen_card = seen_card or Verdict(OTHER_ENDPOINT, url, detail="the card names " + ", ".join(sorted(named))[:300])
+            elsewhere = elsewhere or Verdict(OTHER_ENDPOINT, url, detail="the card names " + ", ".join(sorted(named))[:300])
             continue
-        if not named and not own_path and hosts_endpoints > 1:
-            seen_card = seen_card or Verdict(AMBIGUOUS, url, detail=f"the card names no endpoint and this host lists {hosts_endpoints}")
+        if not named and url != own and (hosts_endpoints > 1 or (url in from_catalog and len(listed) > 1)):
+            what = (f"the card names no endpoint and its catalogue lists {len(listed)} cards"
+                    if url in from_catalog and hosts_endpoints <= 1
+                    else f"the card names no endpoint and this host lists {hosts_endpoints}")
+            elsewhere = elsewhere or Verdict(AMBIGUOUS, url, detail=what)
             continue
         tools = full_tools(r.doc)
         if tools is None:
-            seen_card = seen_card or Verdict(NO_TOOLS, url, detail="no complete tool list (each tool needs a name and an inputSchema)")
+            about_this = about_this or Verdict(NO_TOOLS, url, detail=_no_tools_detail(r.doc))
             continue
         return Verdict(DECLARED, url, tools)
+    seen_card = about_this or elsewhere
     if seen_card is not None:
         return seen_card
     statuses = [reads[u].status for u in candidates(endpoint) if u in reads]

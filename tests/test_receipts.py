@@ -12,13 +12,13 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from awr import SigningKey, canonicalize
 from fastapi.testclient import TestClient
+
+from histor import merkle
 from histor.app import create_app
 from histor.logbook import verify_document
 from histor.receipts import RECEIPT_STH_TYPE, AnchorRefused, ReceiptLog, sign_anchor
-
-from awr import SigningKey, canonicalize
-from histor import merkle
 
 HUB = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-hub").digest())
 STRANGER = SigningKey.from_seed(hashlib.sha256(b"histor-receipts-test-stranger").digest())
