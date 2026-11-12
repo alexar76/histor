@@ -112,6 +112,16 @@ the selected Base RPC; they are not independently verified cryptographic chain p
 Ledger timestamps and ownership remain publisher claims. Neither a label nor a checked
 transfer confirms delivery of the purchased service.
 
+The summary sets a distinct-payer count beside a second number:
+- `external_payers_activity_read` — external payers whose outgoing transfers were read;
+- `external_payers_paying_many_others` — how many of them also paid at least `many_others_min_recipients`
+  (the policy's `min_recipients`, 50) recipients other than this seller in the same window;
+- per payer, the same figure is `chain_activity.other_recipients`.
+
+A wallet that pays hundreds of recipients once each raises every recipient's distinct-payer count, and a rule
+that looks for one dominant payer does not see it
+([x402-foundation/x402#2833](https://github.com/x402-foundation/x402/issues/2833), 2026-11-12).
+
 Reducer: exit **0** for a generated report, including unknown/incomplete evidence; **2** for
 invalid input. Collector: **0** for a complete transfer window; **1** for an explicitly
 incomplete window saved to disk; **2** for a fatal input/RPC error. Settlement availability is

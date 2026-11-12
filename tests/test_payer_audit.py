@@ -95,6 +95,30 @@ def test_broad_small_singleton_transfers_have_an_explicit_uncalibrated_basis():
     assert report["summary"]["external_amount_atomic"] == 1000
 
 
+def test_seller_summary_counts_payers_that_also_paid_many_other_recipients():
+    # x402#2833, 2026-11-12: a distinct-payer count needs, beside it, how many of those payers also
+    # paid many other recipients in the same window. The seller itself is not one of the "others".
+    wide = [event(recipient="0x" + f"{n:040x}", transaction=tx(n), index=n) for n in range(10, 59)]  # 49 others
+    wide.append(event(transaction=tx(99), index=99))  # this seller, which must not count as another recipient
+    report = audit(ledger(), chain=chain(wide))
+    activity = report["payers"][0]["chain_activity"]
+    assert (activity["recipients"], activity["other_recipients"]) == (50, 49)
+    assert report["summary"]["external_payers_activity_read"] == 1
+    assert report["summary"]["external_payers_paying_many_others"] == 0  # 49 < 50
+    wide.append(event(recipient="0x" + f"{200:040x}", transaction=tx(200), index=200))
+    report = audit(ledger(), chain=chain(wide))
+    assert report["summary"]["external_payers_paying_many_others"] == 1
+    assert report["summary"]["many_others_min_recipients"] == 50
+    assert "**1** also paid at least 50 other recipients" in markdown(report)
+
+
+def test_seller_summary_does_not_count_payers_whose_activity_was_not_read():
+    report = audit(ledger())
+    assert report["summary"]["external_payers_activity_read"] == 0
+    assert report["summary"]["external_payers_paying_many_others"] == 0
+    assert "other recipients in this window" not in markdown(report)
+
+
 def test_large_amounts_or_one_frequent_recipient_do_not_match_the_sweeper_rule():
     large = [event(recipient="0x" + f"{n:040x}", amount=1_000_000, transaction=tx(n)) for n in range(10, 60)]
     assert audit(ledger(), chain=chain(large))["payers"][0]["label"] == "unknown"

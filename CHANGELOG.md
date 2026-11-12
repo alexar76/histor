@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`payer-audit` sets a second number beside the distinct-payer count:** how many external payers also paid at
+  least 50 other recipients in the same chain window (`external_payers_paying_many_others`, with
+  `external_payers_activity_read` and, per payer, `chain_activity.other_recipients`; the seller itself is not
+  counted). Such wallets raise every recipient's distinct-payer count alike, as AlalaAlex measured in
+  x402-foundation/x402#2833 on 2026-11-12. The Markdown report states it under the chain window.
+
 ## 0.9.0 — 2026-11-11
 
 - **HISTOR Watch: a refund or dispute takes back only the reversed payment's own period** (money-flow audit

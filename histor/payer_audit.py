@@ -220,6 +220,7 @@ def _annotations(data: dict | None) -> list[dict]:
 def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None = None) -> dict:
     """Reduce immutable inputs. No network, database, settings, signatures or wallet keys."""
     rows, duplicates = ledger_rows(ledger)
+    seller = address(ledger["seller"])
     window, transfers, checks = _chain(chain)
     notes = _annotations(annotations)
     groups: dict[str, list[dict]] = defaultdict(list)
@@ -275,6 +276,8 @@ def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None =
         activity = outgoing.get(payer, [])
         activity_available = payer in window.get("queried_payers", [])
         recipients = Counter(t["recipient"] for t in activity)
+        # Recipients other than this seller: how widely the wallet pays elsewhere in the window.
+        other_recipients = sum(1 for r in recipients if r != seller)
         singletons = sum(n == 1 for n in recipients.values())
         small = sum(t["amount_atomic"] <= POLICY["small_transfer_max_atomic"] for t in activity)
         singleton_fraction = Decimal(singletons) / len(recipients) if recipients else Decimal(0)
@@ -323,12 +326,18 @@ def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None =
                                           "complete": activity_available and window["complete"],
                                           "transfers": len(activity) if activity_available else None,
                                           "recipients": len(recipients) if activity_available else None,
+                                          "other_recipients": other_recipients if activity_available else None,
                                           "singleton_recipients": singletons if activity_available else None,
                                           "small_transfers": small if activity_available else None,
                                           "singleton_recipient_fraction": format(singleton_fraction, ".6f") if activity_available else None,
                                           "small_transfer_fraction": format(small_fraction, ".6f") if activity_available else None},
                        "evidence": evidence})
     external = [p for p in payers if p["ownership"] == "seller-reported-external"]
+    # A distinct-payer count beside how many of those payers also paid many other recipients in the
+    # same window (suggested in x402-foundation/x402#2833, 2026-11-12). Wallets that pay hundreds of
+    # recipients once each raise every recipient's distinct-payer count alike.
+    read = [p for p in external if p["chain_activity"]["available"]]
+    many = [p for p in read if p["chain_activity"]["other_recipients"] >= POLICY["min_recipients"]]
     total_amount = sum(p["amount_atomic"] for p in payers)
     warnings = []
     claimed = ledger.get("totals", {})
@@ -352,6 +361,9 @@ def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None =
                         "external_verified_amount_atomic": sum(p["verified_amount_atomic"] for p in external),
                         "external_verified_amount_usdc": usdc(sum(p["verified_amount_atomic"] for p in external)),
                         "external_labels": dict(sorted(Counter(p["label"] for p in external).items())),
+                        "external_payers_activity_read": len(read),
+                        "external_payers_paying_many_others": len(many),
+                        "many_others_min_recipients": POLICY["min_recipients"],
                         "duplicate_receipts_ignored": duplicates},
             "payers": payers, "warnings": warnings,
             "limits": ["Seller ownership flags and annotations are source claims, not independently established identities.",
@@ -373,6 +385,11 @@ def markdown(report: dict) -> str:
     if window["available"]:
         lines += [f"Chain window: {window['from_at']} — {window['to_at']}; blocks "
                   f"{window['from_block']}–{window['to_block']}; complete: **{window['complete']}**.", ""]
+        if summary["external_payers_activity_read"]:
+            lines += [f"Of {summary['external_payers_activity_read']} external payers whose outgoing transfers were read, "
+                      f"**{summary['external_payers_paying_many_others']}** also paid at least "
+                      f"{summary['many_others_min_recipients']} other recipients in this window. "
+                      "Each of them raises the distinct-payer count of every recipient it paid.", ""]
     else:
         lines += ["Chain evidence unavailable; settlement and cross-recipient activity are not verified.", ""]
     lines += ["| Payer | Label | Sales | USDC | Verified settlements |",
