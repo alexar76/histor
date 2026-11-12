@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.9.1 — 2026-11-12
+
 - **`payer-audit` sets a second number beside the distinct-payer count:** how many external payers also paid at
   least 50 other recipients in the same chain window (`external_payers_paying_many_others`, with
   `external_payers_activity_read` and, per payer, `chain_activity.other_recipients`; the seller itself is not

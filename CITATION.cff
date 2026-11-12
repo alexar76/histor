@@ -9,8 +9,8 @@ authors:
 repository-code: "https://github.com/alexar76/histor"
 url: "https://histor.modelmarket.dev/"
 license: MIT
-version: 0.9.0
-date-released: 2026-11-11
+version: 0.9.1
+date-released: 2026-11-12
 keywords:
   - model-context-protocol
   - transparency-log
