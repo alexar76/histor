@@ -60,15 +60,14 @@ def test_rfc8785_agrees_with_the_specification_where_the_bounded_form_does_not_a
     bounded = {"number-overflow-in-extras", "lone-surrogate-in-extras", "duplicate-names-both-with-extras",
                "one-bad-among-good", "tool-is-string", "tool-is-null", "tool-is-array", "name-missing",
                "name-empty", "name-not-string"}
-    agreed = 0
-    for vector in json.loads(VECTORS.read_text("utf-8"))["vectors"]:
-        want = vector["extras"].get("digest") if "extras" in vector else None
-        got = extras.tool_extras(json.loads(vector["tools"]), extras.RFC8785)[0]
+    vectors = json.loads(VECTORS.read_text("utf-8"))["vectors"]
+    assert bounded < {vector["id"] for vector in vectors}
+    for vector in vectors:
         if vector["id"] in bounded:
             continue
+        want = vector["extras"].get("digest") if "extras" in vector else None
+        got = extras.tool_extras(json.loads(vector["tools"]), extras.RFC8785)[0]
         assert got == want, vector["id"]
-        agreed += 1
-    assert agreed == 58
 
 
 # --- moving a log -----------------------------------------------------------------------------------------
@@ -125,6 +124,33 @@ def test_an_observation_digested_the_old_way_after_the_switch_is_not_a_change(wo
     s.crawler.run()
     now, changes, observed, _ = rows(s, target.id)
     assert changes == [] and now == extras.tool_extras(mcp.tools["/p"], extras.RFC8785)[0] != observed[0]
+
+
+def test_server_detail_identifies_the_digest_scheme_during_rekey(world):
+    from fastapi.testclient import TestClient
+
+    from histor.app import create_app
+
+    s, mcp = world["services"], world["mcp"]
+    mcp.tools["/p"] = [annotated("pay", _meta={"price": 1.0})]
+    target = make_target("io.example/pay", "/p")
+    world["targets"].append(target)
+    s.crawler.run()
+    # Rekey changes the setting before it remaps existing target digests.
+    s.store.set_meta_value(extras.META_KEY, extras.RFC8785)
+
+    with TestClient(create_app(s)) as client:
+        path = f"/api/v1/servers/{target.id}"
+        old = client.get(path).json()
+        assert old["server"]["toolExtrasDigestScheme"] == extras.LEGACY
+        assert old["server"]["toolExtrasDigest"] == extras.digest_of(old["toolExtras"], extras.LEGACY)
+
+        extras_rekey.rekey(s.store.db, extras.RFC8785)
+        new = client.get(path).json()
+        assert new["server"]["toolExtrasDigestScheme"] == extras.RFC8785
+        assert new["server"]["toolExtrasDigest"] == extras.digest_of(new["toolExtras"], extras.RFC8785)
+        assert old["server"]["toolExtrasDigest"] != new["server"]["toolExtrasDigest"]
+        assert old["toolExtras"] == new["toolExtras"]
 
 
 def test_the_way_back(world):

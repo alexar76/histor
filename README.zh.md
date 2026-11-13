@@ -48,7 +48,7 @@
 
 ```mermaid
 flowchart LR
-    R["官方 MCP 注册表<br/>约 2.1 万个服务器"] --> C["抓取程序<br/>server/discover + tools/list<br/>从不调用工具"]
+    R["官方 MCP 注册表"] --> C["抓取程序<br/>server/discover + tools/list<br/>从不调用工具"]
     C --> D["MTL/1 摘要<br/>RFC 8785 + SHA-256"]
     D --> L["四种签名标签<br/>AWR/2 · did:key"]
     W["WARDEN 边车<br/>已发布的模式集"] --> L
@@ -59,6 +59,8 @@ flowchart LR
     K -- "签名应答：相同 · 不同 · 此前见过" --> CL
     K -. "选择加入的摘要计数" .-> M
 ```
+
+请查看[实时统计](https://histor.modelmarket.dev/stats?lang=zh)，了解最近一次完成的抓取中官方注册表的远程端点数量，以及当前索引中的远程端点和软件包条目总数。
 
 - **读取**官方注册表中的每个远程端点：先 `server/discover`，再 `tools/list`（旧版服务器使用初始化），并翻完所有分页。
   不调用任何工具，不安装也不执行任何东西，私有地址在建立连接之前即被拒绝。

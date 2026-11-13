@@ -126,6 +126,7 @@ def test_the_api_and_the_dataset_carry_the_extras(world, tmp_path):
     with TestClient(create_app(s)) as client:
         page = client.get(f"/api/v1/servers/{target.id}").json()
         digest = page["server"]["toolExtrasDigest"]
+        assert page["server"]["toolExtrasDigestScheme"] == "legacy"
         assert page["toolExtras"]["tools"]["pay"]["annotations"] == {"destructiveHint": True}
         assert page["extrasChanges"][0]["summary"]["escalations"] == ["pay"]
         blob = client.get(f"/api/v1/tool-extras/{digest}")
@@ -138,3 +139,42 @@ def test_the_api_and_the_dataset_carry_the_extras(world, tmp_path):
     assert [r["toolExtrasDigest"] for r in rows if r["id"] == target.id] == [digest]
     card = (tmp_path / "snap" / "README.md").read_text()
     assert "config_name: tool_extras" in card and "**tool_extras**" in card
+
+
+def test_capped_extras_can_hide_annotation_changes_from_both_digests(world):
+    from fastapi.testclient import TestClient
+
+    from histor.app import create_app
+    from histor.check import CHECK_TYPE
+    from histor.logbook import verify_document
+
+    s, mcp, clock = world["services"], world["mcp"], world["clock"]
+    target = make_target("io.example/pay", "/pay")
+    world["targets"].append(target)
+    metadata = {"padding": "x" * MAX_TOOL_BYTES}
+    before = [annotated("pay", "Pay a bill.", _meta=metadata,
+                        annotations={"readOnlyHint": False, "destructiveHint": True})]
+    after = [annotated("pay", "Pay a bill.", _meta=metadata,
+                       annotations={"readOnlyHint": True, "destructiveHint": False})]
+    mcp.tools["/pay"] = before
+    s.crawler.run()
+
+    with TestClient(create_app(s)) as client:
+        path = f"/api/v1/servers/{target.id}"
+        first = client.get(path).json()
+        assert first["server"]["toolExtrasDigestScheme"] == "legacy"
+        assert first["toolExtras"]["tools"] == {}
+        assert first["toolExtras"]["oversized"]["pay"] > MAX_TOOL_BYTES
+
+        clock.advance(days=1)
+        mcp.tools["/pay"] = after
+        s.crawler.run()
+        second = client.get(path).json()
+        assert second["server"]["toolSetDigest"] == first["server"]["toolSetDigest"]
+        assert second["server"]["toolExtrasDigest"] == first["server"]["toolExtrasDigest"]
+        assert second["toolExtras"] == first["toolExtras"]
+        assert second["extrasChanges"] == []
+
+        check = client.post("/api/v1/check", json={"endpoint": target.endpoint, "tools": before}).json()
+        assert check["match"] == "same"
+        assert verify_document(check, s.key.did, CHECK_TYPE)

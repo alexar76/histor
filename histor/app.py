@@ -38,6 +38,7 @@ from histor.checkpoint import (
     vkey,
 )
 from histor.declared import public as declared_public
+from histor.extras import scheme_for_digest
 from histor.journey import EVENTS as JOURNEY_EVENTS
 from histor.journey import SOURCES as JOURNEY_SOURCES
 from histor.labels import SHORT
@@ -663,7 +664,7 @@ def create_app(services: Services) -> FastAPI:
 
     @app.get("/api/v1/servers/{target_id}")
     def server(target_id: str) -> Response:
-        t = store.target(target_id)
+        t = store.target_with_extras(target_id)
         if t is None:
             raise HTTPException(status_code=404, detail="unknown server")
         history = store.history(target_id)
@@ -698,8 +699,14 @@ def create_app(services: Services) -> FastAPI:
         classifier = None
         if t["current_toolset"] and t["classifier_model"]:
             classifier = store.classification(t["current_toolset"], t["classifier_model"])
+        extras_body = _json_or_none(t["extras_body"])
+        extras_digest = t["current_extras"]
+        extras_scheme = None
+        if extras_digest and isinstance(extras_body, dict):
+            extras_scheme = scheme_for_digest(extras_digest, extras_body, t["preferred_extras_scheme"])
         page = {
-            "server": {**target_summary(t), "noDigest": no_digest_detail(t)},
+            "server": {**target_summary(t), "noDigest": no_digest_detail(t),
+                       "toolExtrasDigestScheme": extras_scheme},
             "description": t["description"],
             "descriptor": descriptor,
             "patternMatches": matches,
@@ -707,7 +714,7 @@ def create_app(services: Services) -> FastAPI:
             "labels": [{**lbl, "methodShort": SHORT.get(lbl["method"], lbl["method"])} for lbl in store.labels_for(target_id)],
             "timeline": list(reversed(runs))[:100],
             "changes": store.changes(limit=20, target_id=target_id),
-            "toolExtras": store.get_blob(t["current_extras"], "toolextras") if t.get("current_extras") else None,
+            "toolExtras": extras_body,
             "extrasChanges": store.extras_changes(target_id, limit=20),
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.

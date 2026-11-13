@@ -27,11 +27,13 @@ flowchart LR
 
 | Method | Path | Returns |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (no tool list read), `undigested` (a list read, no digest); `q` matches name, endpoint, title |
-| GET | `/api/v1/servers/<id>` | one endpoint: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`, from the registry entry, a declaration file or the server card) and the server card (`serverCard`) |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | index entries for remote endpoints and packages, with `total` before pagination; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (no tool list read), `undigested` (a list read, no digest); `q` matches name, endpoint, title |
+| GET | `/api/v1/servers/<id>` | one target: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`, from the registry entry, a declaration file or the server card) and the server card (`serverCard`) |
 | GET | `/badge/<id>.svg` | README badge: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
-`<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)` — stable, one per remote.
+`<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)`. The `endpoint` is the remote URL or the package locator.
+
+In the server detail, `server.toolExtrasDigestScheme` is `legacy` (sorted-key JSON) or `rfc8785` according to how the bounded `toolExtras` body was encoded for `server.toolExtrasDigest`. It is `null` when there is no digest or the scheme cannot be verified from the stored body. If both schemes reproduce the digest, the API reports the one the log currently uses. The body records tools skipped by storage caps in `oversized` and `omitted`. Equal extras digests can therefore hide an annotation change and are insufficient to verify prior approval. MTL/1 labels and `/check` cover the contract digest.
 
 For a package, each `timeline` row carries `packageVersion`, the version that run was about (`serverVersion` is what the server said in `initialize`, often not the package version), and two versions are two rows even when they served the same list. Recorded since 2026-10-26; older rows have `null`. `launch` says how that run was started: `observer`, `image`, `entry`, `network` (`no route out`) and, when HISTOR supplied configuration, `supplied` with the env variable names (never values), args and pins. The same version can list other tools under other launch args or with the network.
 
@@ -218,6 +220,11 @@ Like every declaration, a card is the operator's word: on 2026-11-02, 49 of 137 
 | `/api/v1/stats/hosts?limit=` | endpoints per host among dialled ones |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | [shields.io endpoint](https://shields.io/badges/endpoint-badge) JSON for README badges |
 | `/health` | liveness, store backend, tree size, whether a crawl is running, last crawl error |
+
+- `lastRun.registryServers` counts distinct server names in the official registry at the last completed crawl.
+- `lastRun.registryEndpoints` counts its remote endpoint entries at that crawl.
+- `targets.listed` counts all current index entries across sources, including remote endpoints and packages. It matches the unfiltered `/api/v1/servers` total at the same point in time.
+- `targets.pinned` counts current index entries that have a pinned tool set.
 
 ## Federation (AIMarket Hub)
 

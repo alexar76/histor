@@ -10,7 +10,7 @@ publica lo firma una sola clave y se añade a un único registro de transparenci
 flowchart TB
     subgraph Outside["Exterior, no confiable"]
         REG["registry.modelcontextprotocol.io<br/>/v0/servers?version=latest"]
-        MCP["~20k endpoints MCP remotos<br/>streamable-http"]
+        MCP["Endpoints MCP remotos<br/>streamable-http"]
         CLIENT["clientes, registros de MCP,<br/>autores de servidores"]
     end
     subgraph Service["Servicio HISTOR (python -m histor serve)"]
@@ -67,7 +67,7 @@ sequenceDiagram
     participant DB as store
     S->>C: intervalo cumplido (o POST /api/v1/admin/crawl del operador)
     C->>R: GET /v0/servers?version=latest (paginado, con reintentos)
-    R-->>C: ~21k servidores, ~22k remotos
+    R-->>C: Entradas de servidor vigentes con endpoints remotos y paquetes
     C->>DB: upsert de destinos, marca los retirados (solo tras una recolección completa)
     C->>W: describe → conjunto de patrones + conjunto de registros, con su resumen
     loop lotes de 400 endpoints, cada uno guardado antes de leer el siguiente

@@ -164,6 +164,18 @@ class Store:
         with self.db.read() as tx:
             return tx.one("SELECT * FROM targets WHERE id=?", (target_id,))
 
+    def target_with_extras(self, target_id: str) -> dict[str, Any] | None:
+        """Read the target and the extras body at its digest in the same database snapshot."""
+        from histor.extras import LEGACY, META_KEY
+
+        with self.db.read() as tx:
+            return tx.one(
+                "SELECT t.*, b.body AS extras_body, COALESCE(m.value, ?) AS preferred_extras_scheme "
+                "FROM targets t LEFT JOIN blobs b ON b.digest=t.current_extras AND b.kind='toolextras' "
+                "LEFT JOIN meta m ON m.key=? WHERE t.id=?",
+                (LEGACY, META_KEY, target_id),
+            )
+
     def targets_by(self, *, endpoint: str | None = None, name: str | None = None) -> list[dict[str, Any]]:
         with self.db.read() as tx:
             if endpoint:

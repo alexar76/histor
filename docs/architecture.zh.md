@@ -9,7 +9,7 @@ HISTOR 是一个 Python 服务加一个辅助进程。它知道的一切都来�
 flowchart TB
     subgraph Outside["外部，不受信任"]
         REG["registry.modelcontextprotocol.io<br/>/v0/servers?version=latest"]
-        MCP["约 2 万个远程 MCP 端点<br/>streamable-http"]
+        MCP["远程 MCP 端点<br/>streamable-http"]
         CLIENT["客户端、注册表、<br/>服务器作者"]
     end
     subgraph Service["HISTOR 服务（python -m histor serve）"]
@@ -66,7 +66,7 @@ sequenceDiagram
     participant DB as 存储
     S->>C: 间隔已到（或运营方 POST /api/v1/admin/crawl）
     C->>R: GET /v0/servers?version=latest（分页，带重试）
-    R-->>C: 约 2.1 万个服务器，约 2.2 万个远程端点
+    R-->>C: 最新服务器条目及其远程端点和软件包
     C->>DB: upsert 目标，标记已下架（仅在完整收集之后）
     C->>W: describe → 模式集 + 记录集，计算摘要
     loop 每批 400 个端点，每批保存后才读取下一批

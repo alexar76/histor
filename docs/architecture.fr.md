@@ -10,7 +10,7 @@ ce qu’il publie est signé par une seule clé et ajouté à un seul journal.
 flowchart TB
     subgraph Outside["Extérieur, non fiable"]
         REG["registry.modelcontextprotocol.io<br/>/v0/servers?version=latest"]
-        MCP["~20k points de terminaison MCP distants<br/>streamable-http"]
+        MCP["Points de terminaison MCP distants<br/>streamable-http"]
         CLIENT["clients, registres,<br/>auteurs de serveurs"]
     end
     subgraph Service["Service HISTOR (python -m histor serve)"]
@@ -67,7 +67,7 @@ sequenceDiagram
     participant DB as stockage
     S->>C: intervalle écoulé (ou POST /api/v1/admin/crawl de l’opérateur)
     C->>R: GET /v0/servers?version=latest (paginé, avec nouvelles tentatives)
-    R-->>C: ~21k serveurs, ~22k entrées distantes
+    R-->>C: Entrées de serveurs à jour avec points de terminaison distants et paquets
     C->>DB: upsert des cibles, marquage des retraits (seulement après une collecte complète)
     C->>W: describe → ensemble de motifs + ensemble d’enregistrements, avec leurs empreintes
     loop lots de 400 points de terminaison, chacun enregistré avant de lire le suivant

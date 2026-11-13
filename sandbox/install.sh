@@ -97,6 +97,30 @@ WantedBy=timers.target
 UNIT
 systemctl daemon-reload
 systemctl enable --now histor-sandbox-trace-clean.timer >/dev/null 2>&1
+# Sandbox containers Docker can no longer remove (a gVisor shim that lost the exit): removed within
+# minutes by root, which the unprivileged observer cannot do (sandbox_reap.sh says how).
+install -o root -g root -m 0755 "$HERE/sandbox_reap.sh" /usr/local/sbin/histor-sandbox-reap
+cat > /etc/systemd/system/histor-sandbox-reap.service <<'UNIT'
+[Unit]
+Description=Remove HISTOR sandbox containers that outlived every observation stage
+After=docker.service
+Requires=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/histor-sandbox-reap
+TimeoutStartSec=10min
+UNIT
+cat > /etc/systemd/system/histor-sandbox-reap.timer <<'UNIT'
+[Unit]
+Description=Check for stuck HISTOR sandbox containers every 5 minutes
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now histor-sandbox-reap.timer >/dev/null 2>&1
 
 # The install stage's network: a bridge on which containers cannot reach each other.
 docker network inspect "$NETWORK" >/dev/null 2>&1 || \

@@ -164,6 +164,29 @@ def docker(*args: str, timeout: float = 60, check: bool = False) -> subprocess.C
     return subprocess.run([DOCKER, *args], capture_output=True, text=True, timeout=timeout, check=check)
 
 
+def remove_container(name: str, client: subprocess.Popen[Any] | None = None) -> None:
+    """Remove a sandbox container and end its `docker run` client. Never raises, never waits long.
+
+    Under gVisor a killed sandbox can leave its shim waiting for an exit event that never comes:
+    Docker keeps the container "running", `docker rm -f` times out, and the client waits for ever
+    (2026-11-12: one package, two hosts, 30 hours). Called from `finally`, a timeout here used to
+    escape and leave the client behind. This service cannot end a shim (it is unprivileged); the
+    root timer histor-sandbox-reap removes such a container within minutes."""
+    try:
+        docker("rm", "-f", name, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    if client is not None:
+        try:
+            client.kill()  # a no-op when it has already exited
+        except OSError:
+            pass
+        try:
+            client.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+
 def http_json(url: str, timeout: float = 30) -> Any:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as res:  # noqa: S310 - fixed registry hosts
@@ -796,7 +819,7 @@ def install(registry: str, name: str, version: str, work: Path, run_id: str, pin
     try:
         res = docker("run", *flags, image or IMAGES[registry], *cmd, timeout=INSTALL_TIMEOUT_S)
     except subprocess.TimeoutExpired:
-        docker("rm", "-f", f"histor-{run_id}-i")
+        remove_container(f"histor-{run_id}-i")
         return False, "install timed out"
     return res.returncode == 0, tail(res.stderr or res.stdout)
 
@@ -1112,8 +1135,7 @@ def run_scripts(work: Path, run_id: str, packages: list[str], image: str | None 
     except subprocess.TimeoutExpired:
         timed_out = True
     finally:
-        docker("rm", "-f", f"histor-{run_id}-s", timeout=30)
-        proc.wait(timeout=10)
+        remove_container(f"histor-{run_id}-s", proc)
     until = time.time()  # after `docker rm`: the address cannot be anyone else's before this
     section = read_trace(cid, [("installScripts", since, until)], "npm", ip,
                          net=(started or since, until))["installScripts"] if cid else {"complete": False, "incompleteReasons": ["container-id-missing"]}
@@ -1144,11 +1166,7 @@ def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool =
         started = container_started(cid)  # while it exists: inspect knows nothing once it is removed
         answer = talk(proc, start, run_id, traced, marks)
     finally:
-        docker("rm", "-f", f"histor-{run_id}-r", timeout=30)
-        try:
-            proc.kill()
-        except OSError:
-            pass
+        remove_container(f"histor-{run_id}-r", proc)
     ended = time.time()
     if traced and cid:
         listed = marks.get("listed", ended)

@@ -739,7 +739,33 @@ def test_the_start_is_read_while_the_container_exists():
     for stage in ('def run_scripts', 'def run('):
         body = src[src.index(stage):]
         body = body[:body.index("\ndef ", 10)]
-        assert body.index("container_started(cid)") < body.index('docker("rm", "-f"'), stage
+        assert body.index("container_started(cid)") < body.index("remove_container("), stage
+
+
+def test_a_container_docker_cannot_remove_does_not_leave_its_client(monkeypatch):
+    """2026-11-12: a killed gVisor sandbox whose shim never reported the exit; `docker rm -f` timed
+    out inside `finally`, the exception escaped and the `docker run` client waited for 30 hours."""
+    import subprocess
+    calls = []
+
+    def stuck(*a, **k):
+        calls.append(a)
+        raise subprocess.TimeoutExpired("docker rm", 30)
+
+    monkeypatch.setattr(obs, "docker", stuck)
+    client = subprocess.Popen(["sleep", "60"])
+    obs.remove_container("histor-abc123abc123-r", client)  # must not raise
+    assert calls == [("rm", "-f", "histor-abc123abc123-r")]
+    assert client.returncode is not None
+
+
+def test_every_stage_removes_its_container_through_remove_container():
+    src = (Path(__file__).parents[1] / "sandbox/histor_observe.py").read_text(encoding="utf-8")
+    body = src[src.index("def remove_container"):]
+    body = body[:body.index("\ndef ", 10)]
+    assert src.count('docker("rm"') == 1 and 'docker("rm"' in body
+    for stage in ('"histor-{run_id}-i"', '"histor-{run_id}-s", proc', '"histor-{run_id}-r", proc'):
+        assert f"remove_container(f{stage})" in src, stage
 
 
 def test_a_send_on_an_accepted_connection_goes_to_the_peer_accept_printed(tmp_path, monkeypatch):

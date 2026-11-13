@@ -53,11 +53,11 @@ de chaîne SRI. Dans sa spécification de lockfile, CrawlCheck l'appelle `jcs_v1
 ensembles tirés des enregistrements de HISTOR et calculés par le service de CrawlCheck, ainsi que le propre serveur de
 CrawlCheck donnent des empreintes égales des deux côtés.
 
-`annotations`, `title` et `icons` sont hors de cette empreinte ; les deux services les conservent sous une seconde
-empreinte, celle des extras. Depuis le soir du 7 novembre 2026, CrawlCheck construit son `extras_sha256` comme HISTOR
-construit son empreinte des extras (pas selon la RFC 8785), elles concordent donc aussi : pour crawlcheck.io/mcp, les
-deux valent `sha256-G44DGgW7…`. L'exécution quotidienne ne compare que l'empreinte d'ensemble d'outils, car les sources
-ne portent pas d'empreinte des extras.
+Les deux services incluent `annotations`, `title` et `icons` dans une empreinte distincte pour les extras. Le 7 novembre
+2026, [CrawlCheck a signalé](https://github.com/modelcontextprotocol/registry/issues/82) 30 concordances, dont
+`sha256-G44DGgW7…` pour crawlcheck.io/mcp. Ce résultat porte sur ces lectures. La comparaison des extras dépend de
+l’encodage et des limites de stockage. Le rapprochement quotidien compare uniquement l’empreinte d’ensemble d’outils,
+car aucune des deux sources ne contient d’empreinte des extras.
 
 Chaque ligne publiée par l'observateur est comparée à l'historique de HISTOR pour ce serveur (`/api/v1/servers/<id>`) :
 

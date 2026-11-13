@@ -46,9 +46,10 @@ https://histor.modelmarket.dev/datasets/peers/index.json ：每个观察者、�
 （https://crawlcheck.io/spec/mcp-lockfile ）。2026 年 11 月 7 日核对：CrawlCheck 的两个测试向量、由 CrawlCheck 服务计算的
 六个取自 HISTOR 记录的工具集，以及 CrawlCheck 自己的服务器，双方得到的摘要都相同。
 
-`annotations`、`title` 和 `icons` 不在这个摘要中；两个服务都把它们放在第二个摘要（附加字段摘要）里。自 2026 年 11 月 7 日
-晚起，CrawlCheck 按照 HISTOR 构造附加字段摘要的方式构造其 `extras_sha256`（不按 RFC 8785），因此两者也一致：对
-crawlcheck.io/mcp，两者都是 `sha256-G44DGgW7…`。每日运行只比较工具集摘要，因为来源中没有附加字段摘要。
+两个服务都把 `annotations`、`title` 和 `icons` 纳入单独的附加字段摘要。2026 年 11 月 7 日，
+[CrawlCheck 报告](https://github.com/modelcontextprotocol/registry/issues/82) 30 个附加字段摘要一致，
+其中 crawlcheck.io/mcp 的值为 `sha256-G44DGgW7…`。这一结果适用于当时的样本。比较附加字段摘要还取决于编码方式和存储限制。
+每日运行只比较工具集摘要，因为两个来源都不提供附加字段摘要。
 
 观察者发布的每一行都与 HISTOR 对该服务器的时间线（`/api/v1/servers/<id>`）比较：
 

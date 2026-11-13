@@ -27,12 +27,13 @@ flowchart LR
 
 | Méthode | Chemin | Renvoie |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | des points de terminaison (endpoints) ; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (aucune liste d’outils lue), `undigested` (liste lue, sans empreinte) ; `q` cherche dans le nom, le point de terminaison et le titre |
-| GET | `/api/v1/servers/<id>` | un point de terminaison : ensemble d’outils actuel, correspondances WARDEN avec leurs positions, étiquettes, chronologie condensée, changements, signalements de clients sur 30 jours, ensembles que déclare l’éditeur (`declaredToolSets`) |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | les entrées de points de terminaison distants et de paquets, avec `total` avant pagination ; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (aucune liste d’outils lue), `undigested` (liste lue, sans empreinte) ; `q` cherche dans le nom, le point de terminaison et le titre |
+| GET | `/api/v1/servers/<id>` | une cible : ensemble d’outils actuel, correspondances WARDEN avec leurs positions, étiquettes, chronologie condensée, changements, signalements de clients sur 30 jours, ensembles que déclare l’éditeur (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | badge pour README : `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
-`<id>` est formé des 16 premiers caractères hexadécimaux de `sha256(name + "\n" + endpoint)` —
-stable, un par entrée distante.
+`<id>` est formé des 16 premiers caractères hexadécimaux de `sha256(name + "\n" + endpoint)`. `endpoint` contient l’URL distante ou l’identifiant du paquet.
+
+Dans la fiche du serveur, `server.toolExtrasDigestScheme` vaut `legacy` (JSON aux clés triées) ou `rfc8785` selon l’encodage de `toolExtras` utilisé pour calculer `server.toolExtrasDigest`. Les deux schémas utilisent le corps `toolExtras` soumis aux limites de stockage. Le champ vaut `null` si l’empreinte manque ou si le corps conservé ne permet pas de vérifier le schéma. Si les deux schémas reproduisent l’empreinte, l’API indique celui que le journal utilise actuellement. `oversized` et `omitted` recensent les outils écartés par les limites de taille. Deux empreintes `extras` identiques peuvent donc masquer un changement d’annotation et ne suffisent pas à vérifier une approbation antérieure. Les étiquettes MTL/1 et `/check` couvrent l’empreinte du contrat.
 
 Pour un paquet, chaque ligne de `timeline` porte `packageVersion`, la version exécutée lors de cette observation (`serverVersion` est ce que le serveur a annoncé dans `initialize`, souvent différent de la version du paquet), et deux versions font deux lignes même si elles servaient la même liste. Enregistré depuis le 2026-10-26 ; les lignes plus anciennes ont `null`. `launch` indique comment cette exécution a été lancée : `observer`, `image`, `entry`, `network` (`no route out`) et, quand HISTOR a fourni une configuration, `supplied` avec les noms des variables d’environnement (jamais leurs valeurs), les arguments et les pins. La même version peut lister d’autres outils avec d’autres arguments de lancement ou avec le réseau.
 
@@ -192,6 +193,11 @@ Une déclaration est la parole de l’éditeur : le registre garantit qu’elle 
 | `/api/v1/stats/hosts?limit=` | points de terminaison par hôte, parmi ceux contactés |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | JSON au format [endpoint de shields.io](https://shields.io/badges/endpoint-badge) pour les badges de README |
 | `/health` | vivacité, backend de stockage, taille de l’arbre, exploration en cours ou non, dernière erreur d’exploration |
+
+- `lastRun.registryServers` compte les noms de serveurs distincts du registre officiel lors de la dernière exploration terminée.
+- `lastRun.registryEndpoints` compte les entrées de points de terminaison distants de ce registre lors de la même exploration.
+- `targets.listed` compte toutes les entrées de l’index actuel, dont les points de terminaison distants et les paquets des différentes sources. Ce chiffre correspond au `total` renvoyé par `/api/v1/servers` sans filtre au même moment.
+- `targets.pinned` compte les entrées de l’index actuel qui ont un ensemble d’outils épinglé.
 
 ## Fédération (AIMarket Hub)
 

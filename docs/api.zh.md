@@ -27,11 +27,13 @@ flowchart LR
 
 | 方法 | 路径 | 返回 |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | 端点列表；`state` ∈ `all`、`pinned`、`changed`、`flagged`、`unobserved`（未读到工具列表）、`undigested`（已读到列表但没有摘要）；`q` 匹配名称、端点、标题 |
-| GET | `/api/v1/servers/<id>` | 单个端点：当前工具集、带匹配区间的 WARDEN 匹配项、标签、折叠后的时间线、变更、30 天内的客户端报告、发布者声明的工具集（`declaredToolSets`） |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | 远程端点和软件包条目，`total` 为分页前的总数；`state` ∈ `all`、`pinned`、`changed`、`flagged`、`unobserved`（未读到工具列表）、`undigested`（已读到列表但没有摘要）；`q` 匹配名称、端点、标题 |
+| GET | `/api/v1/servers/<id>` | 单个目标：当前工具集、带匹配区间的 WARDEN 匹配项、标签、折叠后的时间线、变更、30 天内的客户端报告、发布者声明的工具集（`declaredToolSets`） |
 | GET | `/badge/<id>.svg` | README 徽章：`pinned ‹date›`、`unchanged Nd`、`changed ‹date›`、`not observed`、`not listed` |
 
-`<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符——稳定不变，每个远程端点一个。
+`<id>` 是 `sha256(name + "\n" + endpoint)` 的前 16 个十六进制字符。`endpoint` 是远程 URL 或软件包定位符。
+
+服务器详情中的 `server.toolExtrasDigestScheme` 取值为 `legacy`（按键排序的 JSON）或 `rfc8785`，表示计算 `server.toolExtrasDigest` 时采用的编码方式。两种方案都使用受存储限制的 `toolExtras`。没有摘要，或无法根据已保存的数据验证编码方式时，该字段为 `null`。如果两种方案都能重现该摘要，API 会返回日志当前使用的方案。`oversized` 和 `omitted` 列出因大小限制而跳过的工具。因此，相同的 `extras` 摘要可能掩盖注解变更，无法据此验证先前的批准。MTL/1 标签和 `/check` 覆盖的是合约摘要。
 
 对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。`launch` 说明该次运行如何启动：`observer`、`image`、`entry`、`network`（`no route out`），以及 HISTOR 提供配置时的 `supplied`：环境变量名（从不包含值）、参数和 pins。同一版本在不同启动参数下或有网络时，可能列出不同的工具。
 
@@ -180,6 +182,11 @@ npx -y @aimarket/warden declare --when "runner 1.4, macOS" --out mcp-tool-sets.j
 | `/api/v1/stats/hosts?limit=` | 在已连接的端点中，按主机统计的端点数 |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | 供 README 徽章使用的 [shields.io endpoint](https://shields.io/badges/endpoint-badge) JSON |
 | `/health` | 存活状态、存储后端、树大小、是否正在抓取、上次抓取的错误 |
+
+- `lastRun.registryServers` 统计最近一次完成的抓取中，官方注册表里不同服务器名称的数量。
+- `lastRun.registryEndpoints` 统计同一次抓取中该注册表的远程端点条目数。
+- `targets.listed` 统计当前索引中来自各来源的所有条目，包括远程端点和软件包。它等于同一时刻无筛选条件的 `/api/v1/servers` 返回的 `total`。
+- `targets.pinned` 统计当前索引中已固定工具集的条目。
 
 ## 联邦（AIMarket Hub）
 

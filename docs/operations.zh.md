@@ -148,7 +148,8 @@ docker compose -p histor start histor
 - `/api/v1/stats` → 抓取进行时提供 `crawl.progress`；抓取失败后提供 `lastRun.error`。
 - 当最新树头超过两个抓取间隔时，`/api/v1/badges/sth` 变为琥珀色：抓取程序停了。
 - Alien Monitor 以 `/api/v1/stats` 为数据，把 HISTOR 绘制为安全组中的一个节点；最近一次抓取失败或中断时它会变红。
-- 在默认礼貌设置下，每日抓取约需 1–2 小时（约 2 万个端点，少数主机各承载数千个）。
+- 要查看最近一次完成的抓取耗时，请比较[统计 API](https://histor.modelmarket.dev/api/v1/stats)中的
+  `lastRun.startedAt` 和 `lastRun.finishedAt`。如果周期在重启后恢复，请用 `lastRun.cycle.startedAt` 作为开始时间。
 
 ## 做一个守规矩的抓取程序
 
@@ -217,7 +218,7 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
 |---|---|---|
 | 主机数 | 8：`HISTOR_SANDBOX_URL`，然后 `_2_` … `_8_` | 每台主机都运行陌生人的代码，并各自维护经过校验的防火墙、令牌和证书，且须保持相同的 gVisor 版本和观察程序版本；超过八台，这些维护成本就超过了吞吐量带来的收益。设置 `HISTOR_SANDBOX_9_URL` 会使启动失败。 |
 | 每台主机的槽位 | 1–8：`HISTOR_SANDBOX_N_CONCURRENCY`，等于该主机的 `HISTOR_SANDBOX_SLOTS` | 一个槽位安装时最多占 1 GB，运行时占 512 MB 和一个 CPU：八个槽位已需要 16 核、16 GB 的机器。更大的数会被截为 8。 |
-| 所有主机合计同时进行 | 默认 12：`HISTOR_SANDBOX_MAX_SLOTS`，最多 32 | 每次观察在 `HISTOR_SANDBOX_TIMEOUT_S` 内占用 HISTOR 的一个抓取工作线程（`HISTOR_CRAWL_WORKERS`，12），并可能在 HISTOR 的 768 MB 容器中缓存 32 MiB 的应答。十二个槽位、每个软件包 13–60 秒，每小时约处理 700–3 300 个软件包——约 40 000 个的整份精选列表一到两天即可跑完。超过 12 就需要同时提高 `HISTOR_CRAWL_WORKERS` 和 `HISTOR_MEM_LIMIT`。 |
+| 所有主机合计同时进行 | 默认 12：`HISTOR_SANDBOX_MAX_SLOTS`，最多 32 | 每次观察在 `HISTOR_SANDBOX_TIMEOUT_S` 内占用 HISTOR 的一个抓取工作线程（`HISTOR_CRAWL_WORKERS`，12），并可能在 HISTOR 的 768 MB 容器中缓存 32 MiB 的应答。如果十二个槽位持续占满且每个软件包耗时 13–60 秒，每小时约可执行 700–3 300 次观测，未计入调度和重试开销。超过 12 就需要同时提高 `HISTOR_CRAWL_WORKERS` 和 `HISTOR_MEM_LIMIT`。 |
 
 以下情况 HISTOR 也会拒绝启动：主机只配置了一半（有 URL 但缺令牌或指纹）、配置了额外主机却没有第一台、同一个 URL 出现两次。被悄悄丢弃的主机看起来只像抓取变慢，而不像一个笔误。
 
@@ -262,5 +263,7 @@ HISTOR 固定（pin）证书：在发送任何一个字节（包括令牌）之�
 **立即重新观察单个目标：** `docker compose -p histor exec -T histor python -m histor reobserve pypi:ipinfo-mcp-server`（一个或多个地址或目标 id）。它走与抓取相同的路径——沙箱或 MCP 客户端、WARDEN、提交、标签链、安全事件——并把观察结果挂到正在进行的抓取上，否则挂到最近一次抓取上，这样只含一个目标的抓取不会成为公开的“最近一次抓取”。软件包会得到其记录所示它曾要求的内容（占位值、启动参数、运行时）。用于立即替换一条现在错误的记录，而不必等抓取轮到它；旧的观察结果仍留在历史中。
 
 **镜像留在主机上。** 运行软件包的镜像（`histor-node:22`、`:24`、`histor-python:3.12`、`3.13`、`3.14`）只在一次运行期间被使用，所以在清理程序看来它们没人用：11 月 2 日一次磁盘清理删除了它们，11 月 7 日一台主机上的测试运行之后它们又消失了，该主机上所有 npm 和 PyPI 观察都以 `Unable to find image` 失败。因此 `install.sh` 会安装 `histor-sandbox-images`（`sandbox/sandbox_images.sh`）。它用一个小容器占住每个镜像（`histor-sandbox-hold-…`：`sleep`，无网络，无 capabilities，16 MB），这样 `docker image prune -a`、`docker system prune -a` 和不带 `-f` 的 `docker rmi` 都会拒绝删除它；`histor-sandbox-images.timer` 每 2 分钟运行一次，若镜像仍然丢失就重新构建，并把占位容器移到新镜像上。`histor-sandbox-images check` 列出每个镜像及其是否被占住，有任何一个未被占住时以非零状态退出；每次修复都记录在 `journalctl -t histor-sandbox-images`。不要删除这些占位容器：它们几乎不占资源，没有它们，下一次清理就会带走镜像。
+
+**Docker 删不掉的容器由 root 删除。** 观察的每个阶段都会在几分钟内删除自己的容器。但在 gVisor 下，被杀掉的沙箱可能让它的 containerd shim 一直等待一个永远不会到来的退出事件：Docker 仍显示容器在运行，`docker rm -f` 卡住，`docker run` 客户端永远等待。11 月 12 日，一个软件包在两台沙箱主机上都造成了这种情况；两个容器停留了 30 小时，并让夜间备份卡住。观察程序以非特权用户运行，无法结束 shim，因此 `install.sh` 会安装 `histor-sandbox-reap`（`sandbox/sandbox_reap.sh`），由 `histor-sandbox-reap.timer` 每 5 分钟以 root 运行一次：创建超过 15 分钟的 `histor-<id>-<阶段>` 容器用 `docker rm -f` 删除；如果 Docker 删不掉，就杀掉它的 shim 后再删一次。`histor-sandbox-reap --dry-run` 列出这类容器；每次删除都记录在 `journalctl -u histor-sandbox-reap`，有容器删不掉时该单元以失败结束。
 
 **观察程序新版本：** 先更新所有主机（从新提交再次运行 `install.sh`——它是幂等的），用 `histor sandboxes` 检查，然后才在 HISTOR 上提高 `HISTOR_SANDBOX_OBSERVER`。`HISTOR_SANDBOX_OBSERVERS_VALID` 列出旧观察程序，它们成功且完整的观察仍然有效（默认 `3,4`：观察程序 4 改变的是失败软件包的启动方式，而不是正常运行的软件包报告的内容）；它们的失败会排在从未观察过的软件包之前重新运行，至少占一次抓取的一半。由 `gvisor-trace/9` 之前的读取器（看不到重命名和链接）跟踪的成功且完整的记录会再跟踪一次，并与失败的重跑共享这一半。**移除一台主机：** 删除它的四行并重启 HISTOR；编号不必连续。

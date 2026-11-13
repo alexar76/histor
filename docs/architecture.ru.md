@@ -10,7 +10,7 @@ HISTOR — один сервис на Python и один вспомогател�
 flowchart TB
     subgraph Outside["Снаружи — без доверия"]
         REG["registry.modelcontextprotocol.io<br/>/v0/servers?version=latest"]
-        MCP["~20 тыс. удалённых MCP-эндпоинтов<br/>streamable-http"]
+        MCP["Удалённые MCP-эндпоинты<br/>streamable-http"]
         CLIENT["клиенты, реестры,<br/>авторы серверов"]
     end
     subgraph Service["Сервис HISTOR (python -m histor serve)"]
@@ -67,7 +67,7 @@ sequenceDiagram
     participant DB as хранилище
     S->>C: интервал истёк (или оператор вызвал POST /api/v1/admin/crawl)
     C->>R: GET /v0/servers?version=latest (постранично, с повторами)
-    R-->>C: ~21 тыс. серверов, ~22 тыс. удалённых эндпоинтов
+    R-->>C: Актуальные записи серверов с эндпоинтами и пакетами
     C->>DB: upsert целей, отметка исключённых из реестра (только после полного сбора)
     C->>W: describe → набор шаблонов + набор записей, с дайджестами
     loop партии по 400 эндпоинтов, каждая сохраняется до чтения следующей

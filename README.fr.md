@@ -54,7 +54,7 @@ le signe, et dit à quiconque le demande si ce qu’il a reçu est bien ce que t
 
 ```mermaid
 flowchart LR
-    R["Registre MCP officiel<br/>~21k serveurs"] --> C["Robot d’exploration<br/>server/discover + tools/list<br/>jamais un appel d’outil"]
+    R["Registre MCP officiel"] --> C["Robot d’exploration<br/>server/discover + tools/list<br/>jamais un appel d’outil"]
     C --> D["Empreinte MTL/1<br/>RFC 8785 + SHA-256"]
     D --> L["Quatre étiquettes signées<br/>AWR/2 · did:key"]
     W["Sidecar WARDEN<br/>ensemble de motifs publié"] --> L
@@ -65,6 +65,8 @@ flowchart LR
     K -- "signé : identique · différent · déjà vu" --> CL
     K -. "décompte d’empreintes, sur option" .-> M
 ```
+
+Les [statistiques en direct](https://histor.modelmarket.dev/stats?lang=fr) indiquent le nombre de points de terminaison distants du registre officiel lors de la dernière exploration terminée et la taille actuelle de l’index des points de terminaison distants et des paquets.
 
 - **Lit** chaque point de terminaison (endpoint) distant du registre officiel : `server/discover`, puis
   `tools/list` (initialisation pour les serveurs legacy) parcouru sur toutes les pages. Aucun outil n’est appelé, rien n’est installé ni

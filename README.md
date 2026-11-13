@@ -59,7 +59,7 @@ everyone else is seeing.
 
 ```mermaid
 flowchart LR
-    R["Official MCP registry<br/>~21k servers"] --> C["Crawler<br/>server/discover + tools/list<br/>never a tool call"]
+    R["Official MCP registry"] --> C["Crawler<br/>server/discover + tools/list<br/>never a tool call"]
     C --> D["MTL/1 digest<br/>RFC 8785 + SHA-256"]
     D --> L["Four signed labels<br/>AWR/2 · did:key"]
     W["WARDEN sidecar<br/>published pattern set"] --> L
@@ -70,6 +70,8 @@ flowchart LR
     K -- "signed: same · different · seen before" --> CL
     K -. "opt-in digest count" .-> M
 ```
+
+See [live coverage](https://histor.modelmarket.dev/stats) for the official registry’s remote endpoints from the last completed crawl and the current index of remote endpoints and packages.
 
 - **Reads** every remote endpoint in the official registry: `server/discover`, then `tools/list` (legacy servers use initialization)
   drained across pages. No tool is called, nothing is installed or executed, private addresses

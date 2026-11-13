@@ -30,6 +30,8 @@ import hashlib
 import json
 from typing import Any
 
+from awr import AwrError
+
 from histor.subject import canonical_tool_bytes
 from histor.untrusted import clean_text
 
@@ -80,6 +82,18 @@ def digest_of(body: Any, scheme: str = LEGACY) -> str:
     else:
         raise ValueError(scheme_problem(scheme))
     return "sha256-" + base64.b64encode(hashlib.sha256(data).digest()).decode("ascii")
+
+
+def scheme_for_digest(digest: str, body: dict[str, Any], preferred: str) -> str | None:
+    """Identify how a stored body hashes, even while rekeying updates its references in batches."""
+    schemes = (RFC8785, LEGACY) if preferred == RFC8785 else SCHEMES
+    for scheme in schemes:
+        try:
+            if digest_of(body, scheme) == digest:
+                return scheme
+        except (AwrError, OverflowError, ValueError):
+            continue
+    return None
 
 
 def tool_extras(tools: Any, scheme: str = LEGACY) -> tuple[str | None, dict[str, Any] | None]:

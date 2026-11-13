@@ -54,7 +54,7 @@ dice a quien pregunte si lo que recibió es lo mismo que está viendo todo el mu
 
 ```mermaid
 flowchart LR
-    R["Registro oficial de MCP<br/>~21k servidores"] --> C["Rastreador<br/>server/discover + tools/list<br/>nunca una llamada a una herramienta"]
+    R["Registro oficial de MCP"] --> C["Rastreador<br/>server/discover + tools/list<br/>nunca una llamada a una herramienta"]
     C --> D["Resumen MTL/1<br/>RFC 8785 + SHA-256"]
     D --> L["Cuatro etiquetas firmadas<br/>AWR/2 · did:key"]
     W["Sidecar de WARDEN<br/>conjunto de patrones publicado"] --> L
@@ -65,6 +65,8 @@ flowchart LR
     K -- "firmado: igual · distinto · visto antes" --> CL
     K -. "recuento voluntario de resúmenes" .-> M
 ```
+
+Las [estadísticas en vivo](https://histor.modelmarket.dev/stats?lang=es) muestran los endpoints remotos del registro oficial en el último rastreo completo y el tamaño actual del índice de endpoints remotos y paquetes.
 
 - **Lee** cada endpoint remoto del registro oficial de MCP: `server/discover` y después `tools/list` (inicialización para servidores legacy),
   recorriendo todas las páginas. No se llama a ninguna herramienta, no se instala ni se ejecuta

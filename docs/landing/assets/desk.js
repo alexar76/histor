@@ -1082,7 +1082,8 @@ async function statsView(done) {
     el("p", { class: "muted", text: t("js_stats_intro", { at: fmt(run.finishedAt) }) }),
     el("div", { class: "facts" },
       ...[["js_s_servers", num(run.registryServers)], ["js_s_endpoints", num(run.registryEndpoints)], ["js_s_attempted", num(run.attempted)],
-        ["js_s_pinned", num(st.targets.pinned)], ["js_s_block", num(st.targets.block_tier)], ["js_s_advise", num(st.targets.advise_only)],
+        ["js_s_listed", num(st.targets.listed)], ["js_s_pinned", num(st.targets.pinned)],
+        ["js_s_block", num(st.targets.block_tier)], ["js_s_advise", num(st.targets.advise_only)],
         ["js_s_changes7", num(st.changes.last7d)], ["js_s_changes30", num(st.changes.last30d)], ["js_s_log", num(st.log.treeSize)],
         ["js_s_clients", num(st.clientReports.last7d)]]
         .map(([k, v]) => el("div", { class: "fact" }, el("div", { class: "k", text: t(k) }), el("div", { class: "v", text: v })))),

@@ -10,7 +10,7 @@ signed by one key and appended to one log.
 flowchart TB
     subgraph Outside["Outside, untrusted"]
         REG["registry.modelcontextprotocol.io<br/>/v0/servers?version=latest"]
-        MCP["~20k remote MCP endpoints<br/>streamable-http"]
+        MCP["Remote MCP endpoints<br/>streamable-http"]
         CLIENT["clients, registries,<br/>server authors"]
     end
     subgraph Service["HISTOR service (python -m histor serve)"]
@@ -67,7 +67,7 @@ sequenceDiagram
     participant DB as store
     S->>C: interval elapsed (or operator POST /api/v1/admin/crawl)
     C->>R: GET /v0/servers?version=latest (paged, retried)
-    R-->>C: ~21k servers, ~22k remotes
+    R-->>C: Latest server entries with remotes and packages
     C->>DB: upsert targets, mark delisted (only after a full harvest)
     C->>W: describe → pattern set + record set, digested
     loop batches of 400 endpoints, each saved before the next is read

@@ -27,11 +27,13 @@ flowchart LR
 
 | Método | Ruta | Devuelve |
 |---|---|---|
-| GET | `/api/v1/servers?q=&state=&limit=&offset=` | endpoints; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (ninguna lista de herramientas leída), `undigested` (lista leída, sin digest); `q` busca en el nombre, el endpoint y el título |
-| GET | `/api/v1/servers/<id>` | un endpoint: conjunto de herramientas actual, coincidencias de WARDEN con sus fragmentos, etiquetas, cronología compactada, cambios e informes de clientes de 30 días y conjuntos que declara el editor (`declaredToolSets`) |
+| GET | `/api/v1/servers?q=&state=&limit=&offset=` | entradas de endpoints remotos y paquetes, con `total` antes de paginar; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (ninguna lista de herramientas leída), `undigested` (lista leída, sin digest); `q` busca en el nombre, el endpoint y el título |
+| GET | `/api/v1/servers/<id>` | un destino: conjunto de herramientas actual, coincidencias de WARDEN con sus fragmentos, etiquetas, cronología compactada, cambios e informes de clientes de 30 días y conjuntos que declara el editor (`declaredToolSets`) |
 | GET | `/badge/<id>.svg` | insignia para README: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
-`<id>` son los primeros 16 caracteres hexadecimales de `sha256(name + "\n" + endpoint)`: estable, uno por remoto.
+`<id>` son los primeros 16 caracteres hexadecimales de `sha256(name + "\n" + endpoint)`. `endpoint` contiene la URL remota o el identificador del paquete.
+
+En el detalle del servidor, `server.toolExtrasDigestScheme` vale `legacy` (JSON con claves ordenadas) o `rfc8785` según cómo se codificó `toolExtras` para calcular `server.toolExtrasDigest`. Ambos esquemas usan el cuerpo `toolExtras` sujeto a los límites de almacenamiento. El campo es `null` si no hay digest o si el cuerpo guardado no permite verificar el esquema. Si ambos lo reproducen, la API indica el esquema que usa actualmente el registro. `oversized` y `omitted` enumeran las herramientas descartadas por los límites de tamaño. Por eso, dos digests `extras` iguales pueden ocultar un cambio de anotación y no bastan para verificar una aprobación previa. Las etiquetas MTL/1 y `/check` cubren el digest del contrato.
 
 Para un paquete, cada fila de `timeline` lleva `packageVersion`, la versión que se ejecutó en esa observación (`serverVersion` es lo que el servidor dijo en `initialize`, a menudo distinto de la versión del paquete), y dos versiones son dos filas aunque sirvieran la misma lista. Se registra desde el 2026-10-26; las filas anteriores tienen `null`. `launch` indica cómo se inició esa ejecución: `observer`, `image`, `entry`, `network` (`no route out`) y, cuando HISTOR aportó configuración, `supplied` con los nombres de las variables de entorno (nunca sus valores), los argumentos y los pins. La misma versión puede listar otras herramientas con otros argumentos de arranque o con red.
 
@@ -190,6 +192,11 @@ Una declaración es la palabra del editor: el registro garantiza que viene de qu
 | `/api/v1/stats/hosts?limit=` | endpoints por host entre los contactados |
 | `/api/v1/badges/log` · `pinned` · `changes` · `sth` | JSON de [endpoint de shields.io](https://shields.io/badges/endpoint-badge) para insignias de README |
 | `/health` | estado de vida (liveness), backend de almacenamiento, tamaño del árbol, si hay un rastreo en curso, último error de rastreo |
+
+- `lastRun.registryServers` cuenta los nombres de servidor distintos del registro oficial en el último rastreo completo.
+- `lastRun.registryEndpoints` cuenta las entradas de endpoints remotos de ese registro en el mismo rastreo.
+- `targets.listed` cuenta todas las entradas del índice actual, incluidos los endpoints remotos y paquetes de las distintas fuentes. Coincide con el `total` de `/api/v1/servers` sin filtros en el mismo momento.
+- `targets.pinned` cuenta las entradas actuales del índice con un conjunto de herramientas fijado.
 
 ## Federación (AIMarket Hub)
 

@@ -53,11 +53,11 @@ como cadena SRI. En su especificación de lockfile, CrawlCheck lo llama `jcs_v1.
 CrawlCheck, seis conjuntos de los registros de HISTOR calculados por el servicio de CrawlCheck y el propio servidor de
 CrawlCheck dan resúmenes iguales en ambos lados.
 
-`annotations`, `title` e `icons` quedan fuera de este resumen; ambos servicios los guardan bajo un segundo resumen, el
-de extras. Desde la tarde del 7 de noviembre de 2026, CrawlCheck construye su `extras_sha256` igual que HISTOR
-construye su resumen de extras (no según RFC 8785), así que también coinciden: para crawlcheck.io/mcp ambos son
-`sha256-G44DGgW7…`. La ejecución diaria compara solo el resumen del conjunto de herramientas, porque las fuentes no
-llevan resumen de extras.
+Ambos servicios incluyen `annotations`, `title` e `icons` en un resumen de extras separado. El 7 de noviembre de 2026,
+[CrawlCheck informó](https://github.com/modelcontextprotocol/registry/issues/82) de 30 coincidencias en los extras,
+entre ellas `sha256-G44DGgW7…` para crawlcheck.io/mcp. El resultado se refiere a esas lecturas. Las comparaciones de
+extras dependen de la codificación y los límites de almacenamiento. La ejecución diaria compara solo el resumen del
+conjunto de herramientas, porque ninguna de las fuentes lleva un resumen de extras.
 
 Cada fila publicada por el observador se compara con el historial de HISTOR para ese servidor (`/api/v1/servers/<id>`):
 

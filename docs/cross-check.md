@@ -50,10 +50,11 @@ name in UTF-16 code units; RFC 8785 canonical JSON; SHA-256, written as an SRI s
 both of CrawlCheck's test vectors, six tool sets from HISTOR's records hashed by CrawlCheck's service, and CrawlCheck's
 own server give equal digests on both sides.
 
-`annotations`, `title` and `icons` are outside this digest; both services keep them under a second, extras digest.
-Since the evening of 2026-11-07 CrawlCheck builds its `extras_sha256` the way HISTOR builds its extras digest (not
-RFC 8785), so those match too: for crawlcheck.io/mcp both are `sha256-G44DGgW7…`. The daily run compares the tool-set
-digest only, because the sources carry no extras digest.
+Both services put `annotations`, `title` and `icons` in a separate extras digest. On 2026-11-07,
+[CrawlCheck reported](https://github.com/modelcontextprotocol/registry/issues/82) 30 matching extras results,
+including `sha256-G44DGgW7…` for crawlcheck.io/mcp. That sample establishes agreement for those reads.
+Extras comparisons also depend on encoding and storage limits. The daily run compares only the tool-set
+digest because neither source carries an extras digest.
 
 Each row the observer published is compared with HISTOR's timeline for that server (`/api/v1/servers/<id>`):
 
