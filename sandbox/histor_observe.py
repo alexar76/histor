@@ -181,10 +181,14 @@ def remove_container(name: str, client: subprocess.Popen[Any] | None = None) -> 
             client.kill()  # a no-op when it has already exited
         except OSError:
             pass
-        try:
-            client.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
+        wait = getattr(client, "wait", None)
+        if callable(wait):
+            try:
+                wait(timeout=10)
+            except (TypeError, OSError, subprocess.TimeoutExpired):
+                # TypeError: mocks/SimpleNamespace without a timeout kwarg.
+                # Never raise from finally — this path must stay best-effort.
+                pass
 
 
 def http_json(url: str, timeout: float = 30) -> Any:
