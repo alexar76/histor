@@ -105,7 +105,9 @@ def test_placeholder_argument_is_generated_per_run_without_a_shell(tmp_path, mon
     def popen(command, **kwargs):
         commands.append(command)
         assert "shell" not in kwargs
-        return SimpleNamespace(kill=lambda: None)
+        # remove_container kills then waits; a mock without wait() turns the
+        # finally path into AttributeError and fails Pages badges.
+        return SimpleNamespace(kill=lambda: None, wait=lambda timeout=None: 0)
 
     monkeypatch.setattr(obs.subprocess, "Popen", popen)
     for run_id in ["first-run", "second-run"]:

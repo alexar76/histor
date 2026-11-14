@@ -1,0 +1,5 @@
+# Install as /etc/nginx/conf.d/histor-erc8004-feedback-cache.conf on an edge that uses
+# snippets/histor-erc8004-feedback-proxy.conf.example (http context). The feedback files are a few KB
+# each and change weekly; inactive=30d keeps the last copy through a long outage of the runner host.
+proxy_cache_path /var/cache/nginx/histor-erc8004-feedback levels=1 keys_zone=histor_erc8004_feedback:1m
+                 max_size=50m inactive=30d use_temp_path=off;
