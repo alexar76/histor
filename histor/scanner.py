@@ -82,10 +82,18 @@ class Scanner:
         for start in range(0, len(jobs), BATCH):
             chunk = jobs[start:start + BATCH]
             out = self._run("scan", "".join(json.dumps(j) + "\n" for j in chunk), timeout=timeout)
-            for line in out.splitlines():
+            # "\n" only: str.splitlines() also breaks at U+2028/U+2029/U+0085, which JSON.stringify leaves raw
+            # inside strings; WARDEN 0.27.0 quotes the matched clause, and from 2026-11-15 08:27Z every
+            # batch holding such a tool description failed to parse (remote polling stopped).
+            for line in out.split("\n"):
                 if not line.strip():
                     continue
-                item = json.loads(line)
+                try:
+                    item = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    # A ScannerError, so the crawler's one-by-one retry isolates the job instead of the whole
+                    # remote poll failing before any result of the batch is settled.
+                    raise ScannerError(f"scanner wrote a line that is not JSON ({exc})") from exc
                 if item.get("error"):
                     raise ScannerError(f"scan of {item.get('id')} failed: {item['error']}")
                 results[item["id"]] = item

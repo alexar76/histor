@@ -7,6 +7,7 @@ signed, in the tree, and provable under a signed head.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 
 from awr import canonicalize, verify_document
@@ -172,9 +173,10 @@ def test_a_change_names_the_server_and_registry_versions_on_both_sides(world, tm
         assert [(r["serverVersion"], r["registryVersion"]) for r in ok] == [("2.0", "1.1.0"), ("1.0", "1.0.0"), ("1.0", "1.0.0")]
         one = client.get(f"/api/v1/changes/{silent['id']}").json()
         assert [one[k] for k in versions] == ["1.0", "1.0", "1.0.0", "1.0.0"]
-        cost = client.get(f"/api/v1/changes/{released['id']}/cost").json()["change"]
-        assert (cost["fromServerVersion"], cost["toServerVersion"]) == ("1.0", "2.0")
-        assert (cost["fromRegistryVersion"], cost["toRegistryVersion"]) == ("1.0.0", "1.1.0")
+        if importlib.util.find_spec("tiktoken"):   # the cost endpoint answers 503 without the `cost` extra
+            cost = client.get(f"/api/v1/changes/{released['id']}/cost").json()["change"]
+            assert (cost["fromServerVersion"], cost["toServerVersion"]) == ("1.0", "2.0")
+            assert (cost["fromRegistryVersion"], cost["toRegistryVersion"]) == ("1.0.0", "1.1.0")
 
     out = tmp_path / "snap"
     manifest = dataset.export(s.store, s.key, out)

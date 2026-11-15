@@ -150,3 +150,9 @@ def test_the_script_runs_from_a_checkout(tmp_path):
     """scripts/xcheck_digests.py loads the module by path: no installed package needed."""
     missing = subprocess.run([sys.executable, "-I", str(SCRIPT), str(tmp_path / "none.json")], capture_output=True, text=True)
     assert missing.returncode == 2 and "cannot read" in missing.stderr
+
+
+def test_json_lines_with_a_raw_line_separator_inside_a_string_stay_one_row():
+    rows = [{"name": "io.example/a", "note": "one two three\x85four"}, {"name": "io.example/b"}]
+    text = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows) + "\n"
+    assert xc.read_rows(text) == rows

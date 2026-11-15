@@ -56,18 +56,35 @@ def test_an_unknown_scheme_is_refused():
 @pytest.mark.skipif(not VECTORS.is_file(), reason="mcp-tool-set-digest vectors not in this checkout")
 def test_rfc8785_agrees_with_the_specification_where_the_bounded_form_does_not_apply():
     """mcp-tool-set-digest/1 section 8: under rfc8785 HISTOR's extras digest is the specification's on every
-    vector except the limits of section 8.1 (and the entries the specification gives no digest)."""
-    bounded = {"number-overflow-in-extras", "lone-surrogate-in-extras", "duplicate-names-both-with-extras",
-               "one-bad-among-good", "tool-is-string", "tool-is-null", "tool-is-array", "name-missing",
-               "name-empty", "name-not-string"}
+    vector except the 13 that the limits of section 8.1 change. Where the specification gives no digest
+    (TSD-NAME, TSD-TOOL, TSD-TEXT, TSD-NUMBER), HISTOR's bounded form still writes a value or None; that is a
+    difference, not agreement.
+
+    The list is the specification's own count (Appendix A: "agrees on 60 and differs on the 13 vectors its
+    limits of section 8.1 change"; the same 13 as KNOWN in scripts/cross_check_histor.py, minus the three
+    serialiser cases). Both directions are checked, so a vector added to the specification that touches a
+    limit fails here until it is named, and a named vector that starts to agree fails too."""
+    bounded = {
+        # a number with no double is stored as null, a lone surrogate as U+FFFD
+        "number-overflow-in-extras", "lone-surrogate-in-extras",
+        # of two tools with one name the one listed last is kept (the spec says TSD-NAME)
+        "duplicate-names-both-with-extras", "duplicate-names-before-lone-surrogate",
+        "duplicate-names-before-number-overflow",
+        # an entry that is not a tool is passed over (the spec says TSD-TOOL)
+        "one-bad-among-good", "lone-surrogate-before-bad-entry", "tool-is-string", "tool-is-null",
+        "tool-is-array", "name-missing", "name-empty", "name-not-string",
+    }
     vectors = json.loads(VECTORS.read_text("utf-8"))["vectors"]
     assert bounded < {vector["id"] for vector in vectors}
+    agree, differ = set(), set()
     for vector in vectors:
-        if vector["id"] in bounded:
-            continue
-        want = vector["extras"].get("digest") if "extras" in vector else None
+        # an entry the specification gives no digest is its error code, never equal to HISTOR's None
+        spec = vector["extras"]
+        want = ("error", spec["error"]) if "error" in spec else spec.get("digest")
         got = extras.tool_extras(json.loads(vector["tools"]), extras.RFC8785)[0]
-        assert got == want, vector["id"]
+        (agree if got == want else differ).add(vector["id"])
+    assert differ == bounded
+    assert len(agree) == len(vectors) - len(bounded)
 
 
 # --- moving a log -----------------------------------------------------------------------------------------

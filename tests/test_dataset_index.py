@@ -108,3 +108,18 @@ def test_without_any_known_version_the_page_still_cites_the_concept_doi(tmp_path
     (tmp_path / "zenodo.json").write_text('{"2026-10-20": "not a doi", "x": "10.5281/zenodo.1"}')
     cite = cite_block(dataset_index.write_index(tmp_path).read_text())
     assert f'https://doi.org/{dataset_index.ZENODO_CONCEPT_DOI}</a></p>' in cite
+
+
+def test_the_page_states_the_read_cadence_the_code_uses(tmp_path, monkeypatch):
+    """2026-11-15: the page said "once a day" while each remote is read every six hours (a search summary called it
+    a contradiction). The words follow the defaults; change both together."""
+    from histor.config import load_settings
+
+    for name in ("HISTOR_REMOTE_INTERVAL_S", "HISTOR_REMOTE_CHANGED_INTERVAL_S"):
+        monkeypatch.delenv(name, raising=False)
+    s = load_settings()
+    assert s.remote_interval_s == 6 * 3600 and s.remote_changed_interval_s == 30 * 60
+    snapshot(tmp_path, "2026-11-01", 83000, 30000)
+    page = dataset_index.write_index(tmp_path).read_text()
+    assert "once a day" not in page
+    assert "every six hours (every 30 minutes" in " ".join(page.split())

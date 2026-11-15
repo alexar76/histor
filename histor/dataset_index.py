@@ -232,8 +232,8 @@ p code,li code{{overflow-wrap:anywhere}}.cite a{{overflow-wrap:anywhere}}
 @media (max-width:640px){{th:nth-child(4),td:nth-child(4){{display:none}}td,th{{padding:8px 6px}}table{{font-size:14px}}td code{{font-size:13px;overflow-wrap:anywhere}}}}
 </style></head><body><main>
 <h1>MCP tool definitions and how they change</h1>
-<p class="lead">HISTOR reads the tool list of every remote MCP server in the official MCP registry once a day, and runs every
-new version of npm and PyPI MCP packages in a sandbox. Once a week the whole record is published here as files:
+<p class="lead">HISTOR reads the tool list of every remote MCP server in the official MCP registry every six hours (every 30 minutes
+for a week once its tools have changed twice in a week), and runs every new version of npm and PyPI MCP packages in a sandbox. Once a week the whole record is published here as files:
 what each server advertised, and every change, field by field. Free under CC BY 4.0.</p>
 <div class="stats">
 <div class="stat"><b>{c['listed']:,}</b><span>listed servers and packages</span></div>

@@ -123,7 +123,7 @@ def read_rows(text: str) -> list[dict]:
                     return [r for r in data[key] if isinstance(r, dict)]
             return [data]
         rows = []
-        for line in stripped.splitlines():
+        for line in stripped.split("\n"):   # not splitlines(): U+2028 may sit raw inside a JSON string
             line = line.strip()
             if line:
                 obj = json.loads(line)

@@ -108,7 +108,7 @@ export default {
   w1p: "Quand vous connectez un serveur MCP, les descriptions de ses outils vont directement au modèle, comme des instructions. Un serveur peut passer votre relecture avec des descriptions anodines et les modifier la semaine suivante — une seule phrase ajoutée suffit à une injection de prompt, et la plupart des clients ne vous redemandent jamais rien.",
   w2k: "Ce que fait HISTOR",
   w2t: "Il tient la trace publique",
-  w2p: "Chaque jour, HISTOR lit ce qu’annonce chaque point de terminaison distant (streamable-HTTP) du registre officiel MCP, en calcule l’empreinte, signe ce qu’il a vu et l’ajoute à un journal qui ne peut que croître. Quand les définitions d’un serveur changent, le changement reçoit une date et un diff.",
+  w2p: "Toutes les six heures (toutes les 30 minutes pendant une semaine quand ses outils ont changé deux fois), HISTOR lit ce qu’annonce chaque point de terminaison distant (streamable-HTTP) du registre officiel MCP, en calcule l’empreinte, signe ce qu’il a vu et l’ajoute à un journal qui ne peut que croître. Quand les définitions d’un serveur changent, le changement reçoit une date et un diff.",
   w3k: "Ce que vous y gagnez",
   w3t: "Un second regard que vous pouvez contrôler",
   w3p: "Recherchez n’importe quel serveur avant de lui faire confiance. Collez ce que votre client a reçu et découvrez si tous les autres voient la même chose. Suivez les changements dans un flux, ou placez un badge dans votre README. Chaque réponse est signée : vous pouvez la vérifier au lieu de la croire sur parole.",

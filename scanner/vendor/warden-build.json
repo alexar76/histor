@@ -1,17 +1,17 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.26.0",
-  "sourceCommit": "52fffde67532419fa86582c26cff91ce648a595f",
+  "version": "0.27.0",
+  "sourceCommit": "80a0d40683d20bdc0d4e07b8428b8d2de83d8e1d",
   "registryGitHead": null,
-  "buildDigest": "de9f98d627832446e0433cd112898d1106758f89f31506feeed71a7903530ec8",
-  "tarball": "aimarket-warden-0.26.0.tgz",
-  "sha256": "ff8e9fc959caf1ec2184592bb4cde9ea34d475ea42ce0b380c803afe97331f6b",
-  "integrity": "sha512-ANwHhvYBKRcI29I6tx/ahmKtBsnedWxNlJB6+09qkKQqTmU4m04eKnFbXVTmC2zd4Y1R1+HxNWTCnis/by3F/g==",
-  "distribution": "Published npm 0.26.0 archive (dist.shasum 12170b8b\u2026); dist digest matches the signed accepted MOMUS build. npm records no gitHead for it: it was published from a detached worktree of 52fffde67.",
-  "qualityRun": "20261111T110826",
+  "buildDigest": "403842d70620a8dd805ae4b4386613dc4b5804608b801ef75d674248a16c9772",
+  "tarball": "aimarket-warden-0.27.0.tgz",
+  "sha256": "525622b730b3262d595aa2f3ad9ec059306a875fcf178b2ad1cd9cb15457829e",
+  "integrity": "sha512-sUt+zLlk0rlpFUMRAkH3mmBH9iHdassQ/rR+i32hPYjWQn7BysKBjGodMRuqK8za1czAmWmPwNomBPGAB5AWzg==",
+  "distribution": "Published npm 0.27.0 archive (dist.shasum 66b5764a…, 2026-11-15T07:21:12Z), byte for byte the tarball in warden/docs/evidence/warden-release-0.27.0-2026-11-14/; its build digest is the one MOMUS accepted. npm records no gitHead for it. Production HISTOR has run this build since 2026-11-15 as an overlay image; this pin brings ordinary builds from main to the same scanner.",
+  "qualityRun": "20261115T062632",
   "changes": [
-    "Ruleset v19 unchanged from 0.25.0",
-    "SUPP-06 gate (wrap --histor-revision), TaskAdapter long operations, projectRoots, field regressions in the release gate"
+    "Ruleset v20: an EVM opcode \"mnemonic\" is not a seed-phrase request (warden#14); the request veto needs the mnemonic as the verb's object",
+    "Static-scan findings end with in \"<clause>\"; new warden-mcp interceptor, interceptor-server and tool-set-digest modules"
   ],
-  "packageJsonSha256": "6a4f697f49c344b4f25e9cd4ba1e01641bc62f598d65f89a8bf9680fcb42d2d4"
+  "packageJsonSha256": "9e9ba85018fa1f07e1e24be8cb72460ee0555e09a56bd3b4f7a252260859bbe6"
 }
