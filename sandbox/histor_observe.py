@@ -1236,12 +1236,19 @@ def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
                     raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
                 probe = session.call(-1, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
             body = complete_result(probe, "server/discover")
-            versions = body.get("supportedVersions")
-            if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
-                raise ProtocolFailure("server/discover: malformed supportedVersions")
-            if MODERN_PROTOCOL not in versions:
-                raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
-            return body, MODERN_PROTOCOL, True
+            if error is None and "supportedVersions" not in body:  # first answer, not after a -32022 retry
+                # Not a DiscoverResult: a legacy server that answers every method alike (MOMUS's behaviour
+                # fixture; crypto.api.trendsapi.ai over HTTP). The HTTP reader treats it as legacy too
+                # (histor.mcpclient._discover). Observer 5 before 2026-11-15 failed these as "protocol", so
+                # the calls phase of every such package went unobserved.
+                pass
+            else:
+                versions = body.get("supportedVersions")
+                if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
+                    raise ProtocolFailure("server/discover: malformed supportedVersions")
+                if MODERN_PROTOCOL not in versions:
+                    raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
+                return body, MODERN_PROTOCOL, True
     # Legacy implementations use different errors (or silence) before initialize. Do not
     # couple this fallback to -32601 alone, and keep the original process and outer deadline.
     session.modern = False

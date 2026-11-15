@@ -896,3 +896,39 @@ def test_the_observer_reports_server_instructions_for_either_handshake(monkeypat
     _protocol_fixture(monkeypatch, handler)
     result = obs.talk(None, obs.time.monotonic())
     assert result["status"] == "ok" and result["instructions"] == long[:obs.INSTRUCTIONS_MAX]
+
+
+def test_a_non_discover_result_to_server_discover_falls_back_to_legacy(monkeypatch):
+    """2026-11-15: MOMUS's behaviour fixture answers every method with a plain result. Observer 5 failed it as
+    "malformed supportedVersions", so the calls phase of 24 of 72 campaign cases was empty (18 counted missed).
+    A result without supportedVersions is no DiscoverResult: initialize follows, as in histor.mcpclient."""
+    tool = {"name": "send", "inputSchema": {"type": "object"}}
+
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            return {"result": {"content": [{"type": "text", "text": "ok"}]}}
+        if method == "initialize":
+            return {"result": {"protocolVersion": obs.PROTOCOL, "serverInfo": {"name": "fixture", "version": "1"}}}
+        if method == "tools/list":
+            assert "_meta" not in params
+            return {"result": {"tools": [tool]}}
+        assert method == "tools/call" and "_meta" not in params
+        return {"result": {"content": []}}
+
+    calls, _ = _protocol_fixture(monkeypatch, handler)
+    marks = {}
+    result = obs.talk(None, obs.time.monotonic(), "fixture", True, marks)
+    assert result["status"] == "ok" and result["protocolVersion"] == obs.PROTOCOL and result["tools"] == [tool]
+    assert [c[1] for c in calls] == ["server/discover", "initialize", "tools/list", "tools/call"]
+    assert marks["callsComplete"]
+
+
+def test_a_discover_result_with_malformed_supported_versions_still_fails(monkeypatch):
+    def handler(rid, method, params, wait):
+        assert method == "server/discover"
+        return {"result": {"supportedVersions": "2026-07-28", "capabilities": {}}}
+
+    calls, _ = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "protocol" and "malformed supportedVersions" in result["detail"]
+    assert [c[1] for c in calls] == ["server/discover"]
