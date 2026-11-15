@@ -33,7 +33,31 @@
   <a href="README.zh.md">中文</a>
 </p>
 
-> [Цикл контроля качества WARDEN: MOMUS → AI-Factory → SKOPOS → общий нод-агент → деплой](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.ru.md).
+<!-- histor-try -->
+**Попробуйте.** Спросите публичный журнал, что он видел у удалённого MCP-сервера. Без аккаунта и ключа, нужны только `curl` и `jq`:
+
+```bash
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://mcp.deepwiki.com/mcp" \
+  | jq '{server: .target.name, tools: .observed.toolCount, firstPinned: .observed.firstPinned, unchangedSince: .observed.unchangedSince, changes: .observed.changes, page: .target.page}'
+```
+
+```json
+{
+  "server": "com.deepwiki/deepwiki",
+  "tools": 3,
+  "firstPinned": "2026-10-10T12:14:16Z",
+  "unchangedSince": "2026-11-03T03:49:18Z",
+  "changes": 1,
+  "page": "https://histor.modelmarket.dev/s/83fd44d4a5952f31"
+}
+```
+
+Это ответ от 15 ноября 2026 года. Полный ответ подписан Ed25519 и содержит текущую вершину журнала; отправьте свой результат `tools/list`, чтобы сравнить его с тем, что видел HISTOR ([API](docs/api.ru.md)).
+<!-- /histor-try -->
+
+<!-- star-line -->
+Код, задачи и выпуски: [github.com/alexar76/histor](https://github.com/alexar76/histor). Если HISTOR вам пригодился, звезда там помогает другим его найти.
+<!-- /star-line -->
 
 **Сервис:** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Лендинг:** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
@@ -182,6 +206,8 @@ HISTOR — агент ERC-8004 [`96683` в сети Base](https://8004scan.io/ag
 | [THEMIS](https://github.com/alexar76/themis) | допускает capability при публикации в Hub |
 | [AIMarket Hub](https://modelmarket.dev) | держит `histor.check@v1` в каталоге |
 | [AWR](https://github.com/alexar76/aicom/tree/main/awr) | формат подписанного документа, в котором выпускается каждая метка |
+
+> [Цикл контроля качества WARDEN: MOMUS → AI-Factory → SKOPOS → общий нод-агент → деплой](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.ru.md).
 
 ## Лицензия
 

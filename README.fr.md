@@ -33,7 +33,31 @@
   <a href="README.zh.md">中文</a>
 </p>
 
-> [Cycle de contrôle qualité de WARDEN : MOMUS → AI-Factory → SKOPOS → agent de nœud partagé → déploiement](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.fr.md).
+<!-- histor-try -->
+**Essayez.** Demandez au journal public ce qu'il a vu sur un serveur MCP distant. Sans compte ni clé ; il suffit de `curl` et `jq` :
+
+```bash
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://mcp.deepwiki.com/mcp" \
+  | jq '{server: .target.name, tools: .observed.toolCount, firstPinned: .observed.firstPinned, unchangedSince: .observed.unchangedSince, changes: .observed.changes, page: .target.page}'
+```
+
+```json
+{
+  "server": "com.deepwiki/deepwiki",
+  "tools": 3,
+  "firstPinned": "2026-10-10T12:14:16Z",
+  "unchangedSince": "2026-11-03T03:49:18Z",
+  "changes": 1,
+  "page": "https://histor.modelmarket.dev/s/83fd44d4a5952f31"
+}
+```
+
+C'était la réponse du 15 novembre 2026. La réponse complète est signée en Ed25519 et porte la tête d'arbre actuelle du journal ; envoyez votre propre résultat `tools/list` pour le comparer à ce qu'a observé HISTOR ([API](docs/api.fr.md)).
+<!-- /histor-try -->
+
+<!-- star-line -->
+Code, tickets et versions : [github.com/alexar76/histor](https://github.com/alexar76/histor). Si HISTOR vous a été utile, une étoile là-bas aide d'autres personnes à le trouver.
+<!-- /star-line -->
 
 **En ligne :** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Page d’accueil :** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
@@ -180,6 +204,8 @@ transactions et la façon de les vérifier :
 | [THEMIS](https://github.com/alexar76/themis) | admet une capacité au moment de la publication sur un Hub |
 | [AIMarket Hub](https://modelmarket.dev) | liste `histor.check@v1` dans le catalogue |
 | [AWR](https://github.com/alexar76/aicom/tree/main/awr) | le format de document signé qu’utilise chaque étiquette |
+
+> [Cycle de contrôle qualité de WARDEN : MOMUS → AI-Factory → SKOPOS → agent de nœud partagé → déploiement](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.fr.md).
 
 ## Licence
 

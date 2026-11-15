@@ -38,7 +38,31 @@
   <a href="README.zh.md">中文</a>
 </p>
 
-> [WARDEN quality cycle: MOMUS → AI-Factory → SKOPOS → shared node agent → deployment](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.md).
+<!-- histor-try -->
+**Try it.** Ask the public log what it has seen at a remote MCP server. No account and no key; you need only `curl` and `jq`:
+
+```bash
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://mcp.deepwiki.com/mcp" \
+  | jq '{server: .target.name, tools: .observed.toolCount, firstPinned: .observed.firstPinned, unchangedSince: .observed.unchangedSince, changes: .observed.changes, page: .target.page}'
+```
+
+```json
+{
+  "server": "com.deepwiki/deepwiki",
+  "tools": 3,
+  "firstPinned": "2026-10-10T12:14:16Z",
+  "unchangedSince": "2026-11-03T03:49:18Z",
+  "changes": 1,
+  "page": "https://histor.modelmarket.dev/s/83fd44d4a5952f31"
+}
+```
+
+That was the answer on 15 November 2026. The full response is signed with Ed25519 and carries the log's current tree head; send your own `tools/list` result to compare it with what HISTOR observed ([API](docs/api.md)).
+<!-- /histor-try -->
+
+<!-- star-line -->
+Source, issues and releases: [github.com/alexar76/histor](https://github.com/alexar76/histor). If HISTOR was useful to you, a star there helps other people find it.
+<!-- /star-line -->
 
 **Live:** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Landing:** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
@@ -222,6 +246,8 @@ label's signature can be tied back to the registered agent. Transactions and how
 | [THEMIS](https://github.com/alexar76/themis) | admits a capability at publish time on a Hub |
 | [AIMarket Hub](https://modelmarket.dev) | lists `histor.check@v1` in the catalogue |
 | [AWR](https://github.com/alexar76/aicom/tree/main/awr) | the signed document format every label uses |
+
+> [WARDEN quality cycle: MOMUS → AI-Factory → SKOPOS → shared node agent → deployment](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.md).
 
 ## License
 

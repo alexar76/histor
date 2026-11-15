@@ -33,7 +33,31 @@
   <a href="README.zh.md">中文</a>
 </p>
 
-> [Ciclo de control de calidad de WARDEN: MOMUS → AI-Factory → SKOPOS → agente de nodo compartido → despliegue](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.es.md).
+<!-- histor-try -->
+**Pruébalo.** Pregunta al registro público qué ha visto en un servidor MCP remoto. Sin cuenta ni clave; solo necesitas `curl` y `jq`:
+
+```bash
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://mcp.deepwiki.com/mcp" \
+  | jq '{server: .target.name, tools: .observed.toolCount, firstPinned: .observed.firstPinned, unchangedSince: .observed.unchangedSince, changes: .observed.changes, page: .target.page}'
+```
+
+```json
+{
+  "server": "com.deepwiki/deepwiki",
+  "tools": 3,
+  "firstPinned": "2026-10-10T12:14:16Z",
+  "unchangedSince": "2026-11-03T03:49:18Z",
+  "changes": 1,
+  "page": "https://histor.modelmarket.dev/s/83fd44d4a5952f31"
+}
+```
+
+Esa fue la respuesta del 15 de noviembre de 2026. La respuesta completa está firmada con Ed25519 e incluye la cabeza actual del árbol del registro; envía tu propio resultado de `tools/list` para compararlo con lo que observó HISTOR ([API](docs/api.es.md)).
+<!-- /histor-try -->
+
+<!-- star-line -->
+Código, incidencias y versiones: [github.com/alexar76/histor](https://github.com/alexar76/histor). Si HISTOR te ha sido útil, una estrella allí ayuda a que otras personas lo encuentren.
+<!-- /star-line -->
 
 **En vivo:** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **Sitio:** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
@@ -176,6 +200,8 @@ comprobarlas: [Identidades ERC-8004](https://github.com/alexar76/aicom/blob/main
 | [THEMIS](https://github.com/alexar76/themis) | admite una capacidad al publicarla en un Hub |
 | [AIMarket Hub](https://modelmarket.dev) | ofrece `histor.check@v1` en el catálogo |
 | [AWR](https://github.com/alexar76/aicom/tree/main/awr) | el formato de documento firmado que usa cada etiqueta |
+
+> [Ciclo de control de calidad de WARDEN: MOMUS → AI-Factory → SKOPOS → agente de nodo compartido → despliegue](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.es.md).
 
 ## Licencia
 

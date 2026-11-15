@@ -33,7 +33,31 @@
   <a href="README.zh.md"><b>中文</b></a>
 </p>
 
-> [WARDEN 质量检查周期：MOMUS → AI-Factory → SKOPOS → 共享节点智能体 → 部署](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.zh.md).
+<!-- histor-try -->
+**试一试。** 向公共日志查询它在某个远程 MCP 服务器上看到了什么。无需账号或密钥，只需要 `curl` 和 `jq`：
+
+```bash
+curl -sS "https://histor.modelmarket.dev/api/v1/check?endpoint=https://mcp.deepwiki.com/mcp" \
+  | jq '{server: .target.name, tools: .observed.toolCount, firstPinned: .observed.firstPinned, unchangedSince: .observed.unchangedSince, changes: .observed.changes, page: .target.page}'
+```
+
+```json
+{
+  "server": "com.deepwiki/deepwiki",
+  "tools": 3,
+  "firstPinned": "2026-10-10T12:14:16Z",
+  "unchangedSince": "2026-11-03T03:49:18Z",
+  "changes": 1,
+  "page": "https://histor.modelmarket.dev/s/83fd44d4a5952f31"
+}
+```
+
+这是 2026 年 11 月 15 日的回答。完整响应以 Ed25519 签名，并带有日志当前的树头；发送你自己的 `tools/list` 结果，即可与 HISTOR 的观察结果比对（[API](docs/api.zh.md)）。
+<!-- /histor-try -->
+
+<!-- star-line -->
+源码、问题和版本：[github.com/alexar76/histor](https://github.com/alexar76/histor)。如果 HISTOR 对你有用，在那里点一颗星能帮助更多人找到它。
+<!-- /star-line -->
 
 **在线服务：** [histor.modelmarket.dev](https://histor.modelmarket.dev) ·
 **落地页：** [alexar76.github.io/histor](https://alexar76.github.io/histor/) ·
@@ -158,6 +182,8 @@ HISTOR 是 [Base 上的 `96683` 号](https://8004scan.io/agents/base/96683) ERC-
 | [THEMIS](https://github.com/alexar76/themis) | 在 Hub 上于发布时准入一项能力 |
 | [AIMarket Hub](https://modelmarket.dev) | 在目录中上架 `histor.check@v1` |
 | [AWR](https://github.com/alexar76/aicom/tree/main/awr) | 每个标签所用的签名文档格式 |
+
+> [WARDEN 质量检查周期：MOMUS → AI-Factory → SKOPOS → 共享节点智能体 → 部署](https://github.com/alexar76/momus/blob/main/docs/quality-cycle.zh.md).
 
 ## 许可证
 
