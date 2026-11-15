@@ -36,7 +36,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from histor import cards, diffing
+from histor import cards, diffing, instructions
 from histor import extras as extras_mod
 from histor.classifier import Classifier, ClassifierError
 from histor.config import Settings
@@ -1340,15 +1340,21 @@ class Crawler:
             # observations, and every row from before migration 011).
             extras_digest: str | None = None
             extras_body: dict[str, Any] | None = None
+            instructions_digest: str | None = None
             if p.obs.status == "ok":
                 found, extras_body = tool_extras(p.obs.tools, Store.extras_scheme(tx))
                 extras_digest = found or ""
                 if found:
                     Store.put_blob(tx, found, "toolextras", extras_body)
+                if p.obs.instructions_read:
+                    instructions_digest, instructions_body = instructions.stored(p.obs.instructions)
+                    if instructions_body is not None:
+                        Store.put_blob(tx, instructions_digest, instructions.KIND, instructions_body)
             tx.execute(
                 "INSERT INTO observations(target_id, run_id, observed_at, status, detail, subject, toolset, "
-                "tool_count, pages, protocol, server_name, server_version, extras, package_version, launch, registry_version) "
-                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "tool_count, pages, protocol, server_name, server_version, extras, package_version, launch, registry_version, "
+                "instructions) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (t.id, run_id, p.observed_at, p.obs.status if not p.subject_error else "undigestible",
                  clean_text(excerpt(p.obs.detail, 1000) if not p.subject_error else p.subject_error.code, 1000),
                  subject.digest if subject else None, subject.tool_set_digest if subject else None,
@@ -1356,7 +1362,8 @@ class Crawler:
                  clean_text(p.obs.protocol_version, 40),
                  clean_text(p.obs.server_info.get("name") or "", 200) or None,
                  clean_text(p.obs.server_info.get("version") or "", 100) or None, extras_digest,
-                 clean_text(p.obs.package_version or "", 64) or None, self._launch(p), _registry_version(t)),
+                 clean_text(p.obs.package_version or "", 64) or None, self._launch(p), _registry_version(t),
+                 instructions_digest),
             )
             update: dict[str, Any] = {
                 "last_attempt": p.observed_at,

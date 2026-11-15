@@ -296,9 +296,12 @@ class PackageReader:
                                package_version=observed, package_observer=observer, behaviour=behaviour, **extra)
         tools = doc.get("tools")
         info = doc.get("serverInfo") if isinstance(doc.get("serverInfo"), dict) else {}
+        # An observer that reports the member (5 with instructions, 2026-11-15) sends it even when it is null;
+        # an older one leaves it out, and "not read" must not be stored as "the server sent none".
         return Observation(status="ok", tools=tools if isinstance(tools, list) else [], server_info=info,
                            protocol_version=str(doc.get("protocolVersion") or "")[:40], pages=1,
-                           package_version=observed, package_observer=observer, behaviour=behaviour, **extra)
+                           package_version=observed, package_observer=observer, behaviour=behaviour,
+                           instructions=doc.get("instructions"), instructions_read="instructions" in doc, **extra)
 
     def selftest(self) -> dict[str, Any]:
         """The host's own self-test (gVisor, tracing runtime, network, observer version)."""

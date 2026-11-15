@@ -70,7 +70,8 @@ class FakeMcp:
 
     ``tools[path]`` is what tools/list returns (paginated by ``page_size`` when set);
     ``status[path]`` forces an HTTP status (or a whole response); ``sse`` paths answer as event streams;
-    ``server_versions[path]`` is the serverInfo version initialize reports (default "1.0").
+    ``server_versions[path]`` is the serverInfo version initialize reports (default "1.0");
+    ``instructions[path]`` is the ``instructions`` member initialize returns (absent by default).
     """
 
     def __init__(self) -> None:
@@ -80,6 +81,7 @@ class FakeMcp:
         self.page_size: dict[str, int] = {}
         self.raw: dict[str, str] = {}
         self.server_versions: dict[str, str] = {}
+        self.instructions: dict[str, Any] = {}
         self.calls: list[tuple[str, str]] = []
 
     def transport(self) -> httpx.MockTransport:
@@ -98,6 +100,8 @@ class FakeMcp:
         if method == "initialize":
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
                       "serverInfo": {"name": f"fake{path}", "version": self.server_versions.get(path, "1.0")}}
+            if path in self.instructions:
+                result["instructions"] = self.instructions[path]
             return self._reply(path, {"jsonrpc": "2.0", "id": body["id"], "result": result},
                                headers={"Mcp-Session-Id": "s1"})
         if method == "tools/list":

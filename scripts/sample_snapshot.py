@@ -94,7 +94,10 @@ def main() -> None:
     drain_and_verify("servers.jsonl.gz", rd, files["servers.jsonl.gz"])
 
     population = sorted(server_lines)
-    key = lambda sid: hashlib.sha256(f"{a.seed}:{sid}".encode()).hexdigest()
+
+    def key(sid: str) -> str:
+        return hashlib.sha256(f"{a.seed}:{sid}".encode()).hexdigest()
+
     chosen = sorted(population, key=key)[: a.n]
 
     want: set[str] = set()
@@ -127,7 +130,10 @@ def main() -> None:
 
     out_files = {
         "servers.jsonl": write("servers.jsonl", [server_lines[s] for s in chosen]),
-        "changes.jsonl": write("changes.jsonl", [l for s in chosen for l in change_lines[s]]),
+        "changes.jsonl": write(
+            "changes.jsonl",
+            [line for sid in chosen for line in change_lines[sid]],
+        ),
         "toolsets.jsonl": write("toolsets.jsonl", [toolset_lines[d] for d in sorted(toolset_lines)]),
     }
     kinds = Counter("package" if json.loads(server_lines[s])["endpoint"].startswith(("npm:", "pypi:"))

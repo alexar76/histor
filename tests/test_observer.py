@@ -165,7 +165,7 @@ def test_stdio_discovery_falls_back_for_arbitrary_legacy_errors_or_silence(monke
 
     calls, sends = _protocol_fixture(monkeypatch, handler)
     result = obs.talk(None, obs.time.monotonic())
-    assert result == {"status": "ok", "protocolVersion": obs.PROTOCOL,
+    assert result == {"status": "ok", "protocolVersion": obs.PROTOCOL, "instructions": None,
                       "serverInfo": {"name": "old", "version": "1"}, "tools": []}
     assert [call[1] for call in calls] == ["server/discover", "initialize", "tools/list"]
     assert len({call[0] for call in calls}) == len(calls)
@@ -192,7 +192,7 @@ def test_modern_stdio_paginates_and_canary_calls_with_metadata_and_no_handshake(
     calls, sends = _protocol_fixture(monkeypatch, handler)
     marks = {}
     result = obs.talk(None, obs.time.monotonic(), "fixture", True, marks)
-    assert result == {"status": "ok", "protocolVersion": obs.MODERN_PROTOCOL,
+    assert result == {"status": "ok", "protocolVersion": obs.MODERN_PROTOCOL, "instructions": None,
                       "serverInfo": {"name": "fixture", "version": "self-report"}, "tools": [tool]}
     assert [call[1] for call in calls] == ["server/discover", "tools/list", "tools/list", "tools/call"]
     assert calls[2][2]["cursor"] == "page-2"
@@ -874,3 +874,25 @@ def test_a_trace_runtime_that_does_not_record_file_moves_is_not_a_trace_runtime(
     listed = installed.split("--strace-syscalls=", 1)[1].split('"', 1)[0].split(",")
     assert obs.trace_syscall_gaps(json.dumps(
         {obs.TRACE_RUNTIME: {"runtimeArgs": ["--strace", f"--strace-syscalls={','.join(listed)}"]}})) == []
+
+
+@pytest.mark.parametrize("modern", [False, True])
+def test_the_observer_reports_server_instructions_for_either_handshake(monkeypatch, modern):
+    """HISTOR records `instructions` per observation (migration 024); the observer passes them on, bounded."""
+    long = "Use list_items first. " + "x" * obs.INSTRUCTIONS_MAX
+
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            if not modern:
+                return {"error": {"code": -32601, "message": "legacy"}}
+            found = _discover_result()
+            found["result"]["instructions"] = long
+            return found
+        if method == "initialize":
+            return {"result": {"protocolVersion": obs.PROTOCOL, "serverInfo": {"name": "old", "version": "1"},
+                               "instructions": long}}
+        return {"result": {"resultType": "complete", "tools": []} if modern else {"tools": []}}
+
+    _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "ok" and result["instructions"] == long[:obs.INSTRUCTIONS_MAX]

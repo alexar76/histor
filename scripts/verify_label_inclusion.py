@@ -8,7 +8,11 @@ booleans and nested objects, for which sorted keys + compact separators + UTF-8 
 Then check the STH's Ed25519 signature with the key from /api/v1/issuer (docs/log.md, step 1) and
 compare the head with https://histor.modelmarket.dev/checkpoint or a witness's cosigned copy.
 """
-import hashlib, json, sys, urllib.parse, urllib.request
+import hashlib
+import json
+import sys
+import urllib.parse
+import urllib.request
 
 H = "https://histor.modelmarket.dev/api/v1/labels/"
 
@@ -28,10 +32,12 @@ def root_from_path(index, size, leaf_hash, path):
             r = hashlib.sha256(b"\x01" + p + r).digest()
             if fn % 2 == 0:
                 while fn % 2 == 0 and fn != 0:
-                    fn >>= 1; sn >>= 1
+                    fn >>= 1
+                    sn >>= 1
         else:
             r = hashlib.sha256(b"\x01" + r + p).digest()
-        fn >>= 1; sn >>= 1
+        fn >>= 1
+        sn >>= 1
     return r if sn == 0 else None
 
 label_id = sys.argv[1]

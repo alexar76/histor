@@ -566,6 +566,12 @@ MIGRATION_023: Statements = (
     "CREATE TABLE extras_rekey (old TEXT PRIMARY KEY, new TEXT NOT NULL)",
 )
 
+# The server-level `instructions` each observation read (histor.instructions): NULL not read, "" none sent,
+# else a digest whose text is a blob of kind "instructions". A nullable column without a default: no rewrite.
+MIGRATION_024: Statements = (
+    "ALTER TABLE observations ADD COLUMN instructions TEXT",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -591,6 +597,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (21, "021_card_path_mcp_json", MIGRATION_021),
     (22, "022_signed_revisions", MIGRATION_022),
     (23, "023_extras_rekey", MIGRATION_023),
+    (24, "024_observation_instructions", MIGRATION_024),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

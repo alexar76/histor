@@ -88,6 +88,10 @@ class Observation:
     # start arguments): the conditions a reader needs to judge the observation by.
     package_conditions: dict[str, Any] | None = None
     package_supplied: dict[str, Any] | None = None
+    # The server-level ``instructions`` of the handshake that produced this observation (histor.instructions).
+    # ``instructions_read`` says the reader looked at it: False for a package observer that does not report it.
+    instructions: Any = None
+    instructions_read: bool = False
 
 
 def _server_message(doc: Any) -> str:
@@ -423,6 +427,7 @@ class McpReader:
             if not isinstance(result.get("capabilities"), dict):
                 raise _Stop("protocol", "modern discovery has no capabilities object")
             self._modern_server_info(result, obs)
+            obs.instructions, obs.instructions_read = result.get("instructions"), True
             obs.protocol_version = protocol
             return protocol
         raise _Stop("protocol", "modern version negotiation retry limit; no downgrade")
@@ -559,6 +564,7 @@ class McpReader:
         result = _complete(init, "initialize")
         info = result.get("serverInfo")
         obs.server_info = info if isinstance(info, dict) else {}
+        obs.instructions, obs.instructions_read = result.get("instructions"), True
         negotiated = result.get("protocolVersion")
         obs.protocol_version = negotiated[:40] if isinstance(negotiated, str) else ""
         session = headers.get("mcp-session-id")
@@ -650,6 +656,7 @@ class McpReader:
                             raise _Stop("protocol", f"modern tools/list returned MCP error {code}; no downgrade") from None
                         protocol = None
                         obs.server_info, obs.protocol_version, obs.pages = {}, "", 0
+                        obs.instructions, obs.instructions_read = None, False
                 if protocol is None:
                     session, protocol = self._initialize(client, pinned, deadline, obs)
                     tools = self._drain(client, pinned, deadline, obs, protocol, session, modern=False)

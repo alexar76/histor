@@ -76,6 +76,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+INSTRUCTIONS_MAX = 262_144  # characters of the server-level instructions kept per observation
 VERSION = "5"  # modern discovery/per-request metadata, bounded legacy fallback; existing evidence shape
 STATE = Path(os.environ.get("HISTOR_SANDBOX_STATE", "/var/lib/histor-sandbox"))
 DOCKER = shutil.which("docker") or "/usr/bin/docker"
@@ -1261,6 +1262,10 @@ def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: boo
         meta = info.get("_meta") if isinstance(info.get("_meta"), dict) else {}
         result["serverInfo"] = meta.get("io.modelcontextprotocol/serverInfo") if modern else info.get("serverInfo")
         result["protocolVersion"] = version
+        # The server-level text a client MAY add to the system prompt. Always present (null when not a string),
+        # so HISTOR can tell "this observer read it" from an older observer; bounded like the rest of the doc.
+        given = info.get("instructions")
+        result["instructions"] = given[:INSTRUCTIONS_MAX] if isinstance(given, str) else None
         if not modern:
             session.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
         tools: list[Any] = []

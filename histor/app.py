@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from histor import __version__, badge, fingerprints, toolcost, watch_paid
+from histor import instructions as instructions_mod
 from histor import signed_revisions as signed_revisions_mod
 from histor.check import MAX_MATCHES, CheckError
 from histor.checkpoint import (
@@ -674,7 +675,7 @@ def create_app(services: Services) -> FastAPI:
         runs: list[dict[str, Any]] = []
         for h in reversed(history):
             key = (h["status"], h["toolset"], h["subject"], h.get("package_version"), h.get("launch"), h.get("protocol"),
-                   h["server_version"], h.get("registry_version"))
+                   h["server_version"], h.get("registry_version"), h.get("instructions"))
             if runs and runs[-1]["key"] == key:
                 runs[-1]["until"] = h["observed_at"]
                 runs[-1]["count"] += 1
@@ -686,9 +687,19 @@ def create_app(services: Services) -> FastAPI:
                              "packageVersion": h.get("package_version"),
                              "registryVersion": h.get("registry_version"),
                              "protocolVersion": h.get("protocol") or None,
+                             # NULL not read (older rows, failures), "" none sent, else the text's digest.
+                             "instructionsDigest": h.get("instructions"),
                              "launch": _json_or_none(h.get("launch"))})
         for r in runs:
             r.pop("key")
+        # The server-level instructions of the latest observation that read them (histor.instructions).
+        latest = next((h for h in history if h["status"] == "ok" and h.get("instructions") is not None), None)
+        instructions_page = None
+        if latest is not None:
+            body = _json_or_none(store.blob_text(latest["instructions"], instructions_mod.KIND)) if latest["instructions"] else None
+            instructions_page = {"observedAt": latest["observed_at"], "digest": latest["instructions"] or None,
+                                 **({k: body.get(k) for k in ("text", "length", "truncated", "repaired") if k in body}
+                                    if isinstance(body, dict) else {})}
         matches = None
         pattern_set = store.get_meta("pattern_set")
         if t["current_toolset"] and pattern_set:
@@ -716,6 +727,8 @@ def create_app(services: Services) -> FastAPI:
             "changes": store.changes(limit=20, target_id=target_id),
             "toolExtras": extras_body,
             "extrasChanges": store.extras_changes(target_id, limit=20),
+            # What the server sent as `instructions` (a client MAY put it in the system prompt); null: not read yet.
+            "instructions": instructions_page,
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
             "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
