@@ -937,6 +937,7 @@ class Session:
         self.read = 0
         self.noise = b""  # what it printed on stdout that is not the protocol: often why it exits
         self.modern = True  # the first request is the modern discovery probe
+        self.stale: set[int] = set()  # ids whose wait ended: a late answer to them is skipped, never a mismatch
         self.sel = selectors.DefaultSelector()
         assert proc.stdout is not None
         os.set_blocking(proc.stdout.fileno(), False)
@@ -988,6 +989,8 @@ class Session:
                     raise ProtocolFailure("invalid modern JSON-RPC error code; no downgrade")
                 if msg.get("id") is None and "error" in msg:
                     return msg  # protocol errors may omit an id; never misclassify as silence
+                if type(msg.get("id")) is int and msg["id"] in self.stale and msg["id"] != rid:
+                    continue  # the late answer to a probe we stopped waiting for
                 if type(msg.get("id")) is not int or msg["id"] != rid:
                     raise ProtocolFailure("modern response did not match the request id; no downgrade")
             if type(msg.get("id")) is int and msg["id"] == rid and ("result" in msg or "error" in msg):
@@ -1224,6 +1227,7 @@ def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
         probe = session.call(0, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
     except TimeoutError:
         probe = None
+        session.stale.add(0)
     if probe is not None:
         error = probe.get("error")
         if "error" not in probe or (isinstance(error, dict) and error.get("code") in MODERN_ERRORS):
@@ -1255,6 +1259,21 @@ def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
     init = session.call(1, "initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
                                          "clientInfo": {"name": "histor-sandbox", "version": VERSION}},
                         INIT_TIMEOUT_S)
+    refusal = init.get("error") if isinstance(init.get("error"), dict) else {}
+    data = refusal.get("data") if isinstance(refusal.get("data"), dict) else {}
+    if probe is None and refusal.get("code") == -32022 and isinstance(data.get("supported"), list) \
+            and MODERN_PROTOCOL in data["supported"]:
+        # A modern server that started too slowly for the discovery probe (a cold Python server under gVisor;
+        # 2026-11-15: aktools, renforge, aizee, memtomem, uk-legal-mcp, unifi-protect-mcp). Its SDK answered the
+        # probe late, switched the connection to the modern protocol and refuses initialize: it is modern, so
+        # ask again on the same connection with the full handshake time. Only after a probe that timed out.
+        session.modern = True
+        session.stale.add(1)
+        body = complete_result(session.call(-2, "server/discover", modern_params(), INIT_TIMEOUT_S), "server/discover")
+        versions = body.get("supportedVersions")
+        if not isinstance(versions, list) or MODERN_PROTOCOL not in versions:
+            raise ProtocolFailure("server/discover after a refused initialize: no mutually supported modern protocol version")
+        return body, MODERN_PROTOCOL, True
     info = complete_result(init, "initialize")
     return info, info.get("protocolVersion"), False
 

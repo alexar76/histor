@@ -2,6 +2,7 @@
 
 import importlib.util
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -96,7 +97,7 @@ def test_call_errors_timeouts_and_limit_are_not_success(monkeypatch):
 
     class Session:
         def __init__(self, *a):
-            pass
+            self.stale = set()
 
         def send(self, *a):
             pass
@@ -132,6 +133,7 @@ def _protocol_fixture(monkeypatch, handler):
     class Session:
         def __init__(self, proc, deadline):
             self.deadline = deadline
+            self.stale = set()
 
         def call(self, rid, method, params, wait):
             calls.append((rid, method, params, wait))
@@ -267,6 +269,7 @@ def test_modern_session_never_replies_to_server_requests_or_provides_roots():
     import json
 
     session = obs.Session.__new__(obs.Session)
+    session.stale = set()
     session.modern = True
     sent = []
     session.send = sent.append
@@ -281,6 +284,7 @@ def test_stdio_recognizes_modern_protocol_errors_without_a_request_id(request_id
     import json
 
     session = obs.Session.__new__(obs.Session)
+    session.stale = set()
     session.modern = True
     session.send = lambda msg: None
     error = {"jsonrpc": "2.0", "error": {"code": -32022, "data": {"supported": ["2099-01-01"]}}}
@@ -303,6 +307,7 @@ def test_malformed_or_wrong_id_modern_discovery_never_reaches_initialize(reply):
     import json
 
     session = obs.Session.__new__(obs.Session)
+    session.stale = set()
     session.modern = True
     sent = []
     session.send = sent.append
@@ -317,6 +322,7 @@ def test_valid_legacy_errors_without_id_still_initialize_in_same_session(code):
     import json
 
     session = obs.Session.__new__(obs.Session)
+    session.stale = set()
     session.modern = True
     sent = []
     session.send = sent.append
@@ -932,3 +938,80 @@ def test_a_discover_result_with_malformed_supported_versions_still_fails(monkeyp
     result = obs.talk(None, obs.time.monotonic())
     assert result["status"] == "protocol" and "malformed supportedVersions" in result["detail"]
     assert [c[1] for c in calls] == ["server/discover"]
+
+
+def test_a_modern_server_too_slow_for_the_probe_is_asked_again_after_refusing_initialize(monkeypatch):
+    """2026-11-15: cold Python servers answered server/discover after the 10 s probe, switched the connection to
+    2026-07-28 and refused initialize with -32022 (aktools, renforge, aizee, memtomem, uk-legal-mcp, unifi-protect-mcp
+    went ok -> protocol). After a timed-out probe, that refusal means: modern, ask discovery again."""
+    def handler(rid, method, params, wait):
+        if method == "server/discover" and rid == 0:
+            raise TimeoutError
+        if method == "initialize":
+            return {"error": {"code": -32022, "message": "connection is serving the 2026-07-28 protocol",
+                              "data": {"supported": [obs.MODERN_PROTOCOL], "requested": obs.PROTOCOL}}}
+        if method == "server/discover":
+            assert rid == -2 and wait == obs.INIT_TIMEOUT_S
+            return _discover_result()
+        assert method == "tools/list" and params["_meta"]["io.modelcontextprotocol/protocolVersion"] == obs.MODERN_PROTOCOL
+        return {"result": {"resultType": "complete", "tools": []}}
+
+    calls, sends = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "ok" and result["protocolVersion"] == obs.MODERN_PROTOCOL
+    assert [c[1] for c in calls] == ["server/discover", "initialize", "server/discover", "tools/list"]
+    assert not sends  # no notifications/initialized on a modern connection
+
+
+@pytest.mark.parametrize("probe", ["answered", "error"])
+def test_a_refused_initialize_is_not_retried_when_the_probe_was_answered(monkeypatch, probe):
+    def handler(rid, method, params, wait):
+        if method == "server/discover":
+            if probe == "answered":
+                return {"result": {"content": []}}  # no DiscoverResult: legacy, see the fallback test
+            return {"error": {"code": -32601, "message": "legacy"}}
+        assert method == "initialize"
+        return {"error": {"code": -32022, "message": "x", "data": {"supported": [obs.MODERN_PROTOCOL]}}}
+
+    calls, _ = _protocol_fixture(monkeypatch, handler)
+    result = obs.talk(None, obs.time.monotonic())
+    assert result["status"] == "protocol" and [c[1] for c in calls] == ["server/discover", "initialize"]
+
+
+SLOW_MODERN_SERVER = r"""
+import json, sys, time
+modern = False
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, rid = msg.get("method"), msg.get("id")
+    if method == "server/discover":
+        if rid == 0:
+            time.sleep(0.8)  # answers the probe after the observer stopped waiting
+        modern = True
+        out = {"resultType": "complete", "supportedVersions": ["%(modern)s"], "capabilities": {"tools": {}},
+               "ttlMs": 0, "cacheScope": "public", "instructions": "late but modern"}
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": out}), flush=True)
+    elif method == "initialize":
+        err = {"code": -32022, "message": "connection is serving the %(modern)s protocol; the initialize handshake is not accepted",
+               "data": {"supported": ["%(modern)s"], "requested": "%(legacy)s"}}
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "error": err}), flush=True)
+    elif method == "tools/list":
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "tools": [
+            {"name": "ping", "inputSchema": {"type": "object"}}]}}), flush=True)
+"""
+
+
+def test_the_late_probe_answer_on_a_real_connection_is_skipped(monkeypatch):
+    import subprocess
+    monkeypatch.setattr(obs, "DISCOVER_TIMEOUT_S", 0.3)
+    source = SLOW_MODERN_SERVER % {"modern": obs.MODERN_PROTOCOL, "legacy": obs.PROTOCOL}
+    proc = subprocess.Popen([sys.executable, "-c", source], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    try:
+        result = obs.talk(proc, obs.time.monotonic())
+    finally:
+        proc.kill()
+        proc.wait()
+    assert result["status"] == "ok", result
+    assert result["protocolVersion"] == obs.MODERN_PROTOCOL and [t["name"] for t in result["tools"]] == ["ping"]
+    assert result["instructions"] == "late but modern"
