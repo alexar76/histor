@@ -28,7 +28,10 @@ def quant(xs: list[int]) -> str:
     if not xs:
         return "-"
     xs = sorted(xs)
-    q = lambda p: xs[min(len(xs) - 1, int(p * len(xs)))]
+
+    def q(p: float) -> int:
+        return xs[min(len(xs) - 1, int(p * len(xs)))]
+
     return f"median {statistics.median(xs):,.0f}, p10 {q(.1):,}, p90 {q(.9):,}, max {xs[-1]:,}"
 
 
