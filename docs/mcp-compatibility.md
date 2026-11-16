@@ -49,7 +49,13 @@ requests. Cache hints do not replace a fresh observation or extend its timestamp
 
 The sandbox observer and `histor tool-cost --stdio` probe `server/discover` first. A bounded
 silent probe or valid legacy error permits initialization. A recognized modern error keeps the
-client in the modern era; required metadata is included on subsequent requests. Package canary
+client in the modern era; required metadata is included on subsequent requests. Since 2026-11-16 the sandbox
+observer also follows the HTTP reader's version-list rule: an unsupported-version error or discovery result whose
+versions are all earlier than 2026-07-28 means a legacy server, and initialization follows. Other cases on stdio:
+- a reply to a request already answered or given up is skipped;
+- our integer id echoed as a digit string is the same id;
+- a server that exits on the probe and names it as it goes (Rust rmcp: `ExpectedInitializeRequest`) is started once more
+  with `initialize` only, within the same deadline. Package canary
 calls remain inside the existing isolated sandbox. Discovery adds no host package execution or
 external network route.
 

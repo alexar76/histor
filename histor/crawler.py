@@ -163,6 +163,20 @@ SETTLED = frozenset({"exited", "no-entry-point", "no-wheel", "not-found", "proto
 # package requires, ``python -m``, the mcp-named command, a passwd entry, a writable package):
 # run again ahead of the never-observed queue, with at least half of what is left of a crawl.
 RENEWABLE = frozenset({"exited", "no-entry-point", "install-failed", "timeout", "protocol"})
+# Sandbox observer 5 before build bf8fe5b8 (on every sandbox host from 2026-11-16T04:37Z) failed some servers that
+# observer 4 had read: an id echoed as a string, a late answer to a settled request, a version list of legacy revisions
+# only ("protocol"), and Rust servers that exit on the discovery probe ("exited", naming server/discover). The observer
+# number did not change, so SETTLED kept those failures until a new package version. Each is run once more.
+OBSERVER5_FIXED_AT = "2026-11-16T04:37:00Z"
+PROBE_EXIT = re.compile(r"server/discover|ExpectedInitialize", re.I)
+
+
+def _early_observer5_failure(state: dict[str, Any], observer: str) -> bool:
+    attempt = str(state.get("last_attempt") or "")
+    if observer != "5" or not attempt or attempt >= OBSERVER5_FIXED_AT:
+        return False
+    status = state.get("last_status")
+    return status == "protocol" or (status == "exited" and bool(PROBE_EXIT.search(state.get("last_detail") or "")))
 # The sandbox's trace reader (behaviour.observer). gvisor-trace/2 listed the byte asyncio writes
 # to its own socketpair as a send it could not place, which read as "reached out at startup" for
 # nearly every Python server; a package it left with such sends is traced again, once.
@@ -932,7 +946,8 @@ class Crawler:
             if plan:
                 config[t.id] = plan
             judged_now = state.get("last_status") == "undigestible" and signals.get("mtl") == PROFILE_REVISION
-            if seen == version and (state.get("last_status") in SETTLED or judged_now) and observer == current:
+            if (seen == version and (state.get("last_status") in SETTLED or judged_now) and observer == current
+                    and not _early_observer5_failure(state, observer)):
                 if not plan or plan == (signals.get("supplied") or {}):
                     settled += 1  # nothing new to try until the package or the observer changes
                     continue

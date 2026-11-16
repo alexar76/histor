@@ -971,6 +971,15 @@ class Session:
             self.noise = (self.noise + raw[:MAX_NOISE] + b"\n")[:MAX_NOISE]
 
     def call(self, rid: int, method: str, params: dict[str, Any], wait_s: float) -> dict[str, Any]:
+        try:
+            return self._call(rid, method, params, wait_s)
+        finally:
+            # Whatever ended this wait (an answer, a timeout, an error), a later line with this id is a late or
+            # repeated answer to a request we already settled: skipped, never a mismatch. 2026-11-16: npm servers
+            # read ok with 2025-06-18 by observer 4 failed under load as "did not match the request id".
+            self.stale.add(rid)
+
+    def _call(self, rid: int, method: str, params: dict[str, Any], wait_s: float) -> dict[str, Any]:
         self.send({"jsonrpc": "2.0", "id": rid, "method": method, "params": params})
         for raw in self._lines(time.monotonic() + wait_s):
             try:
@@ -982,6 +991,12 @@ class Session:
                 self.keep(raw)
                 continue
             error = msg.get("error")
+            mid = msg.get("id")
+            if isinstance(mid, str) and re.fullmatch(r"-?\d{1,6}", mid) and (int(mid) == rid or int(mid) in self.stale):
+                # Our integer id echoed as a string: npm:agmail answers the probe with
+                # {"id":"0","error":{"code":-32601,"message":"Method not found: server/discover"}} (2026-11-16), a plain
+                # legacy refusal. The same request, not another one; the reply is judged on its content as usual.
+                msg["id"] = int(mid)
             if self.modern and ("result" in msg or "error" in msg):
                 if msg.get("jsonrpc") != "2.0" or ("result" in msg) == ("error" in msg):
                     raise ProtocolFailure("invalid modern JSON-RPC response envelope; no downgrade")
@@ -992,7 +1007,8 @@ class Session:
                 if type(msg.get("id")) is int and msg["id"] in self.stale and msg["id"] != rid:
                     continue  # the late answer to a probe we stopped waiting for
                 if type(msg.get("id")) is not int or msg["id"] != rid:
-                    raise ProtocolFailure("modern response did not match the request id; no downgrade")
+                    got = tail(json.dumps(msg.get("id")))[:40]
+                    raise ProtocolFailure(f"modern response did not match the request id ({rid} sent, {got} received); no downgrade")
             if type(msg.get("id")) is int and msg["id"] == rid and ("result" in msg or "error" in msg):
                 return msg
             if "method" in msg and "id" in msg:  # the server asks us something: decline, never act
@@ -1155,26 +1171,36 @@ def run_scripts(work: Path, run_id: str, packages: list[str], image: str | None 
 def run(registry: str, work: Path, entry: list[str], run_id: str, traced: bool = False,
         env: list[str] | None = None, args: list[str] | None = None, image: str | None = None) -> dict[str, Any]:
     cidfile = work / "cid-run"
-    # The package directory is writable, as an install on a user's machine is: servers keep logs
-    # and state next to their code, and it is this run's own copy, deleted with it.
-    flags = [*sandbox_flags(run_id + "-r", work, traced, cidfile, package_rw=True), "-i", "-w", APP_IN]
+    extra: list[str] = []
     for name in env or []:
-        flags += ["-e", f"{name}={env_value(name, run_id)}"]
+        extra += ["-e", f"{name}={env_value(name, run_id)}"]
     entry = [*entry, *(env_value("PACKAGE_API_KEY", run_id) if arg == PLACEHOLDER_TOKEN else arg
                        for arg in (args or []))]
     if registry == "pypi":
-        flags += ["-e", "PYTHONPATH=/work/pkg", "-e", "PYTHONDONTWRITEBYTECODE=1"]
-    start, wall = time.monotonic(), time.time()
-    proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES[registry], *entry],
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    cid, ip, started = None, None, None
-    marks: dict[str, Any] = {}
-    try:
-        cid, ip = container_ip(cidfile) if traced else (None, None)
-        started = container_started(cid)  # while it exists: inspect knows nothing once it is removed
-        answer = talk(proc, start, run_id, traced, marks)
-    finally:
-        remove_container(f"histor-{run_id}-r", proc)
+        extra += ["-e", "PYTHONPATH=/work/pkg", "-e", "PYTHONDONTWRITEBYTECODE=1"]
+    start = time.monotonic()
+    legacy = False
+    while True:
+        # The second start (legacy) gets its own container name: a sandbox whose removal hung keeps its name.
+        name = run_id + ("l" if legacy else "")
+        cidfile.unlink(missing_ok=True)
+        # The package directory is writable, as an install on a user's machine is: servers keep logs
+        # and state next to their code, and it is this run's own copy, deleted with it.
+        flags = [*sandbox_flags(name + "-r", work, traced, cidfile, package_rw=True), "-i", "-w", APP_IN, *extra]
+        wall = time.time()
+        proc = subprocess.Popen([DOCKER, "run", *flags, image or IMAGES[registry], *entry],
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cid, ip, started = None, None, None
+        marks: dict[str, Any] = {}
+        try:
+            cid, ip = container_ip(cidfile) if traced else (None, None)
+            started = container_started(cid)  # while it exists: inspect knows nothing once it is removed
+            answer = talk(proc, start, run_id, traced, marks, legacy)
+        finally:
+            remove_container(f"histor-{name}-r", proc)
+        if legacy or not exited_on_probe(answer, marks) or time.monotonic() >= start + RUN_TIMEOUT_S:
+            break
+        legacy = True  # once, within the same run deadline
     ended = time.time()
     if traced and cid:
         listed = marks.get("listed", ended)
@@ -1215,44 +1241,86 @@ def complete_result(reply: dict[str, Any], method: str) -> dict[str, Any]:
     return body
 
 
-def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
+def exited_on_probe(answer: dict[str, Any], marks: dict[str, Any]) -> bool:
+    """A legacy server that ends its process on the discovery probe instead of answering it.
+
+    2026-11-16: Rust servers on rmcp exit with `ExpectedInitializeRequest(... "server/discover" ...)` (npm:onshape-mcp,
+    read ok by observer 4). Only a process that ended during the probe and named the probe or the handshake it expected
+    as it went: a server that exits for want of an API key says nothing about either, and is not started twice."""
+    if answer.get("status") != "exited" or not marks.get("probeExit"):
+        return False
+    return bool(PROBE_REJECTED.search(answer.get("detail") or ""))
+
+
+PROBE_REJECTED = re.compile(r"server/discover|expected\W{0,3}initiali[sz]e|initiali[sz]e\w*\W{0,3}(?:request\W{0,3})?expected", re.I)
+
+
+def legacy_only(versions: Any) -> bool:
+    """A version list whose revisions all open with initialize (all earlier than the first modern revision).
+
+    The rule of docs/mcp-compatibility.md ("Version lists"), which the HTTP reader has followed since 2026-11-01, when
+    the stricter rule had left about 2,000 registry servers unread. 2026-11-16: npm:sceneview-mcp 4.2.0, read ok on
+    2025-06-18 by observer 4, failed under observer 5 as "no mutually supported modern protocol version". A list that
+    names any later revision we do not speak (2099-01-01) is still no reason to downgrade."""
+    return (isinstance(versions, list) and 0 < len(versions) <= 32
+            and all(isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) and v < MODERN_PROTOCOL for v in versions))
+
+
+def _modern_discovery(session: Session, probe: dict[str, Any]) -> dict[str, Any] | None:
+    """The DiscoverResult of a modern server, or None when the answer to the probe identifies a legacy one."""
+    error = probe.get("error")
+    if "error" in probe and not (isinstance(error, dict) and error.get("code") in MODERN_ERRORS):
+        return None  # a legacy error (or none we recognize): initialize follows
+    if "error" in probe:
+        if error.get("code") != -32022:
+            raise ProtocolFailure(tail(json.dumps(error)))
+        data = error.get("data")
+        supported = data.get("supported") if isinstance(data, dict) else None
+        if not isinstance(supported, list) or MODERN_PROTOCOL not in supported:
+            if legacy_only(supported):
+                return None
+            raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
+        probe = session.call(-1, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
+    body = complete_result(probe, "server/discover")
+    if error is None and "supportedVersions" not in body:  # first answer, not after a -32022 retry
+        # Not a DiscoverResult: a legacy server that answers every method alike (MOMUS's behaviour
+        # fixture; crypto.api.trendsapi.ai over HTTP). The HTTP reader treats it as legacy too
+        # (histor.mcpclient._discover). Observer 5 before 2026-11-15 failed these as "protocol", so
+        # the calls phase of every such package went unobserved.
+        return None
+    versions = body.get("supportedVersions")
+    if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
+        raise ProtocolFailure("server/discover: malformed supportedVersions")
+    if MODERN_PROTOCOL not in versions:
+        if error is None and legacy_only(versions):
+            return None
+        raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
+    return body
+
+
+def negotiate(session: Session, legacy: bool = False) -> tuple[dict[str, Any], str | None, bool]:
     """One modern probe, at most one advertised-version retry, then legacy only if indicated.
 
     https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio
-    A recognized modern error must never lead to initialize, even if its supported list
-    advertises legacy versions. We implement one modern version, not arbitrary future versions.
+    A recognized modern error never leads to initialize, except an unsupported-version error whose
+    list holds only legacy revisions (legacy_only). We implement one modern version, not arbitrary future versions.
+    `legacy`: a second start of a server that exited on the probe; initialize only (see exited_on_probe).
     """
     session.modern = True
-    try:
-        probe = session.call(0, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
-    except TimeoutError:
-        probe = None
-        session.stale.add(0)
+    probe = None
+    timed_out = False
+    if not legacy:
+        try:
+            probe = session.call(0, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
+        except TimeoutError:
+            timed_out = True
+        except EOFError:
+            session.probe_exit = True
+            raise
     if probe is not None:
-        error = probe.get("error")
-        if "error" not in probe or (isinstance(error, dict) and error.get("code") in MODERN_ERRORS):
-            if "error" in probe:
-                if error.get("code") != -32022:
-                    raise ProtocolFailure(tail(json.dumps(error)))
-                data = error.get("data")
-                supported = data.get("supported") if isinstance(data, dict) else None
-                if not isinstance(supported, list) or MODERN_PROTOCOL not in supported:
-                    raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
-                probe = session.call(-1, "server/discover", modern_params(), DISCOVER_TIMEOUT_S)
-            body = complete_result(probe, "server/discover")
-            if error is None and "supportedVersions" not in body:  # first answer, not after a -32022 retry
-                # Not a DiscoverResult: a legacy server that answers every method alike (MOMUS's behaviour
-                # fixture; crypto.api.trendsapi.ai over HTTP). The HTTP reader treats it as legacy too
-                # (histor.mcpclient._discover). Observer 5 before 2026-11-15 failed these as "protocol", so
-                # the calls phase of every such package went unobserved.
-                pass
-            else:
-                versions = body.get("supportedVersions")
-                if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions):
-                    raise ProtocolFailure("server/discover: malformed supportedVersions")
-                if MODERN_PROTOCOL not in versions:
-                    raise ProtocolFailure("server/discover: no mutually supported modern protocol version")
-                return body, MODERN_PROTOCOL, True
+        found = _modern_discovery(session, probe)
+        if found is not None:
+            return found, MODERN_PROTOCOL, True
     # Legacy implementations use different errors (or silence) before initialize. Do not
     # couple this fallback to -32601 alone, and keep the original process and outer deadline.
     session.modern = False
@@ -1261,14 +1329,13 @@ def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
                         INIT_TIMEOUT_S)
     refusal = init.get("error") if isinstance(init.get("error"), dict) else {}
     data = refusal.get("data") if isinstance(refusal.get("data"), dict) else {}
-    if probe is None and refusal.get("code") == -32022 and isinstance(data.get("supported"), list) \
+    if timed_out and refusal.get("code") == -32022 and isinstance(data.get("supported"), list) \
             and MODERN_PROTOCOL in data["supported"]:
         # A modern server that started too slowly for the discovery probe (a cold Python server under gVisor;
         # 2026-11-15: aktools, renforge, aizee, memtomem, uk-legal-mcp, unifi-protect-mcp). Its SDK answered the
         # probe late, switched the connection to the modern protocol and refuses initialize: it is modern, so
         # ask again on the same connection with the full handshake time. Only after a probe that timed out.
         session.modern = True
-        session.stale.add(1)
         body = complete_result(session.call(-2, "server/discover", modern_params(), INIT_TIMEOUT_S), "server/discover")
         versions = body.get("supportedVersions")
         if not isinstance(versions, list) or MODERN_PROTOCOL not in versions:
@@ -1279,12 +1346,12 @@ def negotiate(session: Session) -> tuple[dict[str, Any], str | None, bool]:
 
 
 def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: bool = False,
-         marks: dict[str, Any] | None = None) -> dict[str, Any]:
+         marks: dict[str, Any] | None = None, legacy: bool = False) -> dict[str, Any]:
     marks = marks if marks is not None else {}
     session = Session(proc, start + RUN_TIMEOUT_S)
     result: dict[str, Any] = {}
     try:
-        info, version, modern = negotiate(session)
+        info, version, modern = negotiate(session, legacy)
         meta = info.get("_meta") if isinstance(info.get("_meta"), dict) else {}
         result["serverInfo"] = meta.get("io.modelcontextprotocol/serverInfo") if modern else info.get("serverInfo")
         result["protocolVersion"] = version
@@ -1355,6 +1422,8 @@ def talk(proc: subprocess.Popen[bytes], start: float, tag: str = "", traced: boo
         return {**result, "status": "timeout", "detail": ended_with(proc, session, exited=False)}
     except EOFError:
         # Exited before answering: most often a server that needs an API key or a path to start.
+        if getattr(session, "probe_exit", False):
+            marks["probeExit"] = True
         return {**result, "status": "exited", "detail": ended_with(proc, session, exited=True)}
     except OverflowError:
         return {**result, "status": "too-large", "detail": f"more than {MAX_OUTPUT} bytes on stdout"}

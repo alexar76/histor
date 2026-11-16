@@ -231,6 +231,8 @@ class FakePackages:
         # What the sandbox reports about the launch, per version (None: nothing, as older tests expect).
         self.conditions: dict[str, dict] = {}
         self.supplied: dict[str, dict] = {}
+        # A failure the sandbox reports for a package, by name: (status, detail).
+        self.failures: dict[str, tuple[str, str]] = {}
 
     def latest_version(self, registry, name):
         return self.latest.get(f"{registry}:{name}")
@@ -258,6 +260,9 @@ class FakePackages:
         self.runs.append((registry, name, version))
         if self.fail:
             return Observation(status=SANDBOX_ERROR, detail="sandbox unreachable (ConnectionRefusedError)")
+        if name in self.failures:
+            status, detail = self.failures[name]
+            return Observation(status=status, detail=detail, package_version=version, package_observer=self.observer)
         return Observation(
             status="ok",
             tools=self.tools[(f"{registry}:{name}", version)],
@@ -747,3 +752,34 @@ def test_a_set_an_older_revision_declined_runs_once_more(world):
     with services.store.db.read() as tx:
         events = tx.execute("SELECT target_id FROM security_events WHERE target_id=?", (plain.id,))
     assert len(events) <= 1
+
+
+@pytest.mark.parametrize("status,detail,retried", [
+    ("protocol", "modern response did not match the request id; no downgrade", True),
+    ("protocol", "server/discover: no mutually supported modern protocol version", True),
+    ("exited", "[exit code 1] Error: ExpectedInitializeRequest(... method: \"server/discover\" ...)", True),
+    ("exited", "[exit code 1] Error: API_KEY is not set", False),
+])
+def test_a_failure_of_observer_5_before_its_fixes_runs_once_more(world, status, detail, retried):
+    """2026-11-16: observer 5 builds before bf8fe5b8 failed servers observer 4 had read (agmail, sceneview-mcp, onshape-mcp,
+    ...). The observer number stayed "5", so SETTLED kept those failures until a new version. One more run each."""
+    from datetime import UTC, datetime
+
+    services = world["services"]
+    fake = FakePackages()
+    services.crawler.packages = fake
+    t = package_target("io.a/agmail", "npm:agmail")
+    world["targets"].append(t)
+    fake.latest[t.endpoint] = "1.4.8"
+    fake.tools[(t.endpoint, "1.4.8")] = [tool("send", "Send a mail.")]
+    fake.failures["agmail"] = (status, detail)
+    world["clock"].now = datetime(2026, 11, 16, 3, 20, tzinfo=UTC)  # the night of the false failures
+    services.crawler.run()
+    assert len(fake.runs) == 1 and services.store.target(t.id)["last_status"] == status
+    world["clock"].advance(days=1)
+    services.crawler.run()
+    assert len(fake.runs) == (2 if retried else 1)
+    # Failing again under the fixed observer: settled, as any failure of the current observer is.
+    world["clock"].advance(days=1)
+    services.crawler.run()
+    assert len(fake.runs) == (2 if retried else 1)

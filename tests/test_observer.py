@@ -583,7 +583,7 @@ def test_the_run_names_its_user_and_writes_only_its_own_package(tmp_path):
     passwd = (tmp_path / "etc/passwd").read_text()
     assert f"histor:x:{obs.os.getuid()}:{obs.os.getgid()}:" in passwd and "--read-only" in flags
     src = (Path(__file__).parents[1] / "sandbox/histor_observe.py").read_text(encoding="utf-8")
-    assert 'sandbox_flags(run_id + "-r", work, traced, cidfile, package_rw=True)' in src
+    assert 'sandbox_flags(name + "-r", work, traced, cidfile, package_rw=True)' in src
 
 
 def test_an_image_built_on_the_host_is_named_by_its_id(monkeypatch):
@@ -770,7 +770,7 @@ def test_every_stage_removes_its_container_through_remove_container():
     body = src[src.index("def remove_container"):]
     body = body[:body.index("\ndef ", 10)]
     assert src.count('docker("rm"') == 1 and 'docker("rm"' in body
-    for stage in ('"histor-{run_id}-i"', '"histor-{run_id}-s", proc', '"histor-{run_id}-r", proc'):
+    for stage in ('"histor-{run_id}-i"', '"histor-{run_id}-s", proc', '"histor-{name}-r", proc'):
         assert f"remove_container(f{stage})" in src, stage
 
 
@@ -1015,3 +1015,230 @@ def test_the_late_probe_answer_on_a_real_connection_is_skipped(monkeypatch):
     assert result["status"] == "ok", result
     assert result["protocolVersion"] == obs.MODERN_PROTOCOL and [t["name"] for t in result["tools"]] == ["ping"]
     assert result["instructions"] == "late but modern"
+
+
+def _real_talk(source, legacy=False, **fmt):
+    import subprocess
+    proc = subprocess.Popen([sys.executable, "-c", source % {"modern": obs.MODERN_PROTOCOL, "legacy": obs.PROTOCOL, **fmt}],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    marks = {}
+    try:
+        return obs.talk(proc, obs.time.monotonic(), marks=marks, legacy=legacy), marks
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+STRING_ID_LEGACY_SERVER = r"""
+import json, sys
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, rid = msg.get("method"), msg.get("id")
+    if method == "server/discover":
+        print(json.dumps({"jsonrpc": "2.0", "id": %(echo)s, "error": {"code": -32601, "message": "Method not found: server/discover"}}), flush=True)
+    elif method == "initialize":
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "%(legacy)s", "serverInfo": {"name": "agmail-like", "version": "1"}}}), flush=True)
+    elif method == "tools/list":
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"tools": [{"name": "send", "inputSchema": {"type": "object"}}]}}), flush=True)
+"""
+
+
+def test_a_legacy_refusal_that_echoes_our_id_as_a_string_still_initializes():
+    """2026-11-16: npm:agmail answered the probe with {"id":"0","error":{"code":-32601,...}}; observer 4 read it, observer 5
+    failed it as "did not match the request id". "0" is our 0: the refusal is legacy, initialize follows."""
+    result, _ = _real_talk(STRING_ID_LEGACY_SERVER, echo='str(rid)')
+    assert result["status"] == "ok", result
+    assert result["protocolVersion"] == obs.PROTOCOL and [t["name"] for t in result["tools"]] == ["send"]
+
+
+@pytest.mark.parametrize("echo", ['"7"', '"abc"', '"00x"', "[rid]"])
+def test_a_reply_with_an_id_we_never_sent_still_fails_and_says_what_came(echo):
+    result, _ = _real_talk(STRING_ID_LEGACY_SERVER, echo=echo)
+    assert result["status"] == "protocol" and "did not match the request id (0 sent" in result["detail"], result
+
+
+def test_a_string_id_never_turns_a_modern_refusal_into_a_downgrade():
+    import json
+    session = obs.Session.__new__(obs.Session)
+    session.stale, session.modern = set(), True
+    sent = []
+    session.send = sent.append
+    reply = {"jsonrpc": "2.0", "id": "0", "error": {"code": -32020, "message": "metadata mismatch"}}
+    session._lines = lambda until: iter([json.dumps(reply).encode()])
+    with pytest.raises(obs.ProtocolFailure):
+        obs.negotiate(session)
+    assert [m["method"] for m in sent] == ["server/discover"]
+
+
+DUPLICATE_ANSWER_SERVER = r"""
+import json, sys
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, rid = msg.get("method"), msg.get("id")
+    if method == "server/discover":
+        out = {"resultType": "complete", "supportedVersions": ["%(modern)s"], "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "public"}
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": out}), flush=True)
+        last = rid
+    elif method == "tools/list":
+        # a second, late answer to the probe arrives first: the request it answers is settled
+        print(json.dumps({"jsonrpc": "2.0", "id": last, "result": {"resultType": "complete", "supportedVersions": ["%(modern)s"]}}), flush=True)
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "tools": [{"name": "ping", "inputSchema": {"type": "object"}}]}}), flush=True)
+"""
+
+
+def test_a_repeated_answer_to_a_settled_request_is_skipped_on_a_modern_connection():
+    """2026-11-16, under crawl load: npm servers read ok on 2025-06-18 by observer 4 and ok on 2026-07-28 when warm failed as
+    "did not match the request id". A late or repeated answer to a request already answered is not a different request."""
+    result, _ = _real_talk(DUPLICATE_ANSWER_SERVER)
+    assert result["status"] == "ok", result
+    assert result["protocolVersion"] == obs.MODERN_PROTOCOL and [t["name"] for t in result["tools"]] == ["ping"]
+
+
+RUST_LIKE_SERVER = r"""
+import json, sys
+first = sys.stdin.readline()
+msg = json.loads(first)
+if msg.get("method") != "initialize":
+    sys.stderr.write('Error: ExpectedInitializeRequest(Some(Request(JsonRpcRequest { id: Number(0), request: CustomRequest { method: "%%s" } })))\n' %% msg.get("method"))
+    sys.exit(1)
+print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {"protocolVersion": "%(legacy)s", "serverInfo": {"name": "rmcp-like", "version": "1"}}}), flush=True)
+for line in sys.stdin:
+    msg = json.loads(line)
+    if msg.get("method") == "tools/list":
+        print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {"tools": [{"name": "part", "inputSchema": {"type": "object"}}]}}), flush=True)
+"""
+
+
+def test_a_server_that_exits_on_the_probe_is_marked_and_a_legacy_start_reads_it():
+    """2026-11-16: npm:onshape-mcp (Rust, rmcp) exits on server/discover with ExpectedInitializeRequest; observer 4 read it."""
+    first, marks = _real_talk(RUST_LIKE_SERVER)
+    assert first["status"] == "exited" and marks.get("probeExit") and obs.exited_on_probe(first, marks)
+    second, _ = _real_talk(RUST_LIKE_SERVER, legacy=True)
+    assert second["status"] == "ok" and second["protocolVersion"] == obs.PROTOCOL
+    assert [t["name"] for t in second["tools"]] == ["part"]
+
+
+@pytest.mark.parametrize("detail,probe_exit,expected", [
+    ('[exit code 1] Error: ExpectedInitializeRequest(Some(Request(... method: "server/discover" ...)))', True, True),
+    ("[exit code 1] Error: expected initialize request, got server/discover", True, True),
+    ("[exit code 1] Error: MY_API_KEY is not set", True, False),        # wants a key: not started twice
+    ("[exit code 1] usage: tool serve", True, False),
+    ('[exit code 1] Error: ExpectedInitializeRequest(... "server/discover" ...)', False, False),  # exited later, not on the probe
+])
+def test_only_an_exit_that_names_the_probe_or_the_handshake_gets_a_second_start(detail, probe_exit, expected):
+    marks = {"probeExit": True} if probe_exit else {}
+    assert obs.exited_on_probe({"status": "exited", "detail": detail}, marks) is expected
+
+
+def test_run_starts_a_server_that_exits_on_the_probe_once_more_with_initialize_only(monkeypatch, tmp_path):
+    import subprocess
+    starts, removed = [], []
+    real_popen = subprocess.Popen
+
+    def popen(argv, **kw):
+        starts.append(argv)
+        return real_popen([sys.executable, "-c", RUST_LIKE_SERVER % {"legacy": obs.PROTOCOL}], **kw)
+
+    monkeypatch.setattr(obs.subprocess, "Popen", popen)
+    monkeypatch.setattr(obs, "sandbox_flags", lambda name, *a, **k: ["--name", f"histor-{name}"])
+    monkeypatch.setattr(obs, "remove_container", lambda name, proc=None: (removed.append(name), proc and proc.kill()))
+    monkeypatch.setattr(obs, "container_started", lambda cid: None)
+    answer = obs.run("npm", tmp_path, ["node", "server.js"], "abc123")
+    assert answer["status"] == "ok" and answer["protocolVersion"] == obs.PROTOCOL
+    assert len(starts) == 2 and removed == ["histor-abc123-r", "histor-abc123l-r"]
+    assert "histor-abc123-r" in starts[0] and "histor-abc123l-r" in starts[1]
+
+
+def test_run_does_not_start_twice_a_server_that_exits_for_want_of_a_key(monkeypatch, tmp_path):
+    import subprocess
+    starts = []
+    real_popen = subprocess.Popen
+    source = "import sys; sys.stdin.readline(); sys.stderr.write('Error: API_KEY is not set\\n'); sys.exit(1)"
+
+    def popen(argv, **kw):
+        starts.append(argv)
+        return real_popen([sys.executable, "-c", source], **kw)
+
+    monkeypatch.setattr(obs.subprocess, "Popen", popen)
+    monkeypatch.setattr(obs, "sandbox_flags", lambda name, *a, **k: ["--name", f"histor-{name}"])
+    monkeypatch.setattr(obs, "remove_container", lambda name, proc=None: proc and proc.kill())
+    monkeypatch.setattr(obs, "container_started", lambda cid: None)
+    answer = obs.run("npm", tmp_path, ["node", "server.js"], "abc123")
+    assert answer["status"] == "exited" and "API_KEY" in answer["detail"] and len(starts) == 1
+
+
+LATE_CALL_SERVER = r"""
+import json, sys, threading, time
+def reply(obj):
+    print(json.dumps(obj), flush=True)
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, rid = msg.get("method"), msg.get("id")
+    if method == "server/discover":
+        reply({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "supportedVersions": ["%(modern)s"],
+               "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "public"}})
+    elif method == "tools/list":
+        reply({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "tools": [
+            {"name": "slow", "inputSchema": {"type": "object"}}, {"name": "fast", "inputSchema": {"type": "object"}}]}})
+    elif method == "tools/call" and msg["params"]["name"] == "slow":
+        # answers after the observer stopped waiting: the reply lands while it waits on the next call
+        threading.Timer(0.6, reply, [{"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "content": []}}]).start()
+    elif method == "tools/call":
+        time.sleep(0.9)
+        reply({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete", "content": []}})
+"""
+
+
+def test_a_late_reply_to_a_timed_out_canary_call_does_not_fail_the_observation(monkeypatch):
+    """qa flow's reading of the 2026-11-16 id mismatches: under load a tools/call misses CALL_TIMEOUT_S, the next call is
+    sent, and the late reply to the previous id arrives while the observer waits on the new one. It is a settled request:
+    skipped, the listing stands, the slow call counts as a timeout."""
+    import subprocess
+    monkeypatch.setattr(obs, "CALL_TIMEOUT_S", 0.3)
+    proc = subprocess.Popen([sys.executable, "-c", LATE_CALL_SERVER % {"modern": obs.MODERN_PROTOCOL}],
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    marks = {}
+    try:
+        result = obs.talk(proc, obs.time.monotonic(), "late", True, marks)
+    finally:
+        proc.kill()
+        proc.wait()
+    assert result["status"] == "ok", result
+    assert [t["name"] for t in result["tools"]] == ["slow", "fast"]
+    assert marks["coverage"]["timeouts"] >= 1
+
+
+LEGACY_LIST_SERVER = r"""
+import json, sys
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, rid = msg.get("method"), msg.get("id")
+    if method == "server/discover":
+        if "%(shape)s" == "error":
+            print(json.dumps({"jsonrpc": "2.0", "id": rid, "error": {"code": -32022, "message": "Unsupported protocol version",
+                  "data": {"supported": ["2025-06-18", "2025-03-26"], "requested": "%(modern)s"}}}), flush=True)
+        else:
+            print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"resultType": "complete",
+                  "supportedVersions": ["2025-06-18", "2025-03-26"], "capabilities": {"tools": {}}}}), flush=True)
+    elif method == "initialize":
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"protocolVersion": "%(legacy)s", "serverInfo": {"name": "sceneview-like", "version": "4.2.0"}}}), flush=True)
+    elif method == "tools/list":
+        print(json.dumps({"jsonrpc": "2.0", "id": rid, "result": {"tools": [{"name": "render", "inputSchema": {"type": "object"}}]}}), flush=True)
+"""
+
+
+@pytest.mark.parametrize("shape", ["result", "error"])
+def test_a_version_list_of_legacy_revisions_only_means_a_legacy_server(shape):
+    """2026-11-16: npm:sceneview-mcp 4.2.0, read ok on 2025-06-18 by observer 4, failed under observer 5 as "no mutually
+    supported modern protocol version". docs/mcp-compatibility.md: versions all earlier than 2026-07-28 -> initialize."""
+    result, _ = _real_talk(LEGACY_LIST_SERVER, shape=shape)
+    assert result["status"] == "ok", result
+    assert result["protocolVersion"] == obs.PROTOCOL and [t["name"] for t in result["tools"]] == ["render"]
+
+
+@pytest.mark.parametrize("versions,expected", [
+    (["2025-06-18"], True), (["2025-06-18", "2024-11-05"], True),
+    (["2099-01-01", "2025-06-18"], False), ([], False), ("2025-06-18", False), (["latest"], False), ([2025], False),
+])
+def test_legacy_only_is_every_revision_before_the_first_modern_one(versions, expected):
+    assert obs.legacy_only(versions) is expected
