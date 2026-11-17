@@ -115,8 +115,12 @@ transfer confirms delivery of the purchased service.
 The summary sets a distinct-payer count beside a second number:
 - `external_payers_activity_read` — external payers whose outgoing transfers were read;
 - `external_payers_paying_many_others` — how many of them also paid at least `many_others_min_recipients`
-  (the policy's `min_recipients`, 50) recipients other than this seller in the same window;
-- per payer, the same figure is `chain_activity.other_recipients`.
+  recipients other than this seller in the same window;
+- `many_others_min_recipients` — the cut-off used: 50 by default, set with `--many-others-min-recipients N`
+  (since 0.10.0). 50 is an uncalibrated starting point, not a value fitted to data. It is separate from the label
+  rule's `min_recipients`, so changing it moves no label;
+- per payer, the number of other recipients is `chain_activity.other_recipients`, so the count can be redone at any
+  cut-off from the JSON without reading the chain again.
 
 A wallet that pays hundreds of recipients once each raises every recipient's distinct-payer count, and a rule
 that looks for one dominant payer does not see it

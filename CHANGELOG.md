@@ -1,6 +1,33 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 — 2026-11-17
+
+- **`payer-audit --many-others-min-recipients N`.** The cut-off behind `external_payers_paying_many_others` was the
+  label rule's `min_recipients` (50), fixed in code. It is now its own setting: the CLI flag, or
+  `audit(..., many_others_min_recipients=N)`; the default stays 50 and is uncalibrated. The summary records the value
+  used as `many_others_min_recipients`. Labels and the versioned label policy `broad-small-singleton-transfers/v1` do
+  not change with it. Each payer's `chain_activity.other_recipients` is still in the JSON, so a reader can recount at
+  any cut-off without reading the chain again. Asked in x402-foundation/x402#2833 on 2026-11-17.
+
+- **Every observation records the server-level instructions** (migration 024). `observations.instructions` is NULL
+  when they were not read, the empty string when the server sent none, otherwise the digest of the text, stored once
+  as a blob of kind `instructions`. The HTTP reader takes them from `server/discover` or `initialize`; the package
+  reader takes them from a sandbox observer that reports them (bounded to 262,144 characters).
+  `/api/v1/servers/{id}` shows the latest text and an `instructionsDigest` on each timeline row.
+
+- **The WARDEN scanner's output is read line by line on `\n`, not with `str.splitlines()`.** WARDEN 0.27.0 quotes the
+  matched clause, and JSON leaves U+2028 and U+2029 raw inside strings; `splitlines()` broke such a line in two, and
+  from 2026-11-15 08:27 UTC every remote batch holding one failed. The same fix applies to a peer's JSON Lines in the
+  digest cross-check. A line that is still not JSON is a scanner error for that job only, so the job-by-job retry
+  isolates it instead of failing the whole batch.
+
+- **Crawl: failures from sandbox observer 5 builds before 2026-11-16 04:37 UTC run once more.** Those builds failed
+  servers that observer 4 had read (an id echoed as a string, late answers, legacy-only version lists, Rust servers
+  that exit on `server/discover`), and the observer number did not change, so the results stayed settled. A target
+  that fails again under the fixed observer is settled.
+
+- **The landing and the datasets page say how often a server is read:** every six hours, and every 30 minutes for a
+  week once its tools have changed twice (the defaults), not "once a day".
 
 - **The extras digest can be written as RFC 8785** (`histor/extras.py`, `histor/extras_rekey.py`, migration 023).
   - Two schemes, kept in `meta` as `extras_digest_scheme`: `legacy` (sorted-key JSON, the only form until now and
@@ -14,8 +41,10 @@
   - No extras change is recorded by a move: a body seen again under the other scheme is the same body.
   - An integer with no double (beyond 1.8e308) is stored as null, as `1e400` already was.
   - A dataset manifest names its scheme (`extrasDigest`) and its card says how `toolExtrasDigest` was written.
-  - Not switched on in production: CrawlCheck's daily cross-check builds its `extras_sha256` the way HISTOR builds
-    the legacy form, so the move waits for a date agreed with them.
+  - The public instance moved to `rfc8785` on 2026-11-13 (20:03–21:27 UTC: 54 bodies, 3,334 references). A database
+    at migration 023 does not start under an older HISTOR.
+  - `/api/v1/servers/{id}` names the scheme its `toolExtras` digest was written in (`server.toolExtrasDigestScheme`),
+    read in the same database snapshot as the body, so it stays right while a move is in progress.
 
 - **Server cards are also found through a host's AI Catalog** (`/.well-known/ai-catalog.json`, the format MCP's
   Server Card extension, SEP-2127, uses for domain-level discovery; `histor/cards.py`, `docs/api.md`).

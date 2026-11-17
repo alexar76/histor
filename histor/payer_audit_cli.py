@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from histor.payer_audit import audit, markdown
+from histor.payer_audit import MANY_OTHERS_MIN_RECIPIENTS, audit, markdown
 
 MAX_INPUT_BYTES = 32 * 1024 * 1024
 
@@ -28,6 +28,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--receipts", required=True, help="Base USDC seller ledger JSON")
     parser.add_argument("--chain", help="histor.payer-chain/v1 evidence JSON")
     parser.add_argument("--annotations", help="transaction-scoped, sourced annotations JSON")
+    parser.add_argument("--many-others-min-recipients", type=int, default=MANY_OTHERS_MIN_RECIPIENTS, metavar="N",
+                        help="count an external payer as paying many others when it paid at least N recipients other "
+                             f"than this seller in the chain window (default {MANY_OTHERS_MIN_RECIPIENTS}, uncalibrated; "
+                             "recorded in the report; labels do not use it)")
     parser.add_argument("--format", choices=("json", "markdown"), default="markdown")
     parser.add_argument("-o", "--output", help="write report to this path instead of stdout")
     args = parser.parse_args(argv)
@@ -36,7 +40,8 @@ def main(argv: list[str] | None = None) -> int:
                                for path in (args.receipts, args.chain, args.annotations) if path):
             raise ValueError("output must not overwrite an input file")
         result = audit(_read(args.receipts), chain=_read(args.chain) if args.chain else None,
-                       annotations=_read(args.annotations) if args.annotations else None)
+                       annotations=_read(args.annotations) if args.annotations else None,
+                       many_others_min_recipients=args.many_others_min_recipients)
         text = json.dumps(result, ensure_ascii=False, indent=2, allow_nan=False) + "\n" if args.format == "json" else markdown(result)
         if args.output:
             Path(args.output).write_text(text, encoding="utf-8")

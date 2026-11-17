@@ -29,6 +29,9 @@ POLICY = {
     "min_small_transfer_fraction": "0.9",
     "calibrated": False,
 }
+# Default cut-off for `external_payers_paying_many_others`. It starts at the label rule's 50 but is its own
+# setting: tuning it must not move the versioned label rule above (x402-foundation/x402#2833, 2026-11-17).
+MANY_OTHERS_MIN_RECIPIENTS = 50
 
 
 def address(value: Any) -> str:
@@ -217,8 +220,16 @@ def _annotations(data: dict | None) -> list[dict]:
     return out
 
 
-def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None = None) -> dict:
-    """Reduce immutable inputs. No network, database, settings, signatures or wallet keys."""
+def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None = None,
+          many_others_min_recipients: int = MANY_OTHERS_MIN_RECIPIENTS) -> dict:
+    """Reduce immutable inputs. No network, database, settings, signatures or wallet keys.
+
+    ``many_others_min_recipients`` is the cut-off for counting a payer as one that also paid many other
+    recipients. The report records the value used; labels do not depend on it.
+    """
+    if isinstance(many_others_min_recipients, bool) or not isinstance(many_others_min_recipients, int) \
+            or many_others_min_recipients < 1:
+        raise ValueError("many_others_min_recipients must be a positive integer")
     rows, duplicates = ledger_rows(ledger)
     seller = address(ledger["seller"])
     window, transfers, checks = _chain(chain)
@@ -337,7 +348,7 @@ def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None =
     # same window (suggested in x402-foundation/x402#2833, 2026-11-12). Wallets that pay hundreds of
     # recipients once each raise every recipient's distinct-payer count alike.
     read = [p for p in external if p["chain_activity"]["available"]]
-    many = [p for p in read if p["chain_activity"]["other_recipients"] >= POLICY["min_recipients"]]
+    many = [p for p in read if p["chain_activity"]["other_recipients"] >= many_others_min_recipients]
     total_amount = sum(p["amount_atomic"] for p in payers)
     warnings = []
     claimed = ledger.get("totals", {})
@@ -363,7 +374,7 @@ def audit(ledger: dict, *, chain: dict | None = None, annotations: dict | None =
                         "external_labels": dict(sorted(Counter(p["label"] for p in external).items())),
                         "external_payers_activity_read": len(read),
                         "external_payers_paying_many_others": len(many),
-                        "many_others_min_recipients": POLICY["min_recipients"],
+                        "many_others_min_recipients": many_others_min_recipients,
                         "duplicate_receipts_ignored": duplicates},
             "payers": payers, "warnings": warnings,
             "limits": ["Seller ownership flags and annotations are source claims, not independently established identities.",

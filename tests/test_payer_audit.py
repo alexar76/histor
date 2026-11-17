@@ -112,6 +112,40 @@ def test_seller_summary_counts_payers_that_also_paid_many_other_recipients():
     assert "**1** also paid at least 50 other recipients" in markdown(report)
 
 
+def test_many_others_cut_off_is_a_setting_recorded_in_the_report_and_separate_from_labels():
+    # x402#2833, 2026-11-17: 50 is an uncalibrated starting point, so the cut-off is a setting. The report
+    # names the value used, and the versioned label rule keeps its own 50.
+    wide = [event(recipient="0x" + f"{n:040x}", transaction=tx(n), index=n) for n in range(10, 40)]  # 30 others
+    default = audit(ledger(), chain=chain(wide))
+    low = audit(ledger(), chain=chain(wide), many_others_min_recipients=30)
+    high = audit(ledger(), chain=chain(wide), many_others_min_recipients=31)
+    assert default["summary"]["external_payers_paying_many_others"] == 0
+    assert (low["summary"]["external_payers_paying_many_others"], low["summary"]["many_others_min_recipients"]) == (1, 30)
+    assert (high["summary"]["external_payers_paying_many_others"], high["summary"]["many_others_min_recipients"]) == (0, 31)
+    assert "**1** also paid at least 30 other recipients" in markdown(low)
+    # Labels and the label policy do not move with the cut-off.
+    assert low["payers"][0]["label"] == default["payers"][0]["label"] == "unknown"
+    assert low["policy"] == default["policy"] and low["policy"]["min_recipients"] == 50
+    for bad in (0, -1, True, 2.5, "50"):
+        with pytest.raises(ValueError):
+            audit(ledger(), chain=chain(wide), many_others_min_recipients=bad)
+
+
+def test_cli_many_others_min_recipients_flag(tmp_path, capsys):
+    receipts, evidence = tmp_path / "receipts.json", tmp_path / "chain.json"
+    receipts.write_text(json.dumps(ledger()))
+    wide = [event(recipient="0x" + f"{n:040x}", transaction=tx(n), index=n) for n in range(10, 40)]
+    evidence.write_text(json.dumps(chain(wide)))
+    base = ["payer-audit", "--receipts", str(receipts), "--chain", str(evidence), "--format", "json"]
+    assert cli(base + ["--many-others-min-recipients", "30"]) == 0
+    summary = json.loads(capsys.readouterr().out)["summary"]
+    assert (summary["external_payers_paying_many_others"], summary["many_others_min_recipients"]) == (1, 30)
+    assert cli(base) == 0
+    assert json.loads(capsys.readouterr().out)["summary"]["many_others_min_recipients"] == 50
+    assert cli(base + ["--many-others-min-recipients", "0"]) == 2
+    assert "positive integer" in capsys.readouterr().err
+
+
 def test_seller_summary_does_not_count_payers_whose_activity_was_not_read():
     report = audit(ledger())
     assert report["summary"]["external_payers_activity_read"] == 0
