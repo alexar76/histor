@@ -1,17 +1,17 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.27.0",
-  "sourceCommit": "80a0d40683d20bdc0d4e07b8428b8d2de83d8e1d",
+  "version": "0.30.0",
+  "sourceCommit": "49e1c6b39b6c5ac392a8466792c9469a2f37e9b0",
   "registryGitHead": null,
-  "buildDigest": "403842d70620a8dd805ae4b4386613dc4b5804608b801ef75d674248a16c9772",
-  "tarball": "aimarket-warden-0.27.0.tgz",
-  "sha256": "525622b730b3262d595aa2f3ad9ec059306a875fcf178b2ad1cd9cb15457829e",
-  "integrity": "sha512-sUt+zLlk0rlpFUMRAkH3mmBH9iHdassQ/rR+i32hPYjWQn7BysKBjGodMRuqK8za1czAmWmPwNomBPGAB5AWzg==",
-  "distribution": "Published npm 0.27.0 archive (dist.shasum 66b5764a…, 2026-11-15T07:21:12Z), byte for byte the tarball in warden/docs/evidence/warden-release-0.27.0-2026-11-14/; its build digest is the one MOMUS accepted. npm records no gitHead for it. Production HISTOR has run this build since 2026-11-15 as an overlay image; this pin brings ordinary builds from main to the same scanner.",
-  "qualityRun": "20261115T062632",
+  "buildDigest": "73c618fbc7e75ce7d506d17a7c5b061e8ad9fd75fb81b728fc5829f6a255218d",
+  "tarball": "aimarket-warden-0.30.0.tgz",
+  "sha256": "83b7b8086fb00358e97c3e6966fbe9043782367e5fce9da835ead29665c7ea90",
+  "integrity": "sha512-8jQOkrJr3k0T5xAJxOOgj20KbbRn8mSOepf4uBLbs1L8Q8WA5XZbdfCrsajm2RE9gJJr3DqSHXTJGqq/E+oGDQ==",
+  "distribution": "Release archive of 0.30.0 (npm shasum 2c43b950…), byte for byte the tarball in warden/docs/evidence/warden-release-0.30.0-2026-11-17/, built from a clean checkout of 49e1c6b39; its build digest is the one MOMUS accepted (run 20261118T041219). Production HISTOR has run this build since 2026-11-18 07:05Z as an overlay image (histor-histor:warden-0.30.0-prod); this pin brings ordinary builds from main to the same scanner. Not on npm when pinned.",
+  "qualityRun": "20261118T041219",
   "changes": [
-    "Ruleset v20: an EVM opcode \"mnemonic\" is not a seed-phrase request (warden#14); the request veto needs the mnemonic as the verb's object",
-    "Static-scan findings end with in \"<clause>\"; new warden-mcp interceptor, interceptor-server and tool-set-digest modules"
+    "0.28.0–0.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
+    "0.30.0: warden-mcp gateway (OpenWebUI), checks of every package a launch line installs, key-name rule of the flow guard, blockAtSeverity in verdicts; ruleset unchanged (23)"
   ],
-  "packageJsonSha256": "9e9ba85018fa1f07e1e24be8cb72460ee0555e09a56bd3b4f7a252260859bbe6"
+  "packageJsonSha256": "a5783005a5ab6ad8d2cfdab04155befb2cb9fe9e1df38729a72ca84c2bfc24e6"
 }
