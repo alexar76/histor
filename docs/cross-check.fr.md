@@ -102,9 +102,26 @@ et chaque changement de HISTOR sur leur panel absent de leur journal, avec sa ra
 (adresses du journal et du panel, agent robots.txt, heure et première exécution) sont dans son entrée de la liste.
 Jusqu'au 7 novembre 2026, il tournait chaque semaine, après l'export du jeu de données.
 
-## Un quatrième témoin
+## Témoins
 
-Depuis le 7 novembre 2026, CrawlCheck cosigne aussi les checkpoints de HISTOR en tant que témoin
-(c2sp.org/tlog-witness), depuis son propre réseau : `crawlcheck.io/witness`, vkey
-`crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE`. Sa cosignature figure sur
-https://histor.modelmarket.dev/log/checkpoint à côté de celles des trois témoins qui signaient déjà.
+Sept témoins cosignent les checkpoints de HISTOR (c2sp.org/tlog-witness, cosignature/v1). HISTOR leur envoie son
+checkpoint toutes les 10 minutes. Le journal figure dans la liste staging de la witness network
+`log-list-10qps-4klogs.1` (witness-network.org n'a pas encore de liste de production) ; six des témoins le prennent
+dans cette liste et CrawlCheck l'a configuré directement. Mullvad, Markovian et TrustFabric cosignent depuis le
+2026-11-04, CrawlCheck depuis le 2026-11-07, GDB Security, Geomys et IPng depuis le 2026-11-19.
+
+| Témoin | Opérateur | vkey |
+|---|---|---|
+| `witness.stagemole.eu` | Mullvad VPN AB | `witness.stagemole.eu+67f7aea0+BEqSG3yu9YrmcM3BHvQYTxwFj3uSWakQepafafpUqklv` |
+| `markovianprotocol.com/witness` | Markovian Protocol | `markovianprotocol.com/witness+41b8827f+BJKLl8rBYM0oUxSaWh9rjTldTprEpYj/SWVIGgacA9XC` |
+| `staging.witness.transparency.goog/ring-any-bells` | TrustFabric | `staging.witness.transparency.goog/ring-any-bells+2e1a8dc9+BG5JTpLc3FJtwzgh1Uv+Qelz9qeOH2bfWjS1s0s+y4rL` |
+| `crawlcheck.io/witness` | CrawlCheck | `crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE` |
+| `witness.gdbsecurity.com` | GDB Security | `witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf` |
+| `witness.navigli.sunlight.geomys.org` | Geomys | `witness.navigli.sunlight.geomys.org+a3e00fe2+BNy/co4C1Hn1p+INwJrfUlgz7W55dSZReusH/GhUhJ/G` |
+| `krabbel.ct.ipng.ch` | IPng Networks GmbH | `krabbel.ct.ipng.ch+4b10dbd8+BO4sLOtnhktlqMCejDx9C5LDd+/xZxbmBb6BP9ZD2Def` |
+
+Le checkpoint le plus récent, https://histor.modelmarket.dev/log/checkpoint, ne porte que la signature du journal,
+car les témoins n'ont pas encore vu cette taille. Un checkpoint cosigné par les témoins est servi avec leurs lignes à
+`/api/v1/log/checkpoint/<taille>`, par exemple https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (signature du journal et sept cosignatures). Chaque ligne se
+vérifie avec la vkey du témoin indiquée dans le tableau. TrustFabric, Geomys et IPng ont aussi des clés ML-DSA ; HISTOR ne
+conserve que les cosignatures Ed25519.

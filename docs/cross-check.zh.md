@@ -87,8 +87,23 @@ python3 scripts/xcheck_digests.py https://crawlcheck.io/data/xcheck/histor/lates
 ScraperWatch 针对一个固定的远程服务器面板，每天发布工具变更日志，以 JSON 路径加新旧值的形式给出。每天，HISTOR 从两个方向核对该日志的最新一天：其日志中的每一项变更逐路径对照 HISTOR 的记录；HISTOR 在其面板上记录到而其日志未列出的每一项变更，
 都给出原因（`histor/peer_xcheck.py`，[operations.zh.md](operations.zh.md)）。它读取 HISTOR 的数据库，因此在单独的容器中使用数据库设置运行；其参数（日志和面板地址、robots.txt 代理名、运行时间和
 首次运行）写在列表中它的记录里。2026 年 11 月 7 日之前，它每周在数据集导出之后运行一次。
-## 第四个见证者
+## 见证者
 
-自 2026 年 11 月 7 日起，CrawlCheck 还从其自己的网络以见证者身份（c2sp.org/tlog-witness）为 HISTOR 的检查点联署：
-`crawlcheck.io/witness`，vkey `crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE`。
-它的联署出现在 https://histor.modelmarket.dev/log/checkpoint ，与此前已在联署的三个见证者并列。
+七个见证者为 HISTOR 的检查点联署（c2sp.org/tlog-witness，cosignature/v1）。HISTOR 每 10 分钟把检查点推送给每个见证者。
+该日志在 witness network 的 staging 列表 `log-list-10qps-4klogs.1` 中（witness-network.org 目前还没有 production 列表）；
+其中六个见证者从该列表获取日志，CrawlCheck 是直接配置的。Mullvad、Markovian 和 TrustFabric 自 2026-11-04 起联署，
+CrawlCheck 自 2026-11-07 起，GDB Security、Geomys 和 IPng 自 2026-11-19 起。
+
+| 见证者 | 运营方 | vkey |
+|---|---|---|
+| `witness.stagemole.eu` | Mullvad VPN AB | `witness.stagemole.eu+67f7aea0+BEqSG3yu9YrmcM3BHvQYTxwFj3uSWakQepafafpUqklv` |
+| `markovianprotocol.com/witness` | Markovian Protocol | `markovianprotocol.com/witness+41b8827f+BJKLl8rBYM0oUxSaWh9rjTldTprEpYj/SWVIGgacA9XC` |
+| `staging.witness.transparency.goog/ring-any-bells` | TrustFabric | `staging.witness.transparency.goog/ring-any-bells+2e1a8dc9+BG5JTpLc3FJtwzgh1Uv+Qelz9qeOH2bfWjS1s0s+y4rL` |
+| `crawlcheck.io/witness` | CrawlCheck | `crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE` |
+| `witness.gdbsecurity.com` | GDB Security | `witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf` |
+| `witness.navigli.sunlight.geomys.org` | Geomys | `witness.navigli.sunlight.geomys.org+a3e00fe2+BNy/co4C1Hn1p+INwJrfUlgz7W55dSZReusH/GhUhJ/G` |
+| `krabbel.ct.ipng.ch` | IPng Networks GmbH | `krabbel.ct.ipng.ch+4b10dbd8+BO4sLOtnhktlqMCejDx9C5LDd+/xZxbmBb6BP9ZD2Def` |
+
+最新的检查点 https://histor.modelmarket.dev/log/checkpoint 只带日志自己的签名，因为见证者还没有见过这个大小。
+见证者已联署的检查点连同他们的签名行在 `/api/v1/log/checkpoint/<大小>` 提供，例如 https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615（日志签名加七个联署）。
+每一行都可以用上表中见证者的 vkey 验证。TrustFabric、Geomys 和 IPng 还有 ML-DSA 密钥；HISTOR 只保存 Ed25519 联署。

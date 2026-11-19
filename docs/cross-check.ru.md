@@ -100,9 +100,25 @@ JSON-путей со старыми и новыми значениями. Каж
 панели, агент для robots.txt, время и первый прогон) записаны в её записи в списке. До 7 ноября 2026 года она шла раз
 в неделю, после выгрузки датасета.
 
-## Четвёртый свидетель
+## Свидетели
 
-С 7 ноября 2026 года CrawlCheck ещё и подписывает контрольные точки HISTOR как свидетель (c2sp.org/tlog-witness) из
-своей сети: `crawlcheck.io/witness`, vkey `crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE`.
-Его подпись стоит на https://histor.modelmarket.dev/log/checkpoint рядом с подписями трёх свидетелей, которые
-подписывали журнал до него.
+Контрольные точки HISTOR подписывают семь свидетелей (c2sp.org/tlog-witness, cosignature/v1). HISTOR отправляет
+каждому из них свою контрольную точку раз в 10 минут. Журнал внесён в staging-список witness network
+`log-list-10qps-4klogs.1` (production-списка на witness-network.org пока нет); шесть свидетелей берут журнал из этого
+списка, CrawlCheck настроил его напрямую. Mullvad, Markovian и TrustFabric подписывают с 2026-11-04, CrawlCheck — с
+2026-11-07, GDB Security, Geomys и IPng — с 2026-11-19.
+
+| Свидетель | Оператор | vkey |
+|---|---|---|
+| `witness.stagemole.eu` | Mullvad VPN AB | `witness.stagemole.eu+67f7aea0+BEqSG3yu9YrmcM3BHvQYTxwFj3uSWakQepafafpUqklv` |
+| `markovianprotocol.com/witness` | Markovian Protocol | `markovianprotocol.com/witness+41b8827f+BJKLl8rBYM0oUxSaWh9rjTldTprEpYj/SWVIGgacA9XC` |
+| `staging.witness.transparency.goog/ring-any-bells` | TrustFabric | `staging.witness.transparency.goog/ring-any-bells+2e1a8dc9+BG5JTpLc3FJtwzgh1Uv+Qelz9qeOH2bfWjS1s0s+y4rL` |
+| `crawlcheck.io/witness` | CrawlCheck | `crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE` |
+| `witness.gdbsecurity.com` | GDB Security | `witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf` |
+| `witness.navigli.sunlight.geomys.org` | Geomys | `witness.navigli.sunlight.geomys.org+a3e00fe2+BNy/co4C1Hn1p+INwJrfUlgz7W55dSZReusH/GhUhJ/G` |
+| `krabbel.ct.ipng.ch` | IPng Networks GmbH | `krabbel.ct.ipng.ch+4b10dbd8+BO4sLOtnhktlqMCejDx9C5LDd+/xZxbmBb6BP9ZD2Def` |
+
+Самая новая контрольная точка, https://histor.modelmarket.dev/log/checkpoint, несёт только подпись журнала: этого
+размера свидетели ещё не видели. Контрольная точка, которую свидетели подписали, отдаётся с их строками по адресу
+`/api/v1/log/checkpoint/<размер>`, например https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (подпись журнала и семь подписей свидетелей). Каждая строка
+проверяется по vkey свидетеля из таблицы. У TrustFabric, Geomys и IPng есть ещё ключи ML-DSA; HISTOR хранит только подписи Ed25519.

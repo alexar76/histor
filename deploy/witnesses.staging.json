@@ -14,17 +14,38 @@
     "source": "https://witness.markovianprotocol.com/about (read 2026-10-30)"
   },
   {
-    "name": "witness.gdbsecurity.com",
-    "operator": "GDB Security",
-    "vkey": "witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf",
-    "url": "https://witness.gdbsecurity.com",
-    "source": "https://witness.gdbsecurity.com/about (read 2026-10-30); configures only the 10qps staging list"
-  },
-  {
     "name": "staging.witness.transparency.goog/ring-any-bells",
     "operator": "TrustFabric",
     "vkey": "staging.witness.transparency.goog/ring-any-bells+2e1a8dc9+BG5JTpLc3FJtwzgh1Uv+Qelz9qeOH2bfWjS1s0s+y4rL",
     "url": "https://staging.witness.transparency.goog/ring-any-bells",
     "source": "https://transparency.dev/witnesses (read 2026-10-30); also signs with ML-DSA-44, that line is ignored here"
+  },
+  {
+    "name": "crawlcheck.io/witness",
+    "operator": "CrawlCheck (VSNARY)",
+    "vkey": "crawlcheck.io/witness+f6b056e2+BCYE6WcaJVekqxEETT9IF/pKvxP7yZM6dLW65YDWpQpE",
+    "url": "https://crawlcheck.io/witness",
+    "source": "Emmanuel Orta, mail of 2026-11-07; key id and a cosignature on size 1760605 verified the same day"
+  },
+  {
+    "name": "witness.gdbsecurity.com",
+    "operator": "GDB Security",
+    "vkey": "witness.gdbsecurity.com+a1398f73+BAbIijGonVIk3ikDac+KKlSm1ELHOzcddhjjB6zB4BNf",
+    "url": "https://witness.gdbsecurity.com",
+    "source": "https://witness.gdbsecurity.com/about (read 2026-11-19); configures staging log-list-10qps-4klogs.1, 24 h refresh"
+  },
+  {
+    "name": "witness.navigli.sunlight.geomys.org",
+    "operator": "Geomys",
+    "vkey": "witness.navigli.sunlight.geomys.org+a3e00fe2+BNy/co4C1Hn1p+INwJrfUlgz7W55dSZReusH/GhUhJ/G",
+    "url": "https://witness.navigli.sunlight.geomys.org",
+    "source": "https://witness.navigli.sunlight.geomys.org/ (read 2026-11-19; lists histor.modelmarket.dev/log among witnessed logs); also signs with ML-DSA, that line is ignored here"
+  },
+  {
+    "name": "krabbel.ct.ipng.ch",
+    "operator": "IPng Networks GmbH",
+    "vkey": "krabbel.ct.ipng.ch+4b10dbd8+BO4sLOtnhktlqMCejDx9C5LDd+/xZxbmBb6BP9ZD2Def",
+    "url": "https://krabbel.ct.ipng.ch",
+    "source": "https://ipng.ch/s/ct/ and https://ipng.ch/assets/ct/krabbel-ed25519.pub.vkey (read 2026-11-19); staging, both staging lists, 17 min refresh; also signs with ML-DSA, that line is ignored here"
   }
 ]
