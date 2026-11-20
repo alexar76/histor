@@ -1053,6 +1053,24 @@ def create_app(services: Services) -> FastAPI:
         return Response(data, media_type="application/octet-stream",
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
+    # Registered before /api/v1/log/checkpoint/{tree_size}, which would otherwise take "cosigned".
+    @app.get("/api/v1/log/checkpoint/cosigned")
+    def checkpoint_cosigned() -> Response:
+        """The largest head witnesses co-signed, as its checkpoint note with every cosignature line.
+
+        /checkpoint is the newest head, which no witness has seen yet most of the time: HISTOR
+        pushes to its witnesses every 10 minutes and signs heads more often. A reader who wants a
+        witnessed head — to prove an entry against it, or to watch for a split view — asks here,
+        then for an inclusion proof at that size. The size is also in the Histor-Tree-Size header.
+        """
+        found = store.latest_cosigned()
+        sth = store.sth(found[0]) if found else None
+        if sth is None:
+            raise HTTPException(status_code=404, detail="no head has been co-signed yet")
+        return Response(_checkpoint(sth), media_type="text/plain; charset=utf-8",
+                        headers={"Cache-Control": "no-cache", "Histor-Tree-Size": str(found[0]),
+                                 "Histor-Witnesses": str(found[1])})
+
     @app.get("/api/v1/log/checkpoint/{tree_size}")
     def checkpoint_at(tree_size: int) -> Response:
         sth = store.sth(tree_size)

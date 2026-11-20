@@ -72,6 +72,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/log/sth` | последняя подписанная вершина дерева |
 | GET | `/api/v1/log/sth/<size>` | вершина, подписанная при этом размере |
+| GET | `/api/v1/log/checkpoint/cosigned` | самая большая вершина, которую подписали свидетели, — контрольная точка со всеми строками их подписей; размер также в заголовке `Histor-Tree-Size`, число свидетелей — в `Histor-Witnesses` (с 20.11.2026) |
 | GET | `/api/v1/log/entries?start=&end=` | листья по порядку (≤ 1000 за вызов) |
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | доказательство включения по RFC 9162, hex |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | доказательство согласованности по RFC 9162, hex |

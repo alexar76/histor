@@ -117,5 +117,5 @@ configured it directly. Mullvad, Markovian and TrustFabric have co-signed since 
 
 The newest checkpoint, https://histor.modelmarket.dev/log/checkpoint, carries only the log's signature, because the
 witnesses have not seen that size yet. A checkpoint the witnesses co-signed is served with their lines at
-`/api/v1/log/checkpoint/<size>`, for example https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (log signature and seven cosignatures). Each line verifies under
+`/api/v1/log/checkpoint/<size>`, for example https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (log signature and seven cosignatures). The newest such checkpoint is always at https://histor.modelmarket.dev/api/v1/log/checkpoint/cosigned (its size in the `Histor-Tree-Size` header): prove an entry against that size. The HESTIA agent `histor.witnessed@v1` does exactly that for a tool set. Each line verifies under
 the witness's vkey above. TrustFabric, Geomys and IPng also have ML-DSA keys; HISTOR keeps only the Ed25519 cosignatures.

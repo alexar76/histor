@@ -220,6 +220,21 @@ def test_the_log_serves_its_own_head_as_a_checkpoint_and_keeps_cosignatures(witn
     assert [s.name for s in served.signatures] == ["histor.test/log", "example.com/witness"]
     assert client.get("/api/v1/log/checkpoint/2").text == client.get("/checkpoint").text
     assert client.get("/api/v1/log/checkpoint/3").status_code == 404
+    # the newest head a witness co-signed, even after the log has moved on
+    with services.store.db.transaction() as tx:
+        tx.lock_log()
+        services.store.append_leaf(tx, merkle.leaf_hash(b"leaf-2"))
+    services.logbook.publish_sth(timestamp="2026-10-30T00:10:00Z")
+    assert parse_checkpoint_text(parse_note(client.get("/checkpoint").text).text).tree_size == 3
+    r = client.get("/api/v1/log/checkpoint/cosigned")
+    assert r.status_code == 200 and r.headers["histor-tree-size"] == "2" and r.headers["histor-witnesses"] == "1"
+    assert r.text == client.get("/api/v1/log/checkpoint/2").text
+    assert [s.name for s in parse_note(r.text).signatures] == ["histor.test/log", "example.com/witness"]
+
+
+def test_no_cosigned_head_is_a_404(witness_app):
+    client, _ = witness_app
+    assert client.get("/api/v1/log/checkpoint/cosigned").status_code == 404
 
 
 def test_known_logs_file_is_validated(tmp_path):

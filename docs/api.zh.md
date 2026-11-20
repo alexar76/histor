@@ -72,6 +72,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/log/sth` | 最新的签名树头 |
 | GET | `/api/v1/log/sth/<size>` | 在该大小时签发的树头 |
+| GET | `/api/v1/log/checkpoint/cosigned` | 见证者共同签名过的最大树头，以检查点形式返回并附全部联署行；大小也在 `Histor-Tree-Size` 头中，见证者数量在 `Histor-Witnesses` 中（自 2026-11-20 起） |
 | GET | `/api/v1/log/entries?start=&end=` | 按顺序排列的叶子（每次调用 ≤ 1000 条） |
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | RFC 9162 包含证明，十六进制 |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | RFC 9162 一致性证明，十六进制 |

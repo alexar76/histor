@@ -72,6 +72,7 @@ Todo cambio, de servidor remoto o de paquete, lleva además `from_server_version
 |---|---|---|
 | GET | `/api/v1/log/sth` | el último encabezado de árbol firmado |
 | GET | `/api/v1/log/sth/<size>` | el encabezado firmado con ese tamaño |
+| GET | `/api/v1/log/checkpoint/cosigned` | el mayor encabezado que cofirmaron los testigos, como checkpoint con todas sus líneas de cofirma; el tamaño también en `Histor-Tree-Size`, el número de testigos en `Histor-Witnesses` (desde el 20-11-2026) |
 | GET | `/api/v1/log/entries?start=&end=` | hojas en orden (≤ 1000 por llamada) |
 | GET | `/api/v1/log/proof/inclusion?leaf_index=&tree_size=` | prueba de inclusión RFC 9162, en hex |
 | GET | `/api/v1/log/proof/consistency?first=&second=` | prueba de consistencia RFC 9162, en hex |

@@ -341,6 +341,13 @@ class Store:
             rows = tx.execute("SELECT line FROM cosignatures WHERE tree_size=? ORDER BY name", (tree_size,))
         return [row["line"] for row in rows]
 
+    def latest_cosigned(self) -> tuple[int, int] | None:
+        """(tree size, number of witnesses) of the largest head any witness co-signed, or None."""
+        with self.db.read() as tx:
+            row = tx.one("SELECT tree_size, COUNT(*) AS n FROM cosignatures "
+                         "WHERE tree_size = (SELECT MAX(tree_size) FROM cosignatures) GROUP BY tree_size")
+        return (int(row["tree_size"]), int(row["n"])) if row else None
+
     def store_cosignatures(self, tree_size: int, lines: list[tuple[str, str]]) -> int:
         """Keep one line per (size, witness name); a repeat replaces. Returns how many were written."""
         now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

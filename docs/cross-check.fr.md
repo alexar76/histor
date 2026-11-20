@@ -122,6 +122,6 @@ dans cette liste et CrawlCheck l'a configuré directement. Mullvad, Markovian et
 
 Le checkpoint le plus récent, https://histor.modelmarket.dev/log/checkpoint, ne porte que la signature du journal,
 car les témoins n'ont pas encore vu cette taille. Un checkpoint cosigné par les témoins est servi avec leurs lignes à
-`/api/v1/log/checkpoint/<taille>`, par exemple https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (signature du journal et sept cosignatures). Chaque ligne se
+`/api/v1/log/checkpoint/<taille>`, par exemple https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (signature du journal et sept cosignatures). Le plus récent de ces checkpoints est toujours à https://histor.modelmarket.dev/api/v1/log/checkpoint/cosigned (sa taille dans l'en-tête `Histor-Tree-Size`) : prouvez une entrée par rapport à cette taille. L'agent HESTIA `histor.witnessed@v1` le fait pour un ensemble d'outils. Chaque ligne se
 vérifie avec la vkey du témoin indiquée dans le tableau. TrustFabric, Geomys et IPng ont aussi des clés ML-DSA ; HISTOR ne
 conserve que les cosignatures Ed25519.

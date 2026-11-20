@@ -105,5 +105,5 @@ CrawlCheck 自 2026-11-07 起，GDB Security、Geomys 和 IPng 自 2026-11-19 �
 | `krabbel.ct.ipng.ch` | IPng Networks GmbH | `krabbel.ct.ipng.ch+4b10dbd8+BO4sLOtnhktlqMCejDx9C5LDd+/xZxbmBb6BP9ZD2Def` |
 
 最新的检查点 https://histor.modelmarket.dev/log/checkpoint 只带日志自己的签名，因为见证者还没有见过这个大小。
-见证者已联署的检查点连同他们的签名行在 `/api/v1/log/checkpoint/<大小>` 提供，例如 https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615（日志签名加七个联署）。
+见证者已联署的检查点连同他们的签名行在 `/api/v1/log/checkpoint/<大小>` 提供，例如 https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615（日志签名加七个联署）。最新的此类检查点始终位于 https://histor.modelmarket.dev/api/v1/log/checkpoint/cosigned（大小在 `Histor-Tree-Size` 头中）：请以该大小证明条目。HESTIA 代理 `histor.witnessed@v1` 正是为工具集这样做。
 每一行都可以用上表中见证者的 vkey 验证。TrustFabric、Geomys 和 IPng 还有 ML-DSA 密钥；HISTOR 只保存 Ed25519 联署。

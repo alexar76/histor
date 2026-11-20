@@ -120,5 +120,5 @@ JSON-путей со старыми и новыми значениями. Каж
 
 Самая новая контрольная точка, https://histor.modelmarket.dev/log/checkpoint, несёт только подпись журнала: этого
 размера свидетели ещё не видели. Контрольная точка, которую свидетели подписали, отдаётся с их строками по адресу
-`/api/v1/log/checkpoint/<размер>`, например https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (подпись журнала и семь подписей свидетелей). Каждая строка
+`/api/v1/log/checkpoint/<размер>`, например https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (подпись журнала и семь подписей свидетелей). Самая новая такая точка всегда по адресу https://histor.modelmarket.dev/api/v1/log/checkpoint/cosigned (размер — в заголовке `Histor-Tree-Size`): доказывайте запись относительно этого размера. Агент HESTIA `histor.witnessed@v1` делает это для набора инструментов. Каждая строка
 проверяется по vkey свидетеля из таблицы. У TrustFabric, Geomys и IPng есть ещё ключи ML-DSA; HISTOR хранит только подписи Ed25519.

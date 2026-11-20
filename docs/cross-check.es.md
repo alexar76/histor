@@ -121,5 +121,5 @@ GDB Security, Geomys e IPng desde 2026-11-19.
 
 El checkpoint más reciente, https://histor.modelmarket.dev/log/checkpoint, lleva solo la firma del registro, porque
 los testigos aún no han visto ese tamaño. Un checkpoint que los testigos cofirmaron se sirve con sus líneas en
-`/api/v1/log/checkpoint/<tamaño>`, por ejemplo https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (firma del registro y siete cofirmas). Cada línea se verifica con
+`/api/v1/log/checkpoint/<tamaño>`, por ejemplo https://histor.modelmarket.dev/api/v1/log/checkpoint/2836615 (firma del registro y siete cofirmas). El más reciente de esos checkpoints está siempre en https://histor.modelmarket.dev/api/v1/log/checkpoint/cosigned (su tamaño en la cabecera `Histor-Tree-Size`): pruebe una entrada contra ese tamaño. El agente de HESTIA `histor.witnessed@v1` lo hace para un conjunto de herramientas. Cada línea se verifica con
 la vkey del testigo de la tabla. TrustFabric, Geomys e IPng tienen además claves ML-DSA; HISTOR guarda solo las cofirmas Ed25519.

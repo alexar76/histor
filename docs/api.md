@@ -90,6 +90,7 @@ subscription receives, and how a payment becomes a period: [watch.md](watch.md).
 |---|---|---|
 | GET | `/checkpoint` | the latest head as a C2SP checkpoint note (`text/plain`): log signature plus any witness cosignatures stored for that size — [spec §4.3](spec/transparency-log.md) |
 | GET | `/api/v1/log/checkpoint/<size>` | the head at that size as a checkpoint note |
+| GET | `/api/v1/log/checkpoint/cosigned` | the largest head witnesses co-signed, as its checkpoint note with every cosignature line; the size is also in `Histor-Tree-Size`, the number of witnesses in `Histor-Witnesses` (since 2026-11-20) |
 | POST | `/api/v1/log/cosignatures` | operator (`X-Histor-Operator`): `{"treeSize": N, "lines": ["— <witness> <base64>", …]}` — store cosignature lines a witness returned |
 | POST | `/witness/v1/add-checkpoint` | c2sp.org/tlog-witness: co-sign another log's checkpoint (logs listed in `HISTOR_WITNESS_LOGS`) — [spec §8](spec/transparency-log.md) |
 | GET | `/witness/v1/logs/<origin sha256 hex>/checkpoint` | the newest checkpoint this witness co-signed for that log |
