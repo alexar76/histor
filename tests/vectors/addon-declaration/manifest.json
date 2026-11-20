@@ -1,0 +1,1706 @@
+{
+  "spec": "addon-declaration/0.1",
+  "generated": "2026-11-18",
+  "declarations": [
+    {
+      "id": "ed25519/valid",
+      "declaration": "ed25519-valid.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ed25519-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:531ec9ca7b0eaee384cf2e35f227e4c7170f2b08443c406c706e6fc1aa3bc7c8",
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-subnamespace",
+      "declaration": "ed25519-valid-subnamespace.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:f06222096eee7016cd1412e4379553cdaba662dfa9d2fa109058bd8dbb10578a"
+      }
+    },
+    {
+      "id": "ed25519/valid-http",
+      "declaration": "ed25519-valid-http.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:33cfc905c7e9b8b8b63e9e5dfe4412afeffeaedf2d38bcfc11d84804d2c432b3"
+      }
+    },
+    {
+      "id": "ed25519/valid-adk-record",
+      "declaration": "ed25519-valid-adk-record.json",
+      "pubkey": "v=ADKv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:531ec9ca7b0eaee384cf2e35f227e4c7170f2b08443c406c706e6fc1aa3bc7c8"
+      }
+    },
+    {
+      "id": "ed25519/key-not-found-http-adk-record",
+      "declaration": "ed25519-key-not-found-http-adk-record.json",
+      "pubkey": "v=ADKv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "key_not_found",
+        "exitCode": 4,
+        "declarationHash": "sha256:33cfc905c7e9b8b8b63e9e5dfe4412afeffeaedf2d38bcfc11d84804d2c432b3"
+      }
+    },
+    {
+      "id": "ed25519/valid-bom",
+      "declaration": "ed25519-valid-bom.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0
+      }
+    },
+    {
+      "id": "ed25519/malformed-extra-member",
+      "declaration": "ed25519-malformed-extra-member.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ed25519/valid-16384-bytes",
+      "declaration": "ed25519-valid-16384-bytes.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "bytes": 16384
+      }
+    },
+    {
+      "id": "ed25519/malformed-too-large",
+      "declaration": "ed25519-malformed-too-large.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "bytes": 16385
+      }
+    },
+    {
+      "id": "ed25519/malformed-invalid-utf8",
+      "declaration": "ed25519-malformed-invalid-utf8.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ed25519/malformed-duplicate-member",
+      "declaration": "ed25519-malformed-duplicate-member.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ed25519/invalid-signature",
+      "declaration": "ed25519-invalid-signature.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:0bc22dc14a6090fe59649a077d76c2fab796c967d57d6c8320114df54c23cf46"
+      }
+    },
+    {
+      "id": "ed25519/key-not-found",
+      "declaration": "ed25519-key-not-found.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=Two9Eq+1zNyn1SdeoTGn9fJ22I54HgyV3/q/NinBVgE=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "key_not_found",
+        "exitCode": 4,
+        "declarationHash": "sha256:531ec9ca7b0eaee384cf2e35f227e4c7170f2b08443c406c706e6fc1aa3bc7c8"
+      }
+    },
+    {
+      "id": "ed25519/expired",
+      "declaration": "ed25519-expired.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "expired",
+        "exitCode": 5,
+        "declarationHash": "sha256:f61e7410c8d1ff16b41271b146c5416f2e0da18184052aa8433a5048c425f8f5"
+      }
+    },
+    {
+      "id": "ed25519/not-yet-valid",
+      "declaration": "ed25519-not-yet-valid.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "not_yet_valid",
+        "exitCode": 6,
+        "declarationHash": "sha256:2ba18c11fbbb6421101c3768d9c540eb3faf7014398dbc8f4e810a86db06c468"
+      }
+    },
+    {
+      "id": "ed25519/name-domain-mismatch",
+      "declaration": "ed25519-name-domain-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "name_domain_mismatch",
+        "exitCode": 7,
+        "declarationHash": "sha256:9083cf2b58fdd15bf959a7a795d2ae112d94e2f7e8945361ee22cb8e69b3c284"
+      }
+    },
+    {
+      "id": "ed25519/name-domain-mismatch-http-subnamespace",
+      "declaration": "ed25519-name-domain-mismatch-http-subnamespace.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "name_domain_mismatch",
+        "exitCode": 7,
+        "declarationHash": "sha256:42fef562fb331613c3c34819b0a9870ca4c6a01f68196c064cd42fd43ad05e3f"
+      }
+    },
+    {
+      "id": "ed25519/tools-hash-mismatch",
+      "declaration": "ed25519-tools-hash-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-other.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:531ec9ca7b0eaee384cf2e35f227e4c7170f2b08443c406c706e6fc1aa3bc7c8"
+      }
+    },
+    {
+      "id": "ed25519/chain-mismatch",
+      "declaration": "ed25519-chain-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:f5cb0ea258e141cb11634c8daf52483104dbe9545f95a869bd56d97596b9eb51"
+      }
+    },
+    {
+      "id": "ed25519/chain-mismatch-forged-previous",
+      "declaration": "ed25519-chain-mismatch-forged-previous.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:531ec9ca7b0eaee384cf2e35f227e4c7170f2b08443c406c706e6fc1aa3bc7c8"
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-key-change",
+      "declaration": "ed25519-valid-chain-key-change.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=Two9Eq+1zNyn1SdeoTGn9fJ22I54HgyV3/q/NinBVgE=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:c47cfc2cc9e0f8935796cfa660c2f2217a5b4c363275b2f6ded0e5a6b45f121c",
+        "keyChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "not_checked"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-key-change-both-keys",
+      "declaration": "ed25519-valid-chain-key-change-both-keys.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=Two9Eq+1zNyn1SdeoTGn9fJ22I54HgyV3/q/NinBVgE=\nv=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:c47cfc2cc9e0f8935796cfa660c2f2217a5b4c363275b2f6ded0e5a6b45f121c",
+        "keyChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "checked"
+        }
+      }
+    },
+    {
+      "id": "ed25519/chain-mismatch-key-change-forged-previous",
+      "declaration": "ed25519-chain-mismatch-key-change-forged-previous.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=Two9Eq+1zNyn1SdeoTGn9fJ22I54HgyV3/q/NinBVgE=\nv=MCPv1; k=ed25519; p=UDNOGeVe4hdjdQxUt6PNr27sw+zuV86tqfUKiwAawPM=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:c47cfc2cc9e0f8935796cfa660c2f2217a5b4c363275b2f6ded0e5a6b45f121c"
+      }
+    },
+    {
+      "id": "ecdsap384/valid",
+      "declaration": "ecdsap384-valid.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ecdsap384-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:17f6dc019b0d066a35b854d2b73b231b57ee592630051ac670c6564e18f3875b",
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-subnamespace",
+      "declaration": "ecdsap384-valid-subnamespace.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:7fcb98d4f2b9e701d72760fce8aaf88519071ee6b57347c6c44f91c12934d64c"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-http",
+      "declaration": "ecdsap384-valid-http.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:865271a557048edfffebe249fa79c3fcbe8de5c62d581c1b51764e6eda79d5b3"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-adk-record",
+      "declaration": "ecdsap384-valid-adk-record.json",
+      "pubkey": "v=ADKv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:17f6dc019b0d066a35b854d2b73b231b57ee592630051ac670c6564e18f3875b"
+      }
+    },
+    {
+      "id": "ecdsap384/key-not-found-http-adk-record",
+      "declaration": "ecdsap384-key-not-found-http-adk-record.json",
+      "pubkey": "v=ADKv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "key_not_found",
+        "exitCode": 4,
+        "declarationHash": "sha256:865271a557048edfffebe249fa79c3fcbe8de5c62d581c1b51764e6eda79d5b3"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-bom",
+      "declaration": "ecdsap384-valid-bom.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-extra-member",
+      "declaration": "ecdsap384-malformed-extra-member.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ecdsap384/valid-16384-bytes",
+      "declaration": "ecdsap384-valid-16384-bytes.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "bytes": 16384
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-too-large",
+      "declaration": "ecdsap384-malformed-too-large.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "bytes": 16385
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-invalid-utf8",
+      "declaration": "ecdsap384-malformed-invalid-utf8.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-duplicate-member",
+      "declaration": "ecdsap384-malformed-duplicate-member.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2
+      }
+    },
+    {
+      "id": "ecdsap384/invalid-signature",
+      "declaration": "ecdsap384-invalid-signature.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:ff3a1dde372b874dbafbd9bdcdda8834988c38df6f416e21ae061905032165c1"
+      }
+    },
+    {
+      "id": "ecdsap384/key-not-found",
+      "declaration": "ecdsap384-key-not-found.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=ArwTcYPVNr9de0Qb19UCRt0YvdfoPi3/62i/0DqH+NtNgrtBQdqOtNrthfiHWBGCSQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "key_not_found",
+        "exitCode": 4,
+        "declarationHash": "sha256:17f6dc019b0d066a35b854d2b73b231b57ee592630051ac670c6564e18f3875b"
+      }
+    },
+    {
+      "id": "ecdsap384/expired",
+      "declaration": "ecdsap384-expired.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "expired",
+        "exitCode": 5,
+        "declarationHash": "sha256:d4b00041cba9a1f5e98a29a3ac40f142d7d98ccbcd56fe908abd025daf486d1a"
+      }
+    },
+    {
+      "id": "ecdsap384/not-yet-valid",
+      "declaration": "ecdsap384-not-yet-valid.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "not_yet_valid",
+        "exitCode": 6,
+        "declarationHash": "sha256:e79b0611b890a87e3ce670dec5fc091682dba18dbf665979c22288b6b4d8faa8"
+      }
+    },
+    {
+      "id": "ecdsap384/name-domain-mismatch",
+      "declaration": "ecdsap384-name-domain-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "name_domain_mismatch",
+        "exitCode": 7,
+        "declarationHash": "sha256:560ade26f2501b1c0545dd06b446d847fe84d8435dc490ebb0aca4b88566db0f"
+      }
+    },
+    {
+      "id": "ecdsap384/name-domain-mismatch-http-subnamespace",
+      "declaration": "ecdsap384-name-domain-mismatch-http-subnamespace.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "name_domain_mismatch",
+        "exitCode": 7,
+        "declarationHash": "sha256:392046e7b5d1e83e71178dd5e022a16a4ecbb6ded19f318196a4fd12c700dd2f"
+      }
+    },
+    {
+      "id": "ecdsap384/tools-hash-mismatch",
+      "declaration": "ecdsap384-tools-hash-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-other.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:17f6dc019b0d066a35b854d2b73b231b57ee592630051ac670c6564e18f3875b"
+      }
+    },
+    {
+      "id": "ecdsap384/chain-mismatch",
+      "declaration": "ecdsap384-chain-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:ed470ac38d3fb51c715d18b165535c3a31235f78ef71fdaea994009f78cce211"
+      }
+    },
+    {
+      "id": "ecdsap384/chain-mismatch-forged-previous",
+      "declaration": "ecdsap384-chain-mismatch-forged-previous.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:17f6dc019b0d066a35b854d2b73b231b57ee592630051ac670c6564e18f3875b"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-key-change",
+      "declaration": "ecdsap384-valid-chain-key-change.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=ArwTcYPVNr9de0Qb19UCRt0YvdfoPi3/62i/0DqH+NtNgrtBQdqOtNrthfiHWBGCSQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:58b78a4fa3f62d73ba6ca6ade631109f4bff9b3180dcded7f0c12ff3bf5a3b40",
+        "keyChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "not_checked"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-key-change-both-keys",
+      "declaration": "ecdsap384-valid-chain-key-change-both-keys.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=ArwTcYPVNr9de0Qb19UCRt0YvdfoPi3/62i/0DqH+NtNgrtBQdqOtNrthfiHWBGCSQ==\nv=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:58b78a4fa3f62d73ba6ca6ade631109f4bff9b3180dcded7f0c12ff3bf5a3b40",
+        "keyChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "checked"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/chain-mismatch-key-change-forged-previous",
+      "declaration": "ecdsap384-chain-mismatch-key-change-forged-previous.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=ArwTcYPVNr9de0Qb19UCRt0YvdfoPi3/62i/0DqH+NtNgrtBQdqOtNrthfiHWBGCSQ==\nv=MCPv1; k=ecdsap384; p=A4YjbDykHcn9Mra1Tawiljc3OAuHEoIDUuKE/+e7c1fGHsYXn6AfIhR7QPaCI+bcAA==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:58b78a4fa3f62d73ba6ca6ade631109f4bff9b3180dcded7f0c12ff3bf5a3b40"
+      }
+    }
+  ],
+  "fields": [
+    {
+      "id": "https-url/0",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://mcp.example.com/mcp",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/1",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://mcp.example.com/",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/2",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/%7e",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/3",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/?x=%27",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/4",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://localhost/mcp",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/5",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://[::1]/mcp",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/6",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://1.2.3.4/",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/7",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com:8443/mcp",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/8",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://xn--bcher-kva.example/",
+      "expect": "accept"
+    },
+    {
+      "id": "https-url/9",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/?x='",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/10",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/a/%2e%2e/b",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/11",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/a/../b",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/12",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/13",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://A.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/14",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com:443/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/15",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://user@a.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/16",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://u:p@a.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/17",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://evil.com\\@good.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/18",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https:evil.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/19",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https:/evil.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/20",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "http://a.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/21",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://{tenant}.a.com/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/22",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/a b",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/23",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://a.com/%zz",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/24",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https://bücher.example/",
+      "expect": "reject"
+    },
+    {
+      "id": "https-url/25",
+      "rule": "https-url",
+      "pointer": "/remotes/0/url",
+      "value": "https:///path",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/26",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:security@example.com",
+      "expect": "accept"
+    },
+    {
+      "id": "contact/27",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a.b+c_d-e@x-y.example.org",
+      "expect": "accept"
+    },
+    {
+      "id": "contact/28",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:x@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "expect": "accept"
+    },
+    {
+      "id": "contact/29",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "https://example.com/security",
+      "expect": "accept"
+    },
+    {
+      "id": "contact/30",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:x@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/31",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a@b",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/32",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a@-b.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/33",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a@b-.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/34",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:@b.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/35",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a b@c.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/36",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a@b.com?subject=x",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/37",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:\"a\"@b.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/38",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "MAILTO:a@b.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/39",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "https://a.com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/40",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "example.com",
+      "expect": "accept"
+    },
+    {
+      "id": "domain/41",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "a-b.example.com",
+      "expect": "accept"
+    },
+    {
+      "id": "domain/42",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "expect": "accept"
+    },
+    {
+      "id": "domain/43",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "xn--bcher-kva.example",
+      "expect": "accept"
+    },
+    {
+      "id": "domain/44",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "Example.com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/45",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/46",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "1.2.3.4",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/47",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "example.123",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/48",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "localhost",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/49",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "github.io",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/50",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "foo.github.io",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/51",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "-a.com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/52",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "a-.com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/53",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "a..com",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/54",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "example.com.",
+      "expect": "reject"
+    },
+    {
+      "id": "domain/55",
+      "rule": "domain",
+      "pointer": "/key/domain",
+      "value": "_dmarc.example.com",
+      "expect": "reject"
+    },
+    {
+      "id": "version/56",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0",
+      "expect": "accept"
+    },
+    {
+      "id": "version/57",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0+build:7",
+      "expect": "accept"
+    },
+    {
+      "id": "version/58",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "latest",
+      "expect": "accept"
+    },
+    {
+      "id": "version/59",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "expect": "accept"
+    },
+    {
+      "id": "version/60",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "é",
+      "expect": "accept"
+    },
+    {
+      "id": "version/61",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "version/62",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "expect": "reject"
+    },
+    {
+      "id": "version/63",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u0085",
+      "expect": "reject"
+    },
+    {
+      "id": "version/64",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u202e",
+      "expect": "reject"
+    },
+    {
+      "id": "version/65",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u200b",
+      "expect": "reject"
+    },
+    {
+      "id": "version/66",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\ufeff",
+      "expect": "reject"
+    },
+    {
+      "id": "version/67",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u00ad",
+      "expect": "reject"
+    },
+    {
+      "id": "version/68",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\udb40\udc41",
+      "expect": "reject"
+    },
+    {
+      "id": "version/69",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u2028",
+      "expect": "reject"
+    },
+    {
+      "id": "version/70",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u0007",
+      "expect": "reject"
+    },
+    {
+      "id": "version/71",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\ud800",
+      "expect": "reject"
+    },
+    {
+      "id": "version/72",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\ufe0f",
+      "expect": "reject"
+    },
+    {
+      "id": "version/73",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\udb40\udd00",
+      "expect": "reject"
+    },
+    {
+      "id": "version/74",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u3164",
+      "expect": "reject"
+    },
+    {
+      "id": "version/75",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u115f",
+      "expect": "reject"
+    },
+    {
+      "id": "version/76",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\uffa0",
+      "expect": "reject"
+    },
+    {
+      "id": "version/77",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u034f",
+      "expect": "reject"
+    },
+    {
+      "id": "version/78",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u180b",
+      "expect": "reject"
+    },
+    {
+      "id": "version/79",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\ufff0",
+      "expect": "reject"
+    },
+    {
+      "id": "version/80",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\udb43\udfff",
+      "expect": "reject"
+    },
+    {
+      "id": "version/81",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\ue000",
+      "expect": "reject"
+    },
+    {
+      "id": "version/82",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\uffff",
+      "expect": "reject"
+    },
+    {
+      "id": "version/83",
+      "rule": "version",
+      "pointer": "/version",
+      "value": "1.0.0\u0378",
+      "expect": "reject"
+    },
+    {
+      "id": "time/84",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18T10:00:00Z",
+      "expect": "accept"
+    },
+    {
+      "id": "time/85",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2024-02-29T00:00:00Z",
+      "expect": "accept"
+    },
+    {
+      "id": "time/86",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2016-12-31T23:59:60Z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/87",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-02-30T00:00:00Z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/88",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2025-02-29T00:00:00Z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/89",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18T24:00:00Z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/90",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18T10:00:00.000Z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/91",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18T10:00:00+00:00",
+      "expect": "reject"
+    },
+    {
+      "id": "time/92",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18t10:00:00z",
+      "expect": "reject"
+    },
+    {
+      "id": "time/93",
+      "rule": "time",
+      "pointer": "/issuedAt",
+      "value": "2026-11-18 10:00:00Z",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/94",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "0",
+      "expect": "accept"
+    },
+    {
+      "id": "amount/95",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "1",
+      "expect": "accept"
+    },
+    {
+      "id": "amount/96",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "999999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "expect": "accept"
+    },
+    {
+      "id": "amount/97",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "01",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/98",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "1.0",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/99",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "1e3",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/100",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "9999999999999999999999999999999999999999999999999999999999999999999999999999999",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/101",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "-1",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/102",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "amount/103",
+      "rule": "amount",
+      "pointer": "/payment/0/amount",
+      "value": " 1",
+      "expect": "reject"
+    },
+    {
+      "id": "network/104",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "eip155:8453",
+      "expect": "accept"
+    },
+    {
+      "id": "network/105",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+      "expect": "accept"
+    },
+    {
+      "id": "network/106",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "EIP155:8453",
+      "expect": "reject"
+    },
+    {
+      "id": "network/107",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "eip155",
+      "expect": "reject"
+    },
+    {
+      "id": "network/108",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "eip155:",
+      "expect": "reject"
+    },
+    {
+      "id": "network/109",
+      "rule": "network",
+      "pointer": "/payment/0/network",
+      "value": "ab:1",
+      "expect": "reject"
+    },
+    {
+      "id": "name/110",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/weather",
+      "expect": "accept"
+    },
+    {
+      "id": "name/111",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/...",
+      "expect": "accept"
+    },
+    {
+      "id": "name/112",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/a.b_c-d",
+      "expect": "accept"
+    },
+    {
+      "id": "name/113",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/..",
+      "expect": "reject"
+    },
+    {
+      "id": "name/114",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/.",
+      "expect": "reject"
+    },
+    {
+      "id": "name/115",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "../weather",
+      "expect": "reject"
+    },
+    {
+      "id": "name/116",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example",
+      "expect": "reject"
+    },
+    {
+      "id": "name/117",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/a/b",
+      "expect": "reject"
+    },
+    {
+      "id": "name/118",
+      "rule": "name",
+      "pointer": "/name",
+      "value": "com.example/a b",
+      "expect": "reject"
+    },
+    {
+      "id": "asset/119",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "expect": "accept"
+    },
+    {
+      "id": "asset/120",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "expect": "accept"
+    },
+    {
+      "id": "asset/121",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "USDC",
+      "expect": "accept"
+    },
+    {
+      "id": "asset/122",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "usd",
+      "expect": "accept"
+    },
+    {
+      "id": "asset/123",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "USD",
+      "expect": "reject"
+    },
+    {
+      "id": "asset/124",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "EUR",
+      "expect": "reject"
+    },
+    {
+      "id": "asset/125",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "0x 1",
+      "expect": "reject"
+    },
+    {
+      "id": "asset/126",
+      "rule": "asset",
+      "pointer": "/payment/0/asset",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/127",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get_forecast",
+      "expect": "accept"
+    },
+    {
+      "id": "tool/128",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get.forecast",
+      "expect": "accept"
+    },
+    {
+      "id": "tool/129",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/130",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get\u200b",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/131",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get\u001b[2K",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/132",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/133",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get\u3164weather",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/134",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get_forecast\ufe0f",
+      "expect": "reject"
+    },
+    {
+      "id": "tool/135",
+      "rule": "tool",
+      "pointer": "/payment/0/tool",
+      "value": "get_forecast\udb40\udd00",
+      "expect": "reject"
+    },
+    {
+      "id": "signature/136",
+      "rule": "signature",
+      "pointer": "/signature",
+      "value": "BE4JZMLh5oX6vvsrNG9N7IOMLlfR8gjjpmE0zfSKHS4YFFuYBb2mb9tR1T3SCuI7zAhExo1HL8D/yuGndYNmAx==",
+      "expect": "reject",
+      "note": "nonzero padding bits"
+    },
+    {
+      "id": "signature/137",
+      "rule": "signature",
+      "pointer": "/signature",
+      "value": "BE4JZMLh5oX6vvsrNG9N7IOMLlfR8gjjpmE0zfSKHS4YFFuYBb2mb9tR1T3SCuI7zAhExo1HL8D/yuGndYNmAw",
+      "expect": "reject",
+      "note": "padding removed"
+    },
+    {
+      "id": "signature/138",
+      "rule": "signature",
+      "pointer": "/signature",
+      "value": "BE4JZMLh5oX6vvsrNG9N7IOMLlfR8gjjpmE0zfSKHS4Y\nFFuYBb2mb9tR1T3SCuI7zAhExo1HL8D/yuGndYNmAw==",
+      "expect": "reject",
+      "note": "line break"
+    },
+    {
+      "id": "signature/139",
+      "rule": "signature",
+      "pointer": "/signature",
+      "value": "BE4JZMLh5oX6vvsrNG9N7IOMLlfR8gjjpmE0zfSKHS4YFFuYBb2mb9tR1T3SCuI7zAhExo1HL8D_yuGndYNmAw==",
+      "expect": "reject",
+      "note": "base64url alphabet"
+    }
+  ],
+  "tools": [
+    {
+      "id": "sort-astral-before-high-bmp",
+      "input": "tools-sort-astral-before-high-bmp.json",
+      "expect": {
+        "toolsHash": "sha256:78146be97595e4fde2fc3b45cc708b71ea4a9a5cd9c19cabc67a946cd3ee71ac"
+      }
+    },
+    {
+      "id": "number-forms",
+      "input": "tools-number-forms.json",
+      "expect": {
+        "toolsHash": "sha256:a1cda1433a6b463be7322d1d676f0c4ea979ce05206f25fb1dc87a1e8edbdf4f"
+      }
+    },
+    {
+      "id": "number-forms-same",
+      "input": "tools-number-forms-same.json",
+      "expect": {
+        "toolsHash": "sha256:a1cda1433a6b463be7322d1d676f0c4ea979ce05206f25fb1dc87a1e8edbdf4f"
+      }
+    },
+    {
+      "id": "integer-beyond-2-53",
+      "input": "tools-integer-beyond-2-53.json",
+      "expect": {
+        "error": true,
+        "reason": "range"
+      }
+    },
+    {
+      "id": "uint64-max",
+      "input": "tools-uint64-max.json",
+      "expect": {
+        "error": true,
+        "reason": "range"
+      }
+    },
+    {
+      "id": "uint64-max-as-double",
+      "input": "tools-uint64-max-as-double.json",
+      "expect": {
+        "toolsHash": "sha256:eea72f3ec0952212988e50033fcb4b5f7dc1f7e5586746fbcacfee20db14d57c"
+      }
+    },
+    {
+      "id": "underflow",
+      "input": "tools-underflow.json",
+      "expect": {
+        "error": true,
+        "reason": "underflow"
+      }
+    },
+    {
+      "id": "jsonrpc-wrapper",
+      "input": "tools-jsonrpc-wrapper.json",
+      "expect": {
+        "toolsHash": "sha256:1c21e2592aa558e3ff2294b71c099f2996fe7f2f0ceec4007151daa3dc954e7b"
+      }
+    },
+    {
+      "id": "ambiguous-wrapper",
+      "input": "tools-ambiguous-wrapper.json",
+      "expect": {
+        "error": true,
+        "reason": "ambiguous"
+      }
+    },
+    {
+      "id": "duplicate-name",
+      "input": "tools-duplicate-name.json",
+      "expect": {
+        "error": true,
+        "reason": "duplicate-name"
+      }
+    },
+    {
+      "id": "duplicate-member",
+      "input": "tools-duplicate-member.json",
+      "expect": {
+        "error": true,
+        "reason": "duplicate-member"
+      }
+    },
+    {
+      "id": "invalid-utf8",
+      "input": "tools-invalid-utf8.json",
+      "expect": {
+        "error": true,
+        "reason": "encoding"
+      }
+    },
+    {
+      "id": "bom",
+      "input": "tools-bom.json",
+      "expect": {
+        "toolsHash": "sha256:1c21e2592aa558e3ff2294b71c099f2996fe7f2f0ceec4007151daa3dc954e7b"
+      }
+    },
+    {
+      "id": "depth-64",
+      "input": "tools-depth-64.json",
+      "expect": {
+        "toolsHash": "sha256:46c3a2808ecb0156e845ed7ca9f8488b870b1e9f55410e76299bf7a8c1fbad8a"
+      }
+    },
+    {
+      "id": "depth-65",
+      "input": "tools-depth-65.json",
+      "expect": {
+        "error": true,
+        "reason": "depth"
+      }
+    },
+    {
+      "id": "jsonrpc-depth-64",
+      "input": "tools-jsonrpc-depth-64.json",
+      "expect": {
+        "toolsHash": "sha256:46c3a2808ecb0156e845ed7ca9f8488b870b1e9f55410e76299bf7a8c1fbad8a"
+      }
+    },
+    {
+      "id": "jsonrpc-depth-65",
+      "input": "tools-jsonrpc-depth-65.json",
+      "expect": {
+        "error": true,
+        "reason": "depth"
+      }
+    },
+    {
+      "id": "deep-sibling-meta",
+      "input": "tools-deep-sibling-meta.json",
+      "expect": {
+        "toolsHash": "sha256:7710ae15e27b5d228bddba86b3949815ac89bbcb13819012f93c6b69a2f3933f"
+      }
+    },
+    {
+      "id": "deep-sibling-cursor",
+      "input": "tools-deep-sibling-cursor.json",
+      "expect": {
+        "toolsHash": "sha256:7710ae15e27b5d228bddba86b3949815ac89bbcb13819012f93c6b69a2f3933f"
+      }
+    },
+    {
+      "id": "paged",
+      "inputs": [
+        "tools-paged-page1.json",
+        "tools-paged-page2.json"
+      ],
+      "expect": {
+        "toolsHash": "sha256:1c21e2592aa558e3ff2294b71c099f2996fe7f2f0ceec4007151daa3dc954e7b"
+      }
+    },
+    {
+      "id": "paged-duplicate-across-pages",
+      "inputs": [
+        "tools-paged-duplicate-across-pages-page1.json",
+        "tools-paged-duplicate-across-pages-page2.json"
+      ],
+      "expect": {
+        "error": true,
+        "reason": "duplicate-name"
+      }
+    },
+    {
+      "id": "empty",
+      "input": "tools-empty.json",
+      "expect": {
+        "toolsHash": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    }
+  ]
+}

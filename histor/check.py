@@ -318,6 +318,8 @@ class Checker:
             declared = result["declared"]
             where = (f"in the declaration file its registry entry points at ({declared['url']})"
                      if declared.get("source") == "url" and declared.get("url")
+                     else f"in a statement signed with its registry key ({declared['url'].partition('#')[0]})"
+                     if declared.get("source") == "signed" and declared.get("url")
                      else f"in its server card ({declared['url']})" if declared.get("source") == "card" and declared.get("url")
                      else "in its registry entry")
             note += NOTE_DECLARED.format(where=where, when=f' ("{declared["when"]}")' if declared.get("when") else "")

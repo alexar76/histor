@@ -261,8 +261,11 @@ JOIN '{BASE}/latest/servers.jsonl.gz' s ON s.id = c.serverId
 GROUP BY s.name ORDER BY changes DESC LIMIT 20;</pre>
 <pre>import pandas as pd
 servers = pd.read_json("{BASE}/latest/servers.jsonl.gz", lines=True)</pre>
+<section id="cite">
 <h2>Cite</h2>
+<p><a href="https://histor.modelmarket.dev/datasets/cite/">Get BibTeX for six snapshots from 20 October to 16 November 2026</a>.</p>
 {cite_section(day, dois)}
+</section>
 <h2>Check it</h2>
 <p><code>manifest.json</code> lists the SHA-256 of every file and is signed (Ed25519) by the log's key
 <code>{esc(m['log'])}</code>, with the signed tree head the snapshot was taken under. Any label in it can be

@@ -1,0 +1,46 @@
+{
+ "generated": "2026-11-19T19:41:47.458Z",
+ "node": "v22.23.4",
+ "versions": {
+  "ai": "7.0.177",
+  "@ai-sdk/mcp": "2.0.101",
+  "zod": "4.1.8"
+ },
+ "sameThroughToolsCall": true,
+ "names": [
+  "plain",
+  "no_description",
+  "empty_description",
+  "with_title",
+  "annotation_title",
+  "both_titles",
+  "empty_title",
+  "hints_only",
+  "no_properties",
+  "empty_schema",
+  "open_schema",
+  "unicode_text",
+  "with_output_and_meta",
+  "constructor",
+  "toString",
+  "schema_keywords"
+ ],
+ "fingerprints": {
+  "plain": "4VyxOrn4OpyUV4G8Ixs30JkSqacwAZGm5nEbaMmYOoQ",
+  "no_description": "gHWHuhJNzhh6cDqx4a73WH802nYNBFDF1u5kkpXX2_g",
+  "empty_description": "_hFXClpEim_uLzmdIa_1HjggjxPJA3hzJqTwlHMKk5k",
+  "with_title": "G0sfzM3tzIwR4UqH_8VF-DyeQ2N3WdgrufFAgyZVfs0",
+  "annotation_title": "7Hr8FDn1nTVCZJfacwo17npUbDbMSmdka9HbF63OdCU",
+  "both_titles": "CVw73vKgTOcOQO8s1CCJ7mtH2MfaX00dmLxtTAVzd2k",
+  "empty_title": "Ygh_rbhcGtG4Wexr6qjbPqozvrOy5MHVQPNFbt3kNsg",
+  "hints_only": "5fpPcz-mD4Kf1wnqZQOci_zTYJlly7F6esuFKg2d7RY",
+  "no_properties": "5fpPcz-mD4Kf1wnqZQOci_zTYJlly7F6esuFKg2d7RY",
+  "empty_schema": "M_tWd8CYJ6Qe5akVShIyyzdW9_u7QEmG6kyBnZbwXg8",
+  "open_schema": "6MtpHgc4nI0Cn-iSXYacPuhLj18vV6F0Y1zb6RP_WT4",
+  "unicode_text": "bD1Rr-OvyFxAA7TGmLTZLZFHSvclZVaVKTLkxc3CH5s",
+  "with_output_and_meta": "5fpPcz-mD4Kf1wnqZQOci_zTYJlly7F6esuFKg2d7RY",
+  "constructor": "5fpPcz-mD4Kf1wnqZQOci_zTYJlly7F6esuFKg2d7RY",
+  "toString": "2ZQtfLC_OugM1LHYf2dcbLKWyGDbJzngBbc85AulExo",
+  "schema_keywords": "nrBjAq6YsKeCJvSR6TNwxpprMMZsP0tdKGeR_vqDh24"
+ }
+}

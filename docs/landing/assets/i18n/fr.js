@@ -221,6 +221,7 @@ export default {
   js_declared_src_registry: "dans l’entrée du registre",
   js_declared_src_file: "dans le fichier",
   js_declared_src_card: "dans la carte du serveur",
+  js_declared_src_signed: "dans une déclaration signée",
   js_card: "Carte du serveur",
   js_card_note: "La description du serveur par son exploitant, lue à son adresse là où le robots.txt l’autorise. C’est la parole de l’exploitant, pas une observation, et elle peut différer de ce que le serveur sert.",
   js_card_declared: "liste {n} outils",

@@ -121,6 +121,16 @@ class Settings:
     # Seconds between reads of the declaration files publishers point at from their registry entry
     # (histor.declared); the crawl reads them too. 0 = only at the crawl.
     declaration_refresh_s: int = 3600
+    # The subregistry (histor.subregistry): registry entries served in the MCP registry's v0.1 API with
+    # what HISTOR observed. Off unless HISTOR_SUBREGISTRY=1. It reads HISTOR_SUBREGISTRY_UPSTREAM (default:
+    # the registry the crawl reads) every HISTOR_SUBREGISTRY_SYNC_S seconds (0 = only by hand) and walks
+    # every server again each HISTOR_SUBREGISTRY_FULL_S. HISTOR_SUBREGISTRY_ALLOW is a file of server names
+    # or namespace/* lines: the copy then holds those servers only.
+    subregistry: bool = False
+    subregistry_sync_s: int = 3600
+    subregistry_full_s: int = 604800
+    subregistry_upstream: str = ""
+    subregistry_allow_path: Path | None = None
     # histor-tlog/2 (histor.checkpoint): the log's checkpoint origin — a schema-less URL that
     # never changes once published (HISTOR_LOG_ORIGIN; default: the public host + "/log") — and
     # this instance's witness name (HISTOR_WITNESS_NAME; default: the public host + "/witness").
@@ -272,6 +282,11 @@ def load_settings() -> Settings:
         sandbox_timeout_s=_int("HISTOR_SANDBOX_TIMEOUT_S", 720, minimum=30),
         sandbox_extra=_sandbox_extra(),
         declaration_refresh_s=_int("HISTOR_DECLARATION_REFRESH_S", 3600, minimum=0),
+        subregistry=_truthy("HISTOR_SUBREGISTRY", "0"),
+        subregistry_sync_s=_int("HISTOR_SUBREGISTRY_SYNC_S", 3600, minimum=0),
+        subregistry_full_s=_int("HISTOR_SUBREGISTRY_FULL_S", 604800, minimum=0),
+        subregistry_upstream=os.environ.get("HISTOR_SUBREGISTRY_UPSTREAM", "").strip().rstrip("/"),
+        subregistry_allow_path=Path(os.environ["HISTOR_SUBREGISTRY_ALLOW"].strip()) if os.environ.get("HISTOR_SUBREGISTRY_ALLOW", "").strip() else None,
         log_origin=os.environ.get("HISTOR_LOG_ORIGIN", "").strip(),
         witness_name=os.environ.get("HISTOR_WITNESS_NAME", "").strip(),
         witness_logs=os.environ.get("HISTOR_WITNESS_LOGS", "").strip(),
@@ -298,6 +313,8 @@ def load_settings() -> Settings:
             raise RuntimeError("HISTOR_PROFILE=prod needs a postgresql:// HISTOR_DATABASE_URL")
         if settings.allow_private_targets:
             raise RuntimeError("HISTOR_ALLOW_PRIVATE_TARGETS is refused under HISTOR_PROFILE=prod")
+        if settings.subregistry and not (settings.subregistry_upstream or settings.registry_url).startswith("https://"):
+            raise RuntimeError("HISTOR_SUBREGISTRY under HISTOR_PROFILE=prod needs an https upstream registry")
     return settings
 
 

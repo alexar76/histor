@@ -1,0 +1,1497 @@
+{
+  "spec": "addon-declaration/0.2",
+  "generated": "2026-11-19",
+  "updated": "2026-11-19",
+  "note": "Paths are relative to this folder. The manifest has two lists, \"declarations\" and \"fields\" (there is no \"tools\" list: the tool list rules are those of mcp-tool-set-digest/1, whose own vectors are in ../third_party/mcp-tool-set-digest-1/). A declaration case gives the declaration, the public key record, the clock time, and optionally \"tools\" (one tools/list page), \"previous\" (the earlier declaration) and \"formats\" (the formats the check accepts; all formats when absent). \"expect\" holds the state, exit code and declaration hash, and optionally: \"format\", the format checked; \"toolSetDigest\", a compact form of the result of SPEC.md section 17.3 (\"contract\" and \"extras\" are the result words match, mismatch or no_digest; \"contractCode\" and \"extrasCode\" the TSD code of a no_digest result, null when the list cannot be read at all; \"differs\", \"noDigest\", \"repeatedMembers\" and \"repeatedNames\" as in the verifier output); \"chain\", members of the chain object of SPEC.md section 7; \"keyChangeNote\" and \"formatChangeNote\", true when the output has to say that the key, or the format, changed along the link (the reference verifier writes \"key changed\" and \"format changed\" in its notes). Field vectors change ed25519-valid.json: \"value\" sets the member at \"pointer\", \"remove\": true removes it; \"accept\" means the file still passes step 1 of SPEC.md section 11 under the 0.2 rules, \"reject\" means malformed.",
+  "declarations": [
+    {
+      "id": "ed25519/valid",
+      "declaration": "ed25519-valid.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ed25519-previous-0.2.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": []
+        },
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.2"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-no-contact",
+      "declaration": "ed25519-valid-no-contact.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:e0a2d764fdafccd47ababd9498e226da46da6a9c7165bf02eb25dcfc0c5fcb59",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/valid-null-extras",
+      "declaration": "ed25519-valid-null-extras.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-no-extras.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:5c02f7336c4875c685a8fbf17ecc32013a134842ac1557898fe0124e22cb7921",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-0.1-previous",
+      "declaration": "ed25519-valid-0.1-previous.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:592101546380a7d314d59c22b3aea756f4860ed7e8c92a0322b4702c2152c62c",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-from-0.1",
+      "declaration": "ed25519-valid-chain-from-0.1.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ed25519-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:e50e072e6746fc119175c1efefe11ca9d00ef65f55e221761b80f51d7913822a",
+        "format": "addon-declaration/0.2",
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-from-0.1-format-0.2-only",
+      "declaration": "ed25519-valid-chain-from-0.1-format-0.2-only.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-0.1.json",
+      "formats": [
+        "addon-declaration/0.2"
+      ],
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:e50e072e6746fc119175c1efefe11ca9d00ef65f55e221761b80f51d7913822a",
+        "format": "addon-declaration/0.2",
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-from-0.1-key-change",
+      "declaration": "ed25519-valid-chain-from-0.1-key-change.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=xnm54atMt/9KojcRu8mfyMsOhCtdA3SGZLBGLOWmMd0=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:dbc16dee112828659a721f34701bc7ac90b2cf5060a4431abb40b5ea3ded7a9b",
+        "format": "addon-declaration/0.2",
+        "keyChangeNote": true,
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "not_checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-chain-from-0.1-key-change-both-keys",
+      "declaration": "ed25519-valid-chain-from-0.1-key-change-both-keys.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=xnm54atMt/9KojcRu8mfyMsOhCtdA3SGZLBGLOWmMd0=\nv=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:dbc16dee112828659a721f34701bc7ac90b2cf5060a4431abb40b5ea3ded7a9b",
+        "format": "addon-declaration/0.2",
+        "keyChangeNote": true,
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ed25519/chain-mismatch-from-forged-0.1",
+      "declaration": "ed25519-chain-mismatch-from-forged-0.1.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-0.1-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:e50e072e6746fc119175c1efefe11ca9d00ef65f55e221761b80f51d7913822a"
+      }
+    },
+    {
+      "id": "ed25519/chain-mismatch-0.1-follows-0.2",
+      "declaration": "ed25519-chain-mismatch-0.1-follows-0.2.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ed25519-previous-0.2.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:76a81684d58f60f422c083cc88ff660edbf9627c9ab7bf91309e1c98d122ac53",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/tools-extras-mismatch",
+      "declaration": "ed25519-tools-extras-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-extras-changed.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-contract-mismatch",
+      "declaration": "ed25519-tools-contract-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-contract-changed.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "toolSetDigest": {
+          "contract": "mismatch",
+          "extras": "match",
+          "differs": [
+            "contract"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-null-extras-mismatch",
+      "declaration": "ed25519-tools-null-extras-mismatch.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:5c02f7336c4875c685a8fbf17ecc32013a134842ac1557898fe0124e22cb7921",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-extras-declared-none-received",
+      "declaration": "ed25519-tools-extras-declared-none-received.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-no-extras.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-no-extras-digest",
+      "declaration": "ed25519-tools-no-extras-digest.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-name.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "toolSetDigest": {
+          "contract": "mismatch",
+          "extras": "no_digest",
+          "extrasCode": "TSD-NAME",
+          "differs": [
+            "contract"
+          ],
+          "noDigest": [
+            "extras"
+          ],
+          "repeatedNames": [
+            {
+              "name": "a",
+              "count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-incomplete-list",
+      "declaration": "ed25519-tools-incomplete-list.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-page.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:58df38a7ab433bbbe899d8dc0d2970227bc2c5157a48b76a779b06f58fdfe551",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-PAGE",
+          "extras": "no_digest",
+          "extrasCode": "TSD-PAGE",
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-extras-tsd-text",
+      "declaration": "ed25519-tools-extras-tsd-text.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-text.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:5fa3fd5131bec273ab25916955e076477b8022c69fde64e0d466acf14b41f827",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "no_digest",
+          "extrasCode": "TSD-TEXT",
+          "differs": [],
+          "noDigest": [
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-contract-tsd-number",
+      "declaration": "ed25519-tools-contract-tsd-number.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-number.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:5fa3fd5131bec273ab25916955e076477b8022c69fde64e0d466acf14b41f827",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-NUMBER",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [
+            "contract"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-tsd-tool",
+      "declaration": "ed25519-tools-tsd-tool.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-tool.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:5fa3fd5131bec273ab25916955e076477b8022c69fde64e0d466acf14b41f827",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-TOOL",
+          "extras": "no_digest",
+          "extrasCode": "TSD-TOOL",
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/tools-unreadable",
+      "declaration": "ed25519-tools-unreadable.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-unreadable.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:5fa3fd5131bec273ab25916955e076477b8022c69fde64e0d466acf14b41f827",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": null,
+          "extras": "no_digest",
+          "extrasCode": null,
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ],
+          "repeatedMembers": null,
+          "repeatedNames": null
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-repeated-tool-name",
+      "declaration": "ed25519-valid-repeated-tool-name.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-repeated-name-moved.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:66f3490abfee41ea9745b0848ec5544855aa7d7c67c8515b2be3d64e75a8550c",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [],
+          "repeatedMembers": 0,
+          "repeatedNames": [
+            {
+              "name": "f",
+              "count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ed25519/valid-repeated-member",
+      "declaration": "ed25519-valid-repeated-member.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=afEi+EIgmvBjrH6vHrhEAwf7rnohCmOi5QjTYb2fIP0=",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-repeated-member.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:522fc03ee560e7275e9497ccf461cfdaf0facf16afaf673ee95e082c428a133c",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [],
+          "repeatedMembers": 1,
+          "repeatedNames": []
+        }
+      }
+    },
+    {
+      "id": "ed25519/malformed-tools-hash-member",
+      "declaration": "ed25519-malformed-tools-hash-member.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/malformed-both-members",
+      "declaration": "ed25519-malformed-both-members.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/malformed-hex-digest",
+      "declaration": "ed25519-malformed-hex-digest.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/malformed-missing-extras",
+      "declaration": "ed25519-malformed-missing-extras.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/malformed-0.1-with-tool-set-digest",
+      "declaration": "ed25519-malformed-0.1-with-tool-set-digest.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/malformed-relabelled-0.1",
+      "declaration": "ed25519-malformed-relabelled-0.1.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/invalid-signature-relabelled-0.1",
+      "declaration": "ed25519-invalid-signature-relabelled-0.1.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:9cae95b9d75575daeff46879c9cd9aa6195b679a8156d35db5e11360a337b7ed",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/malformed-relabelled-0.2",
+      "declaration": "ed25519-malformed-relabelled-0.2.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/invalid-signature-relabelled-0.2",
+      "declaration": "ed25519-invalid-signature-relabelled-0.2.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:76a81684d58f60f422c083cc88ff660edbf9627c9ab7bf91309e1c98d122ac53",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/invalid-signature-0.2-body-0.1-prefix",
+      "declaration": "ed25519-invalid-signature-0.2-body-0.1-prefix.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:686267b203a5f4a58deaae2a8bfea5c63cca80b444421ef14a22e48c5dde8342",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ed25519/invalid-signature-0.1-body-0.2-prefix",
+      "declaration": "ed25519-invalid-signature-0.1-body-0.2-prefix.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:b9c651bbd963ea5777e132c09983c84cba37c2d35625c45a52ec5c5e210d3e3f",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/format-0.1-not-accepted",
+      "declaration": "ed25519-format-0.1-not-accepted.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "formats": [
+        "addon-declaration/0.2"
+      ],
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ed25519/format-0.2-not-accepted",
+      "declaration": "ed25519-format-0.2-not-accepted.json",
+      "pubkey": "v=MCPv1; k=ed25519; p=hGQLxqlhPOWcx3JLA6d5vLuHLw66h+ChnvvGUGcpDxo=",
+      "now": "2026-11-18T12:00:00Z",
+      "formats": [
+        "addon-declaration/0.1"
+      ],
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/valid",
+      "declaration": "ecdsap384-valid.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ecdsap384-previous-0.2.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": []
+        },
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.2"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-no-contact",
+      "declaration": "ecdsap384-valid-no-contact.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:f640b40d4c3550230eebc55b3be1ae0517dd8e469467c875844a309effff08b6",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-null-extras",
+      "declaration": "ecdsap384-valid-null-extras.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-no-extras.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:caab91ba2a48d3513f7b1d09fdc0461f5648c6b0052da0fb7afaa4579e543def",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-0.1-previous",
+      "declaration": "ecdsap384-valid-0.1-previous.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:d947879accd385d49cf77dca0779628d09e4d6821d008cc65293ec4ddaeb987b",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-from-0.1",
+      "declaration": "ecdsap384-valid-chain-from-0.1.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "previous": "ecdsap384-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:555323522b8835c1fa8000a417dfede44a9b7d183947e07c1e162a7e64917875",
+        "format": "addon-declaration/0.2",
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-from-0.1-format-0.2-only",
+      "declaration": "ecdsap384-valid-chain-from-0.1-format-0.2-only.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-0.1.json",
+      "formats": [
+        "addon-declaration/0.2"
+      ],
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:555323522b8835c1fa8000a417dfede44a9b7d183947e07c1e162a7e64917875",
+        "format": "addon-declaration/0.2",
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": false,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-from-0.1-key-change",
+      "declaration": "ecdsap384-valid-chain-from-0.1-key-change.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=Al7uKVNvsGPxVm8JEwWXZAXbRVMHeKGan2fhovY2BEBqoXjuOzs9pS82N2vlV+u+7A==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:44f03cd8fc43b07a5410f6c269e725652703eff6dabf9fdf55f172b597d73528",
+        "format": "addon-declaration/0.2",
+        "keyChangeNote": true,
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "not_checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-chain-from-0.1-key-change-both-keys",
+      "declaration": "ecdsap384-valid-chain-from-0.1-key-change-both-keys.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=Al7uKVNvsGPxVm8JEwWXZAXbRVMHeKGan2fhovY2BEBqoXjuOzs9pS82N2vlV+u+7A==\nv=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-0.1.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:44f03cd8fc43b07a5410f6c269e725652703eff6dabf9fdf55f172b597d73528",
+        "format": "addon-declaration/0.2",
+        "keyChangeNote": true,
+        "formatChangeNote": true,
+        "chain": {
+          "keyChanged": true,
+          "previousSignature": "checked",
+          "previousFormat": "addon-declaration/0.1"
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/chain-mismatch-from-forged-0.1",
+      "declaration": "ecdsap384-chain-mismatch-from-forged-0.1.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-0.1-forged.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:555323522b8835c1fa8000a417dfede44a9b7d183947e07c1e162a7e64917875"
+      }
+    },
+    {
+      "id": "ecdsap384/chain-mismatch-0.1-follows-0.2",
+      "declaration": "ecdsap384-chain-mismatch-0.1-follows-0.2.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "previous": "ecdsap384-previous-0.2.json",
+      "expect": {
+        "state": "chain_mismatch",
+        "exitCode": 9,
+        "declarationHash": "sha256:727ef49f00a40665e8571c1328b549da14125b5d4fbd559b719629385dc6535f",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/tools-extras-mismatch",
+      "declaration": "ecdsap384-tools-extras-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-extras-changed.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-contract-mismatch",
+      "declaration": "ecdsap384-tools-contract-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-contract-changed.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "toolSetDigest": {
+          "contract": "mismatch",
+          "extras": "match",
+          "differs": [
+            "contract"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-null-extras-mismatch",
+      "declaration": "ecdsap384-tools-null-extras-mismatch.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:caab91ba2a48d3513f7b1d09fdc0461f5648c6b0052da0fb7afaa4579e543def",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-extras-declared-none-received",
+      "declaration": "ecdsap384-tools-extras-declared-none-received.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-no-extras.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "mismatch",
+          "differs": [
+            "extras"
+          ],
+          "noDigest": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-no-extras-digest",
+      "declaration": "ecdsap384-tools-no-extras-digest.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-name.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "toolSetDigest": {
+          "contract": "mismatch",
+          "extras": "no_digest",
+          "extrasCode": "TSD-NAME",
+          "differs": [
+            "contract"
+          ],
+          "noDigest": [
+            "extras"
+          ],
+          "repeatedNames": [
+            {
+              "name": "a",
+              "count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-incomplete-list",
+      "declaration": "ecdsap384-tools-incomplete-list.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-page.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:2c6c2ff4dbc749700e8a24c5f902e295412ccc73ccb5e7c57cac15329aaf31a9",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-PAGE",
+          "extras": "no_digest",
+          "extrasCode": "TSD-PAGE",
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-extras-tsd-text",
+      "declaration": "ecdsap384-tools-extras-tsd-text.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-text.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:b0350830624d364b4b2dadcdf9c2fb2828d7287d22aa27af7a2b74b11618727e",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "no_digest",
+          "extrasCode": "TSD-TEXT",
+          "differs": [],
+          "noDigest": [
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-contract-tsd-number",
+      "declaration": "ecdsap384-tools-contract-tsd-number.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-number.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:b0350830624d364b4b2dadcdf9c2fb2828d7287d22aa27af7a2b74b11618727e",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-NUMBER",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [
+            "contract"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-tsd-tool",
+      "declaration": "ecdsap384-tools-tsd-tool.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-tsd-tool.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:b0350830624d364b4b2dadcdf9c2fb2828d7287d22aa27af7a2b74b11618727e",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": "TSD-TOOL",
+          "extras": "no_digest",
+          "extrasCode": "TSD-TOOL",
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/tools-unreadable",
+      "declaration": "ecdsap384-tools-unreadable.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-unreadable.json",
+      "expect": {
+        "state": "tools_hash_mismatch",
+        "exitCode": 8,
+        "declarationHash": "sha256:b0350830624d364b4b2dadcdf9c2fb2828d7287d22aa27af7a2b74b11618727e",
+        "toolSetDigest": {
+          "contract": "no_digest",
+          "contractCode": null,
+          "extras": "no_digest",
+          "extrasCode": null,
+          "differs": [],
+          "noDigest": [
+            "contract",
+            "extras"
+          ],
+          "repeatedMembers": null,
+          "repeatedNames": null
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-repeated-tool-name",
+      "declaration": "ecdsap384-valid-repeated-tool-name.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-repeated-name-moved.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:7983325952fb295208fd32e06f8a1fb850046eaa446cb6f50faa91c5deec383b",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [],
+          "repeatedMembers": 0,
+          "repeatedNames": [
+            {
+              "name": "f",
+              "count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/valid-repeated-member",
+      "declaration": "ecdsap384-valid-repeated-member.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AtM0n28VOKjZqiwUAqmk55yhsWPnb/RnrS+vVzwPoz2pDfoL9b/tGzZ7VSqVAIzRVQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "tools": "tools-repeated-member.json",
+      "expect": {
+        "state": "valid",
+        "exitCode": 0,
+        "declarationHash": "sha256:6b5107cf380a4770dc0e914a9d59a0fc966a117e83f0c14f1110bcf160a68bf8",
+        "format": "addon-declaration/0.2",
+        "toolSetDigest": {
+          "contract": "match",
+          "extras": "match",
+          "differs": [],
+          "noDigest": [],
+          "repeatedMembers": 1,
+          "repeatedNames": []
+        }
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-tools-hash-member",
+      "declaration": "ecdsap384-malformed-tools-hash-member.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-both-members",
+      "declaration": "ecdsap384-malformed-both-members.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-hex-digest",
+      "declaration": "ecdsap384-malformed-hex-digest.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-missing-extras",
+      "declaration": "ecdsap384-malformed-missing-extras.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-0.1-with-tool-set-digest",
+      "declaration": "ecdsap384-malformed-0.1-with-tool-set-digest.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-relabelled-0.1",
+      "declaration": "ecdsap384-malformed-relabelled-0.1.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/invalid-signature-relabelled-0.1",
+      "declaration": "ecdsap384-invalid-signature-relabelled-0.1.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:8d0244c79449fde4e35c2c56620b87c155518a3f0f14cb7710ee491661c743b6",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/malformed-relabelled-0.2",
+      "declaration": "ecdsap384-malformed-relabelled-0.2.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/invalid-signature-relabelled-0.2",
+      "declaration": "ecdsap384-invalid-signature-relabelled-0.2.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:727ef49f00a40665e8571c1328b549da14125b5d4fbd559b719629385dc6535f",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/invalid-signature-0.2-body-0.1-prefix",
+      "declaration": "ecdsap384-invalid-signature-0.2-body-0.1-prefix.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:9a227470ecbea2a6bd42b39db28ee8564b6f708cb37fe4b0eef4f5285d9aba11",
+        "format": "addon-declaration/0.2"
+      }
+    },
+    {
+      "id": "ecdsap384/invalid-signature-0.1-body-0.2-prefix",
+      "declaration": "ecdsap384-invalid-signature-0.1-body-0.2-prefix.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "expect": {
+        "state": "invalid_signature",
+        "exitCode": 3,
+        "declarationHash": "sha256:bd8579f51132ff9721f724e408e91033a1fadc40588414f07a6158805e106c20",
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/format-0.1-not-accepted",
+      "declaration": "ecdsap384-format-0.1-not-accepted.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "formats": [
+        "addon-declaration/0.2"
+      ],
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.1"
+      }
+    },
+    {
+      "id": "ecdsap384/format-0.2-not-accepted",
+      "declaration": "ecdsap384-format-0.2-not-accepted.json",
+      "pubkey": "v=MCPv1; k=ecdsap384; p=AyaThyZ+AbVrY6fxTba6RC2/eMmWYQW4ME6TegrwE9Mbbz2ogSLBSADqCAG5lwl+EQ==",
+      "now": "2026-11-18T12:00:00Z",
+      "formats": [
+        "addon-declaration/0.1"
+      ],
+      "expect": {
+        "state": "malformed",
+        "exitCode": 2,
+        "format": "addon-declaration/0.2"
+      }
+    }
+  ],
+  "fields": [
+    {
+      "id": "digest/0",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "expect": "accept"
+    },
+    {
+      "id": "digest/1",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/+/A=",
+      "expect": "accept"
+    },
+    {
+      "id": "digest/2",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns=",
+      "expect": "accept"
+    },
+    {
+      "id": "digest/3",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256:1c21e2592aa558e3ff2294b71c099f2996fe7f2f0ceec4007151daa3dc954e7b",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/4",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/5",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256--_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_A=",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/6",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTnt=",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/7",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "SHA256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns=",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/8",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns=\n",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/9",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-11LCxR+6DimqGQVwqdQlPkQHegWNMpf6OlYw1b0BJiL5fCisrtMTtcg7uZDKp9qF",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/10",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha384-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns=",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/11",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "sha256-",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/12",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "digest/13",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": null,
+      "expect": "reject"
+    },
+    {
+      "id": "digest/14",
+      "rule": "digest",
+      "pointer": "/toolSetDigest/contract",
+      "value": 32,
+      "expect": "reject"
+    },
+    {
+      "id": "extras/15",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": null,
+      "expect": "accept"
+    },
+    {
+      "id": "extras/16",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      "expect": "accept"
+    },
+    {
+      "id": "extras/17",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": "null",
+      "expect": "reject"
+    },
+    {
+      "id": "extras/18",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "extras/19",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": false,
+      "expect": "reject"
+    },
+    {
+      "id": "extras/20",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": "sha256:1c21e2592aa558e3ff2294b71c099f2996fe7f2f0ceec4007151daa3dc954e7b",
+      "expect": "reject"
+    },
+    {
+      "id": "extras/21",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTnt=",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/22",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest/spec",
+      "value": "mcp-tool-set-digest/1",
+      "expect": "accept"
+    },
+    {
+      "id": "tool-set-digest/23",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest/spec",
+      "value": "mcp-tool-set-digest/2",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/24",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest/spec",
+      "value": "mcp-tool-set-digest/1 ",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/25",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest/spec",
+      "value": "MCP-TOOL-SET-DIGEST/1",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/26",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest/note",
+      "value": "x",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/27",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest",
+      "value": "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns=",
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/28",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest",
+      "value": [
+        "sha256-HCHiWSqlWOP/IpS3HAmfKZb+fy8M7sQAcVHao9yVTns="
+      ],
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/29",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest",
+      "value": null,
+      "expect": "reject"
+    },
+    {
+      "id": "toolsHash/30",
+      "rule": "toolsHash",
+      "pointer": "/toolsHash",
+      "value": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "expect": "reject"
+    },
+    {
+      "id": "spec/31",
+      "rule": "spec",
+      "pointer": "/spec",
+      "value": "addon-declaration/0.1",
+      "expect": "reject"
+    },
+    {
+      "id": "spec/32",
+      "rule": "spec",
+      "pointer": "/spec",
+      "value": "addon-declaration/0.3",
+      "expect": "reject"
+    },
+    {
+      "id": "spec/33",
+      "rule": "spec",
+      "pointer": "/spec",
+      "value": "addon-declaration/0.2 ",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/34",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "https://example.com/security",
+      "expect": "accept"
+    },
+    {
+      "id": "contact/35",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "https://a.com",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/36",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "mailto:a@b",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/37",
+      "rule": "contact",
+      "pointer": "/contact",
+      "value": "",
+      "expect": "reject"
+    },
+    {
+      "id": "contact/38",
+      "rule": "contact",
+      "pointer": "/contact",
+      "remove": true,
+      "expect": "accept"
+    },
+    {
+      "id": "extras/39",
+      "rule": "extras",
+      "pointer": "/toolSetDigest/extras",
+      "remove": true,
+      "expect": "reject"
+    },
+    {
+      "id": "tool-set-digest/40",
+      "rule": "tool-set-digest",
+      "pointer": "/toolSetDigest",
+      "remove": true,
+      "expect": "reject"
+    }
+  ]
+}

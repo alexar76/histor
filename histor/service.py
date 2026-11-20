@@ -148,7 +148,10 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
     """
     interval = services.settings.crawl_interval_s
     remote = services.settings.remote_interval_s > 0
-    if interval <= 0 and not remote:
+    # The subregistry's copy (histor.subregistry) has its own rhythm and needs no crawl: an instance that
+    # only serves an organisation's list runs with both crawl intervals at 0.
+    mirror = services.settings.subregistry_sync_s if services.settings.subregistry else 0
+    if interval <= 0 and not remote and not mirror:
         return
     retry = min(interval, 3600)
     booted = datetime.now(UTC)
@@ -197,6 +200,20 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
             except Exception:  # noqa: BLE001 - a site's card must not end the schedule
                 log.exception("server card refresh failed")
 
+    mirrored = [time.monotonic() - mirror]  # due at the first tick: a new instance has nothing to serve yet
+    mirroring = threading.Lock()
+
+    def sync_subregistry() -> None:
+        from histor import subregistry
+
+        with mirroring:
+            try:
+                result = subregistry.sync_for(services)
+                if result["stored"] or result["gone"] or result["mode"] != "incremental":
+                    log.warning("subregistry sync: %s", result)
+            except Exception:  # noqa: BLE001 - an upstream that is down must not end the schedule
+                log.exception("subregistry sync failed")
+
     if services.stop.wait(first_wait):
         return
     if remote:
@@ -208,6 +225,9 @@ def scheduler(services: Services, *, first_wait: float = 15.0, tick: float = 300
             if refresh and time.monotonic() - refreshed[0] >= refresh and not refreshing.locked():
                 refreshed[0] = time.monotonic()
                 threading.Thread(target=refresh_declarations, name="histor-declared", daemon=True).start()
+            if mirror and time.monotonic() - mirrored[0] >= mirror and not mirroring.locked():
+                mirrored[0] = time.monotonic()
+                threading.Thread(target=sync_subregistry, name="histor-subregistry", daemon=True).start()
         except Exception:  # noqa: BLE001 - a transient DB error must not end the schedule
             log.exception("scheduler tick failed")
         if services.stop.wait(tick):

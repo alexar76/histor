@@ -202,19 +202,36 @@ class DeclarationFetcher:
     own services. No redirects, a short timeout, at most 64 KiB."""
 
     def __init__(self, *, allow_private: bool = False, transport: httpx.BaseTransport | None = None,
-                 timeout: float = FETCH_TIMEOUT_S, resolver: Any = None) -> None:
+                 timeout: float = FETCH_TIMEOUT_S, resolver: Any = None, clock: Any = None) -> None:
         self.allow_private = allow_private
         self.transport = transport
         self.timeout = timeout
         self.resolver = resolver  # tests only: a stand-in for DNS
+        self.clock = clock        # tests only: () -> aware datetime
 
     def fetch(self, url: str) -> tuple[list[dict[str, Any]], list[str]]:
+        """The sets a declaration file names."""
+        return parse_file(self.get(url))
+
+    def fetch_signed(self, listing: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+        """(sets, notes, detail) of the signed statement a registry listing points at
+        (histor.signed_declaration): *listing* is that module's pointer context. A check that does not
+        pass raises DeclarationError with the detail in ``.detail``."""
+        from datetime import UTC, datetime
+
+        from histor.signed_declaration import read
+
+        now = self.clock() if self.clock else datetime.now(UTC)
+        return read(self.get, listing, now, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+    def get(self, url: str, *, limit: int = MAX_FILE_BYTES, accept: str = "application/json") -> bytes:
+        """The body at *url*: address checked and pinned, no redirects, at most *limit* bytes."""
         try:
             pinned = resolve_public(url, allow_private=self.allow_private,
                                     **({"resolver": self.resolver} if self.resolver else {}))
         except BlockedAddress as exc:
             raise DeclarationError(f"refused: {exc}") from exc
-        headers = {"Host": pinned.host_header, "Accept": "application/json", "User-Agent": USER_AGENT}
+        headers = {"Host": pinned.host_header, "Accept": accept, "User-Agent": USER_AGENT}
         extensions = {"sni_hostname": pinned.sni_hostname} if pinned.sni_hostname else {}
         try:
             with httpx.Client(timeout=httpx.Timeout(self.timeout, connect=min(self.timeout, 5.0)),
@@ -229,13 +246,13 @@ class DeclarationFetcher:
                     body = b""
                     for chunk in response.iter_bytes():
                         body += chunk
-                        if len(body) > MAX_FILE_BYTES:
-                            raise DeclarationError(f"the file is larger than {MAX_FILE_BYTES // 1024} KiB")
+                        if len(body) > limit:
+                            raise DeclarationError(f"the file is larger than {limit // 1024} KiB")
                 finally:
                     response.close()
         except httpx.HTTPError as exc:
             raise DeclarationError(f"unreachable: {type(exc).__name__}") from exc
-        return parse_file(body)
+        return body
 
 
 def public(row: dict[str, Any]) -> dict[str, Any]:
@@ -245,7 +262,7 @@ def public(row: dict[str, Any]) -> dict[str, Any]:
         ("toolCount", row["tool_count"]),
         ("when", row["when_text"]),
         ("source", row.get("source") or "registry"),
-        ("url", row.get("url") if (row.get("source") in ("url", "card")) else None),
+        ("url", row.get("url") if (row.get("source") in ("url", "signed", "card")) else None),
         ("registryVersion", row["registry_version"]),
         ("firstDeclared", row["first_declared"]),
         ("lastDeclared", row["last_declared"]),

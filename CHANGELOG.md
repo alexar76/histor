@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- **Subregistry.** With `HISTOR_SUBREGISTRY=1` an instance serves registry entries in the MCP registry's v0.1 API
+  (`GET /v0.1/servers`, `/v0.1/servers/{serverName}/versions`, `/v0.1/servers/{serverName}/versions/{version}`, with the
+  CORS headers a host application needs), as the MCP documentation describes a subregistry: the upstream entry
+  unchanged, and what HISTOR observed under `_meta["dev.modelmarket.histor/observed"]` (per remote or package: last
+  read, tool-set digest, unchanged since, number of changes). Entries are copied, not proxied: one walk of every latest
+  version, then `updated_since` from a checkpoint each hour, a full walk each week (migration 026, table
+  `registry_entries`). `HISTOR_SUBREGISTRY_ALLOW` (server names or `namespace/*`) makes the copy hold those servers
+  only: the list an organisation gives its hosts; `HISTOR_SUBREGISTRY_UPSTREAM` can be another subregistry, whose
+  `_meta` is kept. `python -m histor.subregistry sync|status`; `GET /api/v1/subregistry`. Off by default. Not done:
+  versions superseded before the first sync, and status changes of a version that is no longer the latest.
+- **Signed publisher statements.** HISTOR reads the `addonDeclaration` pointer (`{url, hash}`) in a registry listing and
+  checks the `addon-declaration` statement behind it (formats 0.1 and 0.2) as section 8a of that format's specification
+  says: only the by-hash path on the namespace's domain is fetched, the file must be the one named, it is compared with
+  the listing (name, version, remotes), verified under the published key it names (Ed25519 or ECDSA P-384), and a newer
+  statement beside it is put in force only through a `previous` history under the same key. The reading of the format
+  passes the specification's conformance vectors (116 declarations, 181 single-member cases; vendored in
+  `tests/vectors/addon-declaration`). A 0.2 statement's contract digest is recorded as a declared set with
+  `source: "signed"`; the check itself (state, statement in force, key, dates, both digests) is kept and shown as
+  `declarationFile.statement`, with `agreesWithObserved` next to it. Migration 025 adds two nullable columns to
+  `declaration_urls`. Not done: the format's tool check, and keys published by the `dns` method.
+- **`GET /api/v1/fingerprints`.** The digests the Vercel AI SDK's `fingerprintTools` computes, from HISTOR's record of a
+  server: a baseline for `detectToolDrift` taken by an outside observer. Reproduced on 16 definitions against the
+  library itself (`ai` 7.0.177, `@ai-sdk/mcp` 2.0.101; `tests/vectors/ai-sdk-fingerprint`).
+
 ## 0.10.0 — 2026-11-17
 
 - **`payer-audit --many-others-min-recipients N`.** The cut-off behind `external_payers_paying_many_others` was the

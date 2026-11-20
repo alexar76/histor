@@ -432,12 +432,13 @@ class Store:
         read this time is not a withdrawal. A digest both name counts as the registry's. Returns
         (sets declared now, sets withdrawn). Server-card sets (source 'card') are histor.cards' to manage."""
         active = {d: src for d, src in active.items() if src != "card"}
-        keep = {d for d, src in active.items() if (src == "url" and url is None) or (src != "url" and registry is None)}
+        filed = ("url", "signed")  # read from the file the entry points at; 'signed': histor.signed_declaration
+        keep = {d for d, src in active.items() if (src in filed and url is None) or (src not in filed and registry is None)}
         entries: dict[str, tuple[dict[str, Any], str]] = {}
         for source, sets in (("registry", registry), ("url", url)):
             for d in sets or ():
                 if d["digest"] not in keep and d["digest"] not in entries:
-                    entries[d["digest"]] = (d, source)
+                    entries[d["digest"]] = (d, d["source"] if source == "url" and d.get("source") in filed else source)
         for digest, (d, source) in entries.items():
             tx.execute(
                 "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
@@ -453,21 +454,27 @@ class Store:
         return len(entries) + len(keep), len(gone)
 
     @staticmethod
-    def _note_read(tx: Tx, target_id: str, url: str, now: str, error: str | None) -> None:
-        """How the last read of a target's declaration file went. A new URL starts a new record."""
+    def _note_read(tx: Tx, target_id: str, url: str, now: str, error: str | None,
+                   pointer: str | None = None, statement: str | None = None) -> None:
+        """How the last read of a target's declaration file went. A new URL starts a new record.
+        *pointer*: for a signed statement, what the listing says (JSON); *statement*: the detail of this
+        check (JSON), kept from the last check that produced one."""
         tx.execute(
-            "INSERT INTO declaration_urls(target_id, url, first_seen, last_fetched, last_ok, last_error) "
-            "VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET "
+            "INSERT INTO declaration_urls(target_id, url, first_seen, last_fetched, last_ok, last_error, pointer, statement) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET "
+            "statement=CASE WHEN excluded.statement IS NOT NULL THEN excluded.statement "
+            "WHEN declaration_urls.url = excluded.url THEN declaration_urls.statement ELSE NULL END, "
+            "pointer=excluded.pointer, "
             "first_seen=CASE WHEN declaration_urls.url = excluded.url THEN declaration_urls.first_seen ELSE excluded.first_seen END, "
             "last_ok=CASE WHEN excluded.last_ok IS NOT NULL THEN excluded.last_ok "
             "WHEN declaration_urls.url = excluded.url THEN declaration_urls.last_ok ELSE NULL END, "
             "url=excluded.url, last_fetched=excluded.last_fetched, last_error=excluded.last_error",
-            (target_id, url, now, now, None if error else now, error),
+            (target_id, url, now, now, None if error else now, error, pointer, statement),
         )
 
     @staticmethod
     def sync_declarations(tx: Tx, targets: list[Any], now: str,
-                          files: dict[str, tuple[list[dict[str, Any]] | None, str | None]] | None = None) -> dict[str, Any]:
+                          files: dict[str, tuple[Any, ...]] | None = None) -> dict[str, Any]:
         """Record what each listed target's publisher declares now (histor.declared): the sets in its
         registry entry, and those in the declaration file the entry points at, read just before this
         transaction (*files*: url → (sets, error)). Only targets in this harvest are touched: a
@@ -489,8 +496,11 @@ class Store:
                 continue
             from_url: list[dict[str, Any]] | None = []
             if t.declared_url:
-                from_url, error = files.get(t.declared_url, (None, "not read"))
-                Store._note_read(tx, t.id, t.declared_url, now, error)
+                read = files.get(t.declared_url, (None, "not read"))
+                from_url, error = read[0], read[1]
+                pointer = getattr(t, "declared_pointer", None)
+                Store._note_read(tx, t.id, t.declared_url, now, error, dumps(pointer) if pointer else None,
+                                 dumps(read[2]) if len(read) > 2 and read[2] else None)
                 urls.add(t.declared_url)
                 if error and t.declared_url not in {u["url"] for u in unread} and len(unread) < 20:
                     unread.append({"server": t.name, "url": t.declared_url, "error": error})
@@ -510,18 +520,20 @@ class Store:
         """Every listed target whose registry entry points at a declaration file."""
         with self.db.read() as tx:
             return [dict(r) for r in tx.execute(
-                "SELECT d.target_id, d.url, t.name, t.version FROM declaration_urls d "
+                "SELECT d.target_id, d.url, d.pointer, t.name, t.version FROM declaration_urls d "
                 "JOIN targets t ON t.id = d.target_id WHERE t.delisted = 0 ORDER BY d.target_id")]
 
-    def refresh_declarations(self, rows: list[dict[str, Any]], files: dict[str, tuple[list[dict[str, Any]] | None, str | None]],
+    def refresh_declarations(self, rows: list[dict[str, Any]], files: dict[str, tuple[Any, ...]],
                              now: str) -> dict[str, Any]:
         """Apply declaration files read between crawls; the registry's own sets are left as they are."""
         changed = withdrawn = 0
         with self.db.transaction() as tx:
             active = Store._active_declarations(tx)
             for row in rows:
-                sets, error = files.get(row["url"], (None, "not read"))
-                Store._note_read(tx, row["target_id"], row["url"], now, error)
+                read = files.get(row["url"], (None, "not read"))
+                sets, error = read[0], read[1]
+                Store._note_read(tx, row["target_id"], row["url"], now, error, row.get("pointer"),
+                                 dumps(read[2]) if len(read) > 2 and read[2] else None)
                 before = set(active.get(row["target_id"], {}))
                 _, w = Store._apply_declaration(tx, row["target_id"], row["version"], now, None, sets,
                                                 active.get(row["target_id"], {}))
@@ -634,10 +646,18 @@ class Store:
     def declaration_file(self, target_id: str) -> dict[str, Any] | None:
         """The target's declaration file and how its last reads went."""
         with self.db.read() as tx:
-            row = tx.one("SELECT url, first_seen, last_fetched, last_ok, last_error FROM declaration_urls WHERE target_id=?",
-                         (target_id,))
-        return {k: v for k, v in (("url", row["url"]), ("firstSeen", row["first_seen"]), ("lastRead", row["last_fetched"]),
-                                  ("lastOk", row["last_ok"]), ("lastError", row["last_error"])) if v is not None} if row else None
+            row = tx.one("SELECT url, first_seen, last_fetched, last_ok, last_error, pointer, statement "
+                         "FROM declaration_urls WHERE target_id=?", (target_id,))
+        if not row:
+            return None
+        pointer = json.loads(row["pointer"]) if row["pointer"] else None
+        return {k: v for k, v in (
+            ("url", row["url"]), ("firstSeen", row["first_seen"]), ("lastRead", row["last_fetched"]),
+            ("lastOk", row["last_ok"]), ("lastError", row["last_error"]),
+            # A signed statement the listing points at (histor.signed_declaration): the pointer's hash and the
+            # detail of the last check that produced one.
+            ("kind", "signed" if pointer else None), ("pointerHash", pointer["hash"] if pointer else None),
+            ("statement", json.loads(row["statement"]) if row["statement"] else None)) if v is not None}
 
     # -- client reports -------------------------------------------------------------
 

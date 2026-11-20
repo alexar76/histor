@@ -29,6 +29,7 @@ flowchart LR
 |---|---|---|
 | GET | `/api/v1/servers?q=&state=&limit=&offset=` | index entries for remote endpoints and packages, with `total` before pagination; `state` ∈ `all`, `pinned`, `changed`, `flagged`, `unobserved` (no tool list read), `undigested` (a list read, no digest); `q` matches name, endpoint, title |
 | GET | `/api/v1/servers/<id>` | one target: current tool set, WARDEN matches with spans, labels, collapsed timeline, changes, 30-day client reports, tool sets the publisher declares (`declaredToolSets`, from the registry entry, a declaration file or the server card) and the server card (`serverCard`) |
+| GET | `/api/v1/fingerprints?endpoint=…&profile=ai-sdk` | the digests a client library computes for the recorded tools (below: a baseline for client-side fingerprints) |
 | GET | `/badge/<id>.svg` | README badge: `pinned ‹date›`, `unchanged Nd`, `changed ‹date›`, `not observed`, `not listed` |
 
 `<id>` is the first 16 hex characters of `sha256(name + "\n" + endpoint)`. The `endpoint` is the remote URL or the package locator.
@@ -211,6 +212,51 @@ A declaration is the publisher's word: the registry vouches that it comes from w
 - **Where it shows.** `/api/v1/servers/<id>` carries `serverCard` (`url`, `status`, `checkedAt`, `toolSetDigest`, `toolCount`, `toolNames`), and the page shows the card beside what the server serves. `/check` adds `target.serverCard` and names the card in its note when the set sent is the card's.
 
 Like every declaration, a card is the operator's word: on 2026-11-02, 49 of 137 cards differed from what their server served.
+
+**Signed statements.** A fourth source (`source: "signed"`, `histor/signed_declaration.py`): a statement the publisher signs and the registry listing points at, `"addonDeclaration": {"url", "hash"}` under `io.modelcontextprotocol.registry/publisher-provided`. The statement is an `addon-declaration` (formats 0.1 and 0.2, https://github.com/bcrypto0/addon-declaration; first published for `com.rtlpdf/arabic-pdf` on 2026-11-19). HISTOR checks a listing as section 8a of that specification says, in its order and with its result states, and its reading of the format passes that repository's conformance vectors (116 declarations, 181 single-member cases).
+
+- **What is fetched.** Only the by-hash path for this name and hash on the domain the namespace names (or a parent of it), the key file `/.well-known/mcp-registry-auth` on `key.domain`, and beside the statement `versions/<version>.json`, `latest.json` and the by-hash files their `previous` history names. Addresses are checked and pinned, redirects are not followed, a statement is at most 16,384 bytes. An `io.github` namespace is out of scope.
+- **What is checked.** The file is the one named (its declaration hash equals the pointer hash, compared before anything in it is used); the rules of its format; the listing's name, version and remotes against the statement's; the namespace rule; the signature (Ed25519 or ECDSA P-384) under the published key the statement names; the clock.
+- **A newer statement.** A file beside the named one is put in force only when it is for this name and version, its `previous` history reaches the pointer hash within 8 links, every statement on the way verifies, and no link crosses a change of key. Otherwise it is listed with the reason and set aside.
+- **What counts.** A 0.2 statement in force states the two digests of `mcp-tool-set-digest/1`; its `contract` value is recorded as a declared set. A 0.1 statement states its own `toolsHash`, which no observer's digest can be compared with: the check is recorded, no set is.
+- **Where it shows.** `declaredToolSets[].source` is `"signed"`. `declarationFile` has `kind: "signed"`, `pointerHash`, `lastOk` / `lastError` and `statement`: the last check (`state`, `named`, `inForce` with `hash`, `format`, `issuedAt`, `expiresAt`, `key`, `toolSetDigest`, the `newer` files read, `notes`). `agreesWithObserved` says per digest whether the statement in force states what HISTOR recorded for the server now (`contract`, `extras`; `extras` is null when HISTOR's value is not in the RFC 8785 form). `/check` says "in a statement signed with its registry key" when the set sent is the stated one.
+- **What is not done.** The tool check of the format (HISTOR does not fetch a tool list for it; it shows the stated digests next to its own record). Keys published by the `dns` method: HISTOR has no TXT lookup, so such a listing is `key_lookup_failed`. One file is read per server: an entry that also names a declaration file under `dev.modelmarket.histor/tool-sets` has that file read, and the pointer is reported as not read.
+- **A check that does not pass** (`listing_mismatch`, `invalid_signature`, `expired`, `key_not_found` and the rest) is shown as a failed read with its state; what the publisher declared before is kept, not withdrawn.
+
+## A baseline for client-side fingerprints
+
+`GET /api/v1/fingerprints?endpoint=<url>&profile=ai-sdk` (or `package=npm:<name>`, `name=<registry name>`, `id=<server id>`) answers with the digests a client library would compute for the tools HISTOR recorded, so a client that pins tool definitions can compare with what an outside observer saw instead of with its own first connect.
+
+Profile `ai-sdk` is `fingerprintTools` of the Vercel AI SDK (`histor/fingerprint_profiles.py`; reproduced on 16 definitions against `ai` 7.0.177 with `@ai-sdk/mcp` 2.0.101, `tests/vectors/ai-sdk-fingerprint`). With that SDK:
+
+```js
+import { detectToolDrift, fingerprintTools } from 'ai';
+
+const baseline = await (await fetch(
+  'https://histor.modelmarket.dev/api/v1/fingerprints?profile=ai-sdk&endpoint=' + encodeURIComponent(endpoint))).json();
+const drift = detectToolDrift(await fingerprintTools(await client.tools()), baseline.tools);
+```
+
+The answer: `tools` (name → digest), `observed` (`lastObserved`, `toolSetDigest`, `toolSetUnchangedSince`, `toolExtrasDigest`, `toolCount`), `checkedAgainst` (the library versions the profile was reproduced on), and when they apply `ifDescriptionAbsent` (HISTOR keeps a description that was not sent as `""`, which the library hashes differently: the second reading for such tools) and `notComputed` (tools whose other members HISTOR did not keep whole). `tools` is null when HISTOR has no tool set for the server.
+
+What it is and is not. It is what an unauthenticated read from HISTOR's address returned at `lastObserved`; a server can answer another client differently, and a server behind sign-in has no record. The library's fingerprint does not cover annotations other than `title`, `outputSchema` or `_meta`; `toolExtrasDigest` in the same answer moves when those do.
+
+## Subregistry (the MCP registry's v0.1 API)
+
+An instance started with `HISTOR_SUBREGISTRY=1` serves its copy of the registry in the registry's own API, as the MCP documentation describes a subregistry: the same three read routes, the upstream entry unchanged, and HISTOR's observations under its own `_meta` key. A host application that takes a registry address reads it like the official one. Guide: [subregistry.md](subregistry.md).
+
+| Path | Returns |
+|---|---|
+| `GET /v0.1/servers` | a page of entries, one per server version; `cursor`, `limit` (1–100, default 30), `search` (substring of the name), `updated_since` (RFC 3339; brings deleted entries too), `version` (`latest` or exact), `include_deleted` |
+| `GET /v0.1/servers/{serverName}/versions` | the versions kept of one server, newest first |
+| `GET /v0.1/servers/{serverName}/versions/{version}` | one entry; `latest` for the newest |
+| `GET /api/v1/subregistry` | what the copy holds: servers, entries, upstream, the last sync |
+
+`serverName` is URL-encoded (`io.github.acme%2Fbilling`); the plain slash is accepted too. Every `/v0.1/servers` answer carries `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, OPTIONS` and `Access-Control-Allow-Headers: Authorization, Content-Type`. An unknown server is `404` with `{"title", "status", "detail", "error"}` as `application/problem+json`. The routes are read-only.
+
+`_meta["dev.modelmarket.histor/observed"]` is on the latest version of a server HISTOR lists: `type` (`histor.observed/v1`), `log` (this instance), and `targets`, one per remote or package: `id`, `endpoint`, `page`, `notAttempted` (why HISTOR does not dial it), `lastStatus`, `lastObserved`, `toolCount`, `toolSetDigest`, `toolExtrasDigest`, `firstPinned`, `unchangedSince`, `changes`. It is what an unauthenticated read from HISTOR's address returned; a server behind sign-in has `notAttempted` or a failed `lastStatus` and no digest. `_meta["io.modelcontextprotocol.registry/official"]` is the upstream's block with `isLatest` and `status` as the copy knows them now.
+
+The copy holds the latest version of every server and each newer version as it appears; a version superseded before the first sync is not in it.
 
 ## Stats and live badges
 

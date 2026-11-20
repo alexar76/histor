@@ -88,6 +88,7 @@ export const JS_EN = {
   js_declared_src_registry: "in the registry entry",
   js_declared_src_file: "in the file",
   js_declared_src_card: "in the server card",
+  js_declared_src_signed: "in a signed statement",
   js_card: "Server card",
   js_card_note: "The operator's own description of the server, read at its address where robots.txt allows. It is the operator's word, not an observation, and can differ from what the server serves.",
   js_card_declared: "lists {n} tools",

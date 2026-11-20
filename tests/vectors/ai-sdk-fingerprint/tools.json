@@ -1,0 +1,18 @@
+[
+ {"name":"plain","description":"List the orders of the signed-in account.","inputSchema":{"type":"object","properties":{"limit":{"type":"integer"}}}},
+ {"name":"no_description","inputSchema":{"type":"object","properties":{"q":{"type":"string"}}}},
+ {"name":"empty_description","description":"","inputSchema":{"type":"object","properties":{}}},
+ {"name":"with_title","title":"Orders","description":"d","inputSchema":{"type":"object","properties":{}}},
+ {"name":"annotation_title","description":"d","inputSchema":{"type":"object","properties":{}},"annotations":{"title":"From annotations","readOnlyHint":true}},
+ {"name":"both_titles","title":"Top","description":"d","inputSchema":{"type":"object","properties":{}},"annotations":{"title":"Lower"}},
+ {"name":"empty_title","title":"","description":"d","inputSchema":{"type":"object","properties":{}},"annotations":{"title":"Lower"}},
+ {"name":"hints_only","description":"d","inputSchema":{"type":"object","properties":{}},"annotations":{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":true}},
+ {"name":"no_properties","description":"d","inputSchema":{"type":"object"}},
+ {"name":"empty_schema","description":"d","inputSchema":{}},
+ {"name":"open_schema","description":"d","inputSchema":{"type":"object","additionalProperties":true,"required":["b","a"],"properties":{"b":{"type":"array","items":{"enum":["x","y",null,true,1]}},"a":{"type":"object","additionalProperties":{"type":"string"},"properties":{"z":{"type":"number","minimum":-0.0,"maximum":1.0,"default":0.1,"multipleOf":1e-7,"examples":[1e21,123456789012345680000,1.5e300,9007199254740993,-9007199254740993,5e-324,100,1E2,0.000001]}}}}}},
+ {"name":"unicode_text","description":"Emoji 😀, é, sep    , ctl \u0001\u001f, tab\t, quote \" backslash \\ slash / del \u007f nbsp   bom ﻿","inputSchema":{"type":"object","properties":{"😀":{"type":"string"},"ﬁ":{"type":"string"},"a":{"type":"string"},"Z":{"type":"string"},"é":{"type":"string"},"10":{"type":"string"},"9":{"type":"string"}}}},
+ {"name":"with_output_and_meta","description":"d","inputSchema":{"type":"object","properties":{}},"outputSchema":{"type":"object","properties":{"ok":{"type":"boolean"}}},"_meta":{"vendor/x":1},"icons":[{"src":"https://example.com/i.png"}]},
+ {"name":"constructor","description":"d","inputSchema":{"type":"object","properties":{}}},
+ {"name":"toString","description":"d","inputSchema":{"type":"object","properties":{"toString":{"type":"string"},"constructor":{"type":"string"}}}},
+ {"name":"schema_keywords","description":"d","inputSchema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","$defs":{"T":{"type":"string","pattern":"^[a-z]+$"}},"properties":{"t":{"$ref":"#/$defs/T"},"n":{"type":["string","null"],"description":"nullable"}},"additionalProperties":false}}
+]

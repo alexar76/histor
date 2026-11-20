@@ -572,6 +572,36 @@ MIGRATION_024: Statements = (
     "ALTER TABLE observations ADD COLUMN instructions TEXT",
 )
 
+# A signed statement a registry listing points at (histor.signed_declaration), kept with the target's
+# declaration file: what the listing says (url, hash, name, version, remotes) and the detail of the last
+# check (state, the statement in force with its key, dates and digests). Nullable, no default: no rewrite.
+MIGRATION_025: Statements = (
+    "ALTER TABLE declaration_urls ADD COLUMN pointer TEXT",
+    "ALTER TABLE declaration_urls ADD COLUMN statement TEXT",
+)
+
+# The subregistry's copy of registry entries (histor.subregistry): the upstream's `server` object and `_meta`
+# as JSON text, one row per server version. `*_key` are the upstream's times as fixed-width UTC text, so
+# text order is time order; `seen_at` is the sync that last returned the row. A new table: no rewrite.
+MIGRATION_026: Statements = (
+    """
+    CREATE TABLE registry_entries (
+        name TEXT NOT NULL,
+        version TEXT NOT NULL,
+        body TEXT NOT NULL,
+        meta TEXT NOT NULL,
+        status TEXT NOT NULL,
+        is_latest INTEGER NOT NULL DEFAULT 0,
+        published_key TEXT NOT NULL,
+        updated_key TEXT NOT NULL,
+        seen_at TEXT NOT NULL,
+        PRIMARY KEY (name, version)
+    )
+    """,
+    "CREATE INDEX registry_entries_updated ON registry_entries(updated_key)",
+    "CREATE INDEX registry_entries_latest ON registry_entries(is_latest, name)",
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -598,6 +628,8 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (22, "022_signed_revisions", MIGRATION_022),
     (23, "023_extras_rekey", MIGRATION_023),
     (24, "024_observation_instructions", MIGRATION_024),
+    (25, "025_signed_statements", MIGRATION_025),
+    (26, "026_registry_entries", MIGRATION_026),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

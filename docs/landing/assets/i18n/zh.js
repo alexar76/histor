@@ -221,6 +221,7 @@ export default {
   js_declared_src_registry: "在注册表条目中",
   js_declared_src_file: "在文件中",
   js_declared_src_card: "在服务器卡片中",
+  js_declared_src_signed: "在签名声明中",
   js_card: "服务器卡片",
   js_card_note: "服务器运营者自己的描述，在 robots.txt 允许的地址读取。这是运营者的说法，不是观测，可能与服务器实际提供的不同。",
   js_card_declared: "列出 {n} 个工具",

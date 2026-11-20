@@ -1,0 +1,30 @@
+{
+  "spec": "addon-declaration/0.2",
+  "name": "com.example/weather",
+  "version": "1.4.0",
+  "toolsHash": "sha256:8dd9b27db39cfed4d05a80179ef165081c42a4d24b612d94ba3eff8465786aca",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.example.com/mcp"
+    }
+  ],
+  "payment": [
+    {
+      "network": "eip155:84532",
+      "asset": "0x1111111111111111111111111111111111111111",
+      "payTo": "0x2222222222222222222222222222222222222222",
+      "amount": "10000"
+    }
+  ],
+  "contact": "mailto:security@example.com",
+  "issuedAt": "2026-11-18T10:00:00Z",
+  "expiresAt": "2027-05-17T10:00:00Z",
+  "key": {
+    "method": "dns",
+    "domain": "example.com",
+    "alg": "ecdsap384",
+    "id": "sha256:34fac051a15c0a81ab4971aacdf1e1183627c396b61c23647de16ea245affc98"
+  },
+  "signature": "/+3BolNDQZu6mf1OReJOnYEXzsU6/wZ5ETJBY5vnFykzEfFDruY6Rn9WGZo2xjCUb2ntop3aUBGBg6WINriD/DG6ZSWXKhbdCP960IqSU4N6fno3wpf5TVsar8fDeF7Y"
+}

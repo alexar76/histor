@@ -672,7 +672,7 @@ async function serverView(id, done) {
       root.append(el("p", { class: "mono" }, el("span", { class: d.withdrawn ? "faint" : seen ? "ok-t" : "", text: state }),
         ` · ${short(d.toolSetDigest, 20)}`, d.toolCount != null ? ` · ${t("js_declared_tools", { n: d.toolCount })}` : "",
         ...(d.when ? [" · «", ...visible(d.when).nodes, "»"] : []),
-        ` · ${t(d.source === "url" ? "js_declared_src_file" : d.source === "card" ? "js_declared_src_card" : "js_declared_src_registry")}`,
+        ` · ${t(d.source === "url" ? "js_declared_src_file" : d.source === "signed" ? "js_declared_src_signed" : d.source === "card" ? "js_declared_src_card" : "js_declared_src_registry")}`,
         ` · ${fmt(d.firstDeclared)}…${fmt(d.lastDeclared)}`));
     }
   }

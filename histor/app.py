@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge, fingerprints, toolcost, watch_paid
+from histor import __version__, badge, fingerprint_profiles, fingerprints, subregistry, toolcost, watch_paid
 from histor import instructions as instructions_mod
 from histor import signed_revisions as signed_revisions_mod
 from histor.check import MAX_MATCHES, CheckError
@@ -44,6 +44,7 @@ from histor.journey import EVENTS as JOURNEY_EVENTS
 from histor.journey import SOURCES as JOURNEY_SOURCES
 from histor.labels import SHORT
 from histor.lookalike import default_index
+from histor.packages import package_key
 from histor.receipts import AnchorRefused
 from histor.server_page_text import CARD_TEXT, WATCH_TEXT
 from histor.service import Services, crawl_in_background, scheduler
@@ -239,6 +240,26 @@ def _json_or_none(text: str | None) -> Any:
         return json.loads(text) if text else None
     except ValueError:
         return None
+
+def _with_agreement(declaration_file: dict[str, Any] | None, target: dict[str, Any], extras_scheme: str | None) -> dict[str, Any] | None:
+    """A signed statement's two digests next to the ones HISTOR recorded for the server now
+    (histor.signed_declaration): ``agreesWithObserved`` says, per digest, whether they are the same.
+    The extras digest is compared only when HISTOR writes it in the RFC 8785 form the statement uses;
+    a stated ``null`` means no tool has an extra member, which HISTOR records as ``""``."""
+    stated = ((declaration_file or {}).get("statement") or {}).get("inForce", {}).get("toolSetDigest")
+    if not declaration_file or not stated or not target.get("current_toolset"):
+        return declaration_file
+    observed_extras = target.get("current_extras")
+    if observed_extras == "":
+        extras: bool | None = stated.get("extras") is None
+    elif observed_extras is None or extras_scheme != "rfc8785":
+        extras = None
+    else:
+        extras = stated.get("extras") == observed_extras
+    return {**declaration_file, "agreesWithObserved": {
+        "contract": stated.get("contract") == target["current_toolset"], "extras": extras,
+        "observed": target.get("last_ok")}}
+
 
 def create_app(services: Services) -> FastAPI:
     settings = services.settings
@@ -657,6 +678,10 @@ def create_app(services: Services) -> FastAPI:
             label_id = (mtl.get("priorLabel") or {}).get("id")
         return out
 
+    if settings.subregistry:
+        # The MCP registry's v0.1 routes over HISTOR's copy of the registry (histor.subregistry).
+        subregistry.mount(app, services, allowed=lambda request: limiter.allow(f"subregistry:{client_ip(request)}", 600, 60))
+
     @app.get("/api/v1/servers")
     def servers(q: str = Query("", max_length=200), state: str = Query("all", max_length=20),
                 limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0, le=10_000_000)) -> dict[str, Any]:
@@ -732,7 +757,7 @@ def create_app(services: Services) -> FastAPI:
             "clientReports": store.client_reports(target_id, _ago(30)[:10]),
             # What the publisher says this server lists elsewhere (histor.declared): its word, not observations.
             "declaredToolSets": [declared_public(r) for r in store.declared_toolsets(target_id)],
-            "declarationFile": store.declaration_file(target_id),
+            "declarationFile": _with_agreement(store.declaration_file(target_id), t, extras_scheme),
             # The operator's server card, read where robots.txt allows (histor.cards): its word, not an observation.
             "serverCard": store.server_card(target_id),
             # Latest publisher-signed SUPP-06 revision HISTOR has verified (histor.signed_revisions).
@@ -1188,6 +1213,51 @@ def create_app(services: Services) -> FastAPI:
         return await run_in_threadpool(run_check, body, limit_key(request))
 
     CHECK_QUERY_FIELDS = ("endpoint", "url", "package", "name", "toolSetDigest")
+
+    @app.get("/api/v1/fingerprints")
+    def tool_fingerprints(request: Request) -> Response:
+        """Tool fingerprints as a client library computes them, from HISTOR's record of a server
+        (histor.fingerprint_profiles): a baseline for a client that pins tool definitions, taken by an
+        outside observer. ``?endpoint=`` (or ``url``, ``package``, ``name``, ``id``), ``profile=ai-sdk``."""
+        if not limiter.allow(f"fingerprints:{client_ip(request)}", 120, 60):
+            raise HTTPException(status_code=429, detail="too many requests")
+        params = request.query_params
+        profile = params.get("profile") or fingerprint_profiles.PROFILE
+        if profile != fingerprint_profiles.PROFILE:
+            raise HTTPException(status_code=400, detail=f"unknown profile; this instance computes: {fingerprint_profiles.PROFILE}")
+        subject = next((params[k] for k in ("id", "endpoint", "url", "package", "name") if params.get(k)), None)
+        if subject is None or len(subject) > 2000 or "\x00" in subject:
+            raise HTTPException(status_code=400, detail="name the server: endpoint=<url>, package=npm:<name> or pypi:<name>, name=<registry name> or id=<server id>")
+        if params.get("id"):
+            found = [store.target_with_extras(subject)]
+        else:
+            if params.get("package"):
+                registry, _, pkg_name = subject.partition(":")
+                subject = package_key(registry, pkg_name) or subject
+            by_name = bool(params.get("name")) and not any(params.get(k) for k in ("endpoint", "url", "package"))
+            rows = store.targets_by(name=subject) if by_name else store.targets_by(endpoint=subject)
+            pick = next((r for r in rows if not r["delisted"]), rows[0] if rows else None)
+            found = [store.target_with_extras(pick["id"])] if pick else [None]
+        t = found[0]
+        if t is None:
+            raise HTTPException(status_code=404, detail="HISTOR has no record of this server")
+        answer: dict[str, Any] = {
+            "type": "histor.fingerprints/v1", "profile": profile, "checkedAgainst": fingerprint_profiles.CHECKED_AGAINST,
+            "target": {"id": t["id"], "name": t["name"], "endpoint": t["endpoint"], "page": f"{settings.public_base}/s/{t['id']}"},
+            "observed": {"lastObserved": t["last_ok"], "toolSetDigest": t["current_toolset"],
+                         "toolSetUnchangedSince": t["unchanged_since"], "toolExtrasDigest": t["current_extras"],
+                         "toolCount": t["current_count"]},
+        }
+        entries = store.get_blob(t["current_toolset"], "toolset") if t["current_toolset"] else None
+        if not isinstance(entries, list):
+            answer |= {"tools": None, "note": "HISTOR has not recorded a tool set for this server (see lastStatus on its page)."}
+        else:
+            extras = {"tools": {}} if t["current_extras"] == "" else _json_or_none(t["extras_body"])
+            answer |= fingerprint_profiles.from_record(entries, extras if isinstance(extras, dict) else None)
+            answer["note"] = ("What an unauthenticated read from HISTOR's address returned at lastObserved, hashed the way the "
+                              "profile's library hashes it. A server can answer another client differently. The profile does not "
+                              "cover annotations (other than title), outputSchema or _meta: compare toolExtrasDigest for those.")
+        return JSONResponse(answer, headers={"Cache-Control": "public, max-age=60"})
 
     @app.get("/api/v1/check")
     async def check_by_query(request: Request) -> Response:

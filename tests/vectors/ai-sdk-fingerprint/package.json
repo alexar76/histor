@@ -1,0 +1,1 @@
+{"name":"fp-vectors","private":true,"type":"module","dependencies":{"@ai-sdk/mcp":"2.0.101","ai":"7.0.177","zod":"4.1.8"}}

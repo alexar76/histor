@@ -392,8 +392,11 @@ class Crawler:
             stats["curated_endpoints"] = sum(1 for t in curated if not is_package(t))
             stats["curated_packages"] = sum(1 for t in curated if is_package(t))
             stats["not_attempted"] = dict(Counter(t.skip_reason for t in targets if t.skip_reason))
-            files = self._read_declaration_files(
-                {t.declared_url for t in targets if t.declared_url and t.registry != REGISTRY_CURATED})
+            pointing: dict[str, dict[str, Any] | None] = {}
+            for t in targets:
+                if t.declared_url and t.registry != REGISTRY_CURATED:
+                    pointing.setdefault(t.declared_url, t.declared_pointer)
+            files = self._read_declaration_files(pointing)
             declared = self._sync_targets(targets, started, files)
             if declared["servers"] or declared["withdrawn"] or declared.get("ignored"):
                 stats["declared_tool_sets"] = declared
@@ -552,14 +555,22 @@ class Crawler:
             self.remote_running_since = None
             self._remote_lock.release()
 
-    def _read_declaration_files(self, urls: set[str]) -> dict[str, tuple[list[dict[str, Any]] | None, str | None]]:
-        """url → (sets, None) or (None, why it could not be read). Read before any transaction opens:
-        a slow publisher site must never hold the database."""
-        def one(url: str) -> tuple[str, tuple[list[dict[str, Any]] | None, str | None]]:
+    def _read_declaration_files(self, urls: dict[str, dict[str, Any] | None]) -> dict[str, tuple[Any, ...]]:
+        """url → (sets, None) or (None, why it could not be read). *urls* maps each file to None, or, for
+        a signed statement, to what its listing says (histor.signed_declaration); such an entry carries a
+        third member, the detail of the check. Read before any transaction opens: a slow publisher site
+        must never hold the database."""
+        def one(url: str) -> tuple[str, tuple[Any, ...]]:
+            listing = urls[url]
             try:
+                if listing:
+                    sets, _notes, detail = self.declarations.fetch_signed(listing)
+                    return url, (sets, None, detail)
                 sets, _ignored = self.declarations.fetch(url)
                 return url, (sets, None)
             except DeclarationError as exc:
+                if listing:
+                    return url, (None, str(exc)[:300], getattr(exc, "detail", None))
                 return url, (None, str(exc)[:300])
             except Exception as exc:  # noqa: BLE001 - one publisher's file must not stop a crawl
                 return url, (None, f"internal: {type(exc).__name__}")
@@ -637,7 +648,10 @@ class Crawler:
         """Read every declaration file again, between crawls: a publisher who ships a runner adds its
         set to the file, and HISTOR should know within the hour, not the next day."""
         rows = self.store.declaration_files()
-        files = self._read_declaration_files({r["url"] for r in rows})
+        pointing: dict[str, dict[str, Any] | None] = {}
+        for r in rows:
+            pointing.setdefault(r["url"], json.loads(r["pointer"]) if r.get("pointer") else None)
+        files = self._read_declaration_files(pointing)
         with self._declarations_lock:
             return self.store.refresh_declarations(rows, files, self.clock())
 

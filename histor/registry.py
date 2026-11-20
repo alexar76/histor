@@ -23,6 +23,7 @@ from histor.declared import declared_tool_sets
 from histor.exit_reasons import declared_needs
 from histor.mcpclient import USER_AGENT
 from histor.packages import REGISTRIES, package_key, parse_package
+from histor.signed_declaration import pointer as signed_pointer
 from histor.subject import REGISTRY_CURATED, REGISTRY_OFFICIAL
 from histor.untrusted import clean_text
 
@@ -57,6 +58,9 @@ class Target:
     declared_ignored: tuple[str, ...] = field(default=(), compare=False)
     # A declaration file on the publisher's own domain (histor.declared), checked against the namespace.
     declared_url: str | None = field(default=None, compare=False)
+    # A signed statement the listing points at (histor.signed_declaration): url, hash and what the
+    # listing itself says (name, version, remotes), to check the statement against. Its url is declared_url.
+    declared_pointer: dict[str, Any] | None = field(default=None, compare=False)
 
 
 def target_id(name: str, endpoint: str) -> str:
@@ -130,7 +134,12 @@ def targets_from_servers(servers: list[dict[str, Any]], *, allow_cleartext: bool
         remotes = [r for r in (srv.get("remotes") or []) if isinstance(r, dict) and isinstance(r.get("url"), str)]
         repo = srv.get("repository") if isinstance(srv.get("repository"), dict) else {}
         sets, ignored, declared_url = declared_tool_sets(srv)
-        declared = {"declared": tuple(sets), "declared_ignored": tuple(ignored), "declared_url": declared_url}
+        signed, signed_ignored = signed_pointer(srv)
+        if signed and declared_url:
+            # One file is read per server; the declaration file the entry names itself comes first.
+            signed, signed_ignored = None, ["addonDeclaration not read: the entry also names a declaration file"]
+        declared = {"declared": tuple(sets), "declared_ignored": tuple([*ignored, *signed_ignored]),
+                    "declared_url": signed["url"] if signed else declared_url, "declared_pointer": signed}
         for remote in remotes[:MAX_REMOTES_PER_SERVER]:
             url = clean_text(remote["url"].strip(), 2000)
             transport = clean_text(remote.get("type") or "", 40)
