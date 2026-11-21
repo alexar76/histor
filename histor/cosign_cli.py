@@ -56,7 +56,6 @@ from histor.checkpoint import (
     verify_cosignature,
 )
 
-
 RATE_LIMIT_BACKOFF = 6 * 3600  # seconds, when a 429 names no Retry-After
 RATE_LIMIT_BACKOFF_MAX = 24 * 3600
 
