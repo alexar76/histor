@@ -1,20 +1,22 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.33.0",
-  "sourceCommit": "19506f6bd",
+  "version": "0.35.0",
+  "sourceCommit": "5dba9049f",
   "registryGitHead": null,
-  "buildDigest": "64ae3d653e8cba0b89e6c52ca28e38ad4c1ea275ff44a3c0cd7f3fe5febac4ae",
-  "tarball": "aimarket-warden-0.33.0.tgz",
-  "sha256": "31de2475d64a8d600203ea05714f035e3ff18daa6a6ed5c2111844b9c8b8f4c2",
-  "integrity": "sha512-HISI0F9xx9uZOY1+e5Tf5V2oKMo7N5skHybQJ7f5rixet0mpSTKnxksrKIHgKsmy4n4oiBheQxADb7KoL8zYKg==",
-  "distribution": "Release archive of 0.33.0 (npm shasum 3b294f00…), byte for byte the tarball in warden/docs/evidence/warden-release-0.33.0-2026-11-20/ and the one on the npm registry (compared 2026-11-20 09:46Z), built from 19506f6bd; its build digest is the one MOMUS accepted (run 20261120T082759). Production HISTOR has run this build since 2026-11-20 08:37:26Z as an overlay image (histor-histor:warden-0.33.0-prod); this pin brings ordinary builds from main to the same build.",
-  "qualityRun": "20261120T082759",
+  "buildDigest": "9106a6d8988d87788f013542d77e0616aa4daad31645232a08b6a68d369431f2",
+  "tarball": "aimarket-warden-0.35.0.tgz",
+  "sha256": "aa6eae019ca12e11bf87421b44061005207be249dfc85716b1d14c86d1917cae",
+  "integrity": "sha512-lSG/0G2JznRgU2fRYOOHIEaMqBEttNYN4d+YUjzBzJLMOSVW7YObNYeFJpy22cgQYIzYSYlRGeq1GDZSl0Y6hA==",
+  "distribution": "Release archive of 0.35.0 (npm shasum d3ba314d\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.35.0-2026-11-20/ and the one on the npm registry (compared 2026-11-20), built from 5dba9049f; its build digest is the one MOMUS accepted (run 20261120T205354). Production HISTOR has run this build since 2026-11-21 10:11:43Z as an overlay image (histor-histor:warden-0.35.0-prod, FROM cosigned-20261120); this pin brings ordinary builds from main to the same build.",
+  "qualityRun": "20261120T205354",
   "changes": [
-    "0.28.0–0.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
+    "0.28.0\u20130.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
     "0.30.0: warden-mcp gateway (OpenWebUI), checks of every package a launch line installs, key-name rule of the flow guard, blockAtSeverity in verdicts; ruleset unchanged (23)",
     "0.31.0: warden-mcp openwebui setup|check|undo, wouldRefuse in the gateway's audit answers; rulesets (23), malware list and verdicts unchanged",
-    "0.32.0: flow guard — after outside text, shell code that reads a credential from the environment is a credential send; rulesets (23), malware list and scan verdicts unchanged",
-    "0.33.0: OpenWebUI Filter checks model calls to Open Terminal connections through the gateway; rulesets (23), malware list and scan verdicts unchanged"
+    "0.32.0: flow guard \u2014 after outside text, shell code that reads a credential from the environment is a credential send; rulesets (23), malware list and scan verdicts unchanged",
+    "0.33.0: OpenWebUI Filter checks model calls to Open Terminal connections through the gateway; rulesets (23), malware list and scan verdicts unchanged",
+    "0.34.0: the re-approval text and the scan --lock report name a behaviour hint that moved and its direction; rulesets (23), malware list and verdicts unchanged",
+    "0.35.0: warden-mcp scan reports a tool whose readOnlyHint true / destructiveHint false its own description contradicts (TOOL_HINT_CONTRADICTS_DESCRIPTION, advisory); rulesets (23), malware list and verdicts unchanged"
   ],
-  "packageJsonSha256": "af7a7b96dbadedf9847142b4b02068a048dbd7ce4cc55484f1084f4b783bd96a"
+  "packageJsonSha256": "35740a266aa266a52e2a698cbdeeb76a1d4df03cb327cc45e4f3cf3b31af54c6"
 }
