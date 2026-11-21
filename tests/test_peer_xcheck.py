@@ -271,3 +271,23 @@ def test_a_server_histor_first_read_after_their_read_is_not_counted_as_missed():
         {"name": "a", "fields": {"description": [{"path": "$.description", "op": "changed", "old": "old", "new": "new text"}]}}]}
     res = px.compare(r.data(), doc(("2026-11-07", [rec])), [EP], ["2026-11-07"], lambda u: True)
     assert res["forward"]["rows"][0]["verdict"] == "HISTOR has no definitions before their read"
+
+
+def test_the_changes_file_may_be_larger_than_other_peer_files(tmp_path, monkeypatch):
+    # 2026-11-21: the peer's changes.json reached 76 MB and the one cap for every file failed the daily run.
+    monkeypatch.setattr(px, "from_store", lambda *args: Rows().data())
+    monkeypatch.setattr(px, "MAX_FILE", 1024)
+    monkeypatch.setattr(px, "MAX_CHANGES", 64 * 1024)
+    big = json.dumps({"days": [{"day": "2026-11-07", "changes": []}], "pad": "x" * 4096}).encode()
+
+    def client(changes: bytes, panel: bytes):
+        def handle(request):
+            return httpx.Response(200, content=changes if str(request.url) == px.PEER["changes"] else panel)
+        return httpx.Client(transport=httpx.MockTransport(handle))
+
+    with client(big, b"# panel\n") as c:
+        assert px.run(None, tmp_path / "ok", http=c)["days"] == ["2026-11-07"]
+    with client(big + b" " * (64 * 1024), b"# panel\n") as c, pytest.raises(ValueError, match="larger than 65536"):
+        px.run(None, tmp_path / "too-big", http=c)
+    with client(big, b"#" * 2048) as c, pytest.raises(ValueError, match="larger than 1024"):
+        px.run(None, tmp_path / "big-panel", http=c)

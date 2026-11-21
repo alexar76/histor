@@ -23,8 +23,14 @@ checkpoint, and prints the cosignature lines. With ``--submit-to-log`` the verif
 are stored in the log (``POST /api/v1/log/cosignatures``, operator token from the named
 environment variable), so the log serves its checkpoint with them on it.
 
-Exit status: 0 when every witness co-signed or had nothing new to sign, 1 when any witness
-refused or answered with something that does not verify, 2 on a usage error.
+A witness that answers 429 (its per-log daily limit, the ``qpd`` the log was listed with) is left
+alone for the time its ``Retry-After`` names, or six hours without one, and the state file remembers
+until when (key ``<url>#retry-after``, Unix seconds). A limiter that counts refused requests never
+recovers while a log keeps knocking at the limit, so knocking less is the only way back.
+
+Exit status: 0 when every witness co-signed, had nothing new to sign or is rate-limiting this log,
+1 when any witness refused otherwise or answered with something that does not verify, 2 on a usage
+error.
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ import base64
 import json
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +55,27 @@ from histor.checkpoint import (
     parse_signature_line,
     verify_cosignature,
 )
+
+
+RATE_LIMIT_BACKOFF = 6 * 3600  # seconds, when a 429 names no Retry-After
+RATE_LIMIT_BACKOFF_MAX = 24 * 3600
+
+
+class RateLimited(Exception):
+    """The witness answered 429; ``retry_after`` is in seconds."""
+
+    def __init__(self, retry_after: int, text: str):
+        super().__init__(text)
+        self.retry_after = retry_after
+
+
+def retry_after_seconds(value: str | None) -> int:
+    """Delta-seconds form of Retry-After, bounded to [10 min, 24 h]; six hours when absent or unreadable."""
+    try:
+        seconds = int((value or "").strip())
+    except ValueError:
+        return RATE_LIMIT_BACKOFF
+    return max(600, min(seconds, RATE_LIMIT_BACKOFF_MAX))
 
 
 @dataclass(frozen=True)
@@ -96,6 +124,8 @@ def submit_one(http: httpx.Client, log: str, note_text: str, target: WitnessTarg
             continue
         break
     assert resp is not None
+    if resp.status_code == 429:
+        raise RateLimited(retry_after_seconds(resp.headers.get("Retry-After")), resp.text.strip()[:160])
     if resp.status_code != 200:
         return old, [], f"{resp.status_code}: {resp.text.strip()[:160]}"
     kept, problems = [], []
@@ -151,8 +181,19 @@ def main(argv: list[str]) -> int:
         lines: list[str] = []
         for target in targets:
             label = target.name or target.url
+            hold = f"{target.url}#retry-after"
+            now = int(time.time())
+            if int(state.get(hold, 0)) > now:
+                print(f"{label}: rate-limited this log; not asked until "
+                      f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(int(state[hold])))}", file=sys.stderr)
+                continue
+            state.pop(hold, None)
             try:
                 new_size, kept, problem = submit_one(http, log, note_text, target, int(state.get(target.url, 0)))
+            except RateLimited as exc:
+                state[hold] = now + exc.retry_after
+                print(f"{label}: 429 ({exc}); not asked for {exc.retry_after // 60} min", file=sys.stderr)
+                continue
             except (httpx.HTTPError, NoteError, ValueError) as exc:
                 new_size, kept, problem = int(state.get(target.url, 0)), [], f"{type(exc).__name__}: {exc}"
             if problem:

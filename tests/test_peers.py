@@ -32,7 +32,11 @@ def digest_peer(**over):
 
 def test_the_shipped_config_is_valid_and_lists_both_peers():
     peers = pr.load_config(DEPLOY_CONFIG.read_text())
-    assert {p["slug"]: p["method"] for p in peers} == {"crawlcheck": "digest", "scraperwatch": "field-diff"}
+    assert {p["slug"]: p["method"] for p in peers} == {
+        "crawlcheck": "digest",
+        "scraperwatch": "field-diff",
+        "mcp-transparency-log": "digest",
+    }
 
 
 @pytest.mark.parametrize("config, message", [

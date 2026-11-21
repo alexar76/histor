@@ -105,7 +105,8 @@ Jusqu'au 7 novembre 2026, il tournait chaque semaine, après l'export du jeu de 
 ## Témoins
 
 Sept témoins cosignent les checkpoints de HISTOR (c2sp.org/tlog-witness, cosignature/v1). HISTOR leur envoie son
-checkpoint toutes les 10 minutes. Le journal figure dans la liste staging de la witness network
+checkpoint toutes les 15 minutes, soit 96 requêtes par jour, sous les 144 par jour (`qpd`) déclarées pour le journal ;
+un témoin qui répond 429 est laissé tranquille le temps indiqué par son `Retry-After`, ou six heures. Le journal figure dans la liste staging de la witness network
 `log-list-10qps-4klogs.1` (witness-network.org n'a pas encore de liste de production) ; six des témoins le prennent
 dans cette liste et CrawlCheck l'a configuré directement. Mullvad, Markovian et TrustFabric cosignent depuis le
 2026-11-04, CrawlCheck depuis le 2026-11-07, GDB Security, Geomys et IPng depuis le 2026-11-19.

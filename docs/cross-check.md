@@ -100,7 +100,8 @@ weekly, after the dataset export.
 ## Witnesses
 
 Seven witnesses co-sign HISTOR's checkpoints (c2sp.org/tlog-witness, cosignature/v1). HISTOR pushes its checkpoint
-to each of them every 10 minutes. The log is on the witness network's staging list `log-list-10qps-4klogs.1`
+to each of them every 15 minutes, 96 requests a day, below the 144 a day (`qpd`) the log was listed with; a
+witness that answers 429 is left alone for the time its `Retry-After` names, or six hours. The log is on the witness network's staging list `log-list-10qps-4klogs.1`
 (witness-network.org has no production list yet); six of the witnesses pick it up from that list, and CrawlCheck
 configured it directly. Mullvad, Markovian and TrustFabric have co-signed since 2026-11-04, CrawlCheck since
 2026-11-07, GDB Security, Geomys and IPng since 2026-11-19.

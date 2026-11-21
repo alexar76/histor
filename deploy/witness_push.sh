@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Push HISTOR's checkpoint to the witnesses it is listed with, and keep their cosignatures
 # (histor-tlog/2, docs/spec/transparency-log.md §8.2). Installed as /usr/local/sbin/histor-witness-push
-# and run by histor-witness-push.timer every 10 minutes — 144 add-checkpoint requests per witness per
-# day, the `qpd` the log was listed with on witness-network.org. Change both together.
+# and run by histor-witness-push.timer every 15 minutes — 96 add-checkpoint requests per witness per
+# day, below the `qpd` 144 the log was listed with on witness-network.org. Pushing at exactly the qpd left no room
+# for a 409 retry or a manual run: from 2026-11-19 one witness answered 429 to almost every push. A witness that
+# answers 429 is skipped for its Retry-After (six hours without one) and does not fail the run.
 #
 # Does nothing until $CONF exists: the log is pushed only to witnesses that have configured it (an
 # unlisted log gets 404 from every one, which is noise for their operators). Copy
@@ -16,7 +18,7 @@
 # histor/cosign_cli.py (installed next to this script; the image carries it from the next deploy on).
 #
 # Exit status: that of `python -m histor witness-submit` (1 = a witness refused or answered with a
-# cosignature that does not verify; the others' lines are still stored).
+# cosignature that does not verify; the others' lines are still stored; a 429 is not a failure).
 set -euo pipefail
 
 APP="${HISTOR_APP_CONTAINER:-histor-histor-1}"
@@ -38,6 +40,10 @@ mounts=(-v "$CONF:/witnesses.json:ro" -v "$STATE_DIR:/state")
 if ! docker run --rm --entrypoint python "$image" -c \
     'import sys, histor.cosign_cli as m; sys.exit(0 if hasattr(m, "load_witnesses") else 1)' 2> /dev/null; then
   [[ -f "$MODULE" ]] || { echo "the image's witness-submit predates --witnesses-file and $MODULE is missing" >&2; exit 1; }
+  mounts+=(-v "$MODULE:/app/histor/cosign_cli.py:ro")
+elif [[ -f "$MODULE" ]] && ! docker run --rm --entrypoint python "$image" -c \
+    'import sys, histor.cosign_cli as m; sys.exit(0 if hasattr(m, "RateLimited") else 1)' 2> /dev/null; then
+  # an image from before the 429 hold (2026-11-21) gets the installed module until the next deploy carries it
   mounts+=(-v "$MODULE:/app/histor/cosign_cli.py:ro")
 fi
 

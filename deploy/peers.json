@@ -35,5 +35,21 @@
       "2026-10-30T10:59:39Z"
     ],
     "days": 1
+  },
+  {
+    "slug": "mcp-transparency-log",
+    "name": "MCP Transparency Log",
+    "contact": "https://github.com/yassinht/mcp-transparency-log/issues",
+    "page": "https://github.com/yassinht/mcp-transparency-log",
+    "since": "2026-11-17",
+    "method": "digest",
+    "schedule": "daily 12:00 UTC (histor-peers.timer)",
+    "window_hours": 24,
+    "sources": [
+      {
+        "name": "list",
+        "url": "https://yassinht.github.io/mcp-transparency-log/data/peers/tool-digests-latest.jsonl"
+      }
+    ]
   }
 ]

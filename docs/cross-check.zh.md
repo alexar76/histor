@@ -89,7 +89,7 @@ ScraperWatch 针对一个固定的远程服务器面板，每天发布工具变�
 首次运行）写在列表中它的记录里。2026 年 11 月 7 日之前，它每周在数据集导出之后运行一次。
 ## 见证者
 
-七个见证者为 HISTOR 的检查点联署（c2sp.org/tlog-witness，cosignature/v1）。HISTOR 每 10 分钟把检查点推送给每个见证者。
+七个见证者为 HISTOR 的检查点联署（c2sp.org/tlog-witness，cosignature/v1）。HISTOR 每 15 分钟把检查点推送给每个见证者，每天 96 次，低于该日志登记的每天 144 次（`qpd`）；回复 429 的见证者会按其 `Retry-After` 指定的时间暂停推送，没有该字段时暂停六小时。
 该日志在 witness network 的 staging 列表 `log-list-10qps-4klogs.1` 中（witness-network.org 目前还没有 production 列表）；
 其中六个见证者从该列表获取日志，CrawlCheck 是直接配置的。Mullvad、Markovian 和 TrustFabric 自 2026-11-04 起联署，
 CrawlCheck 自 2026-11-07 起，GDB Security、Geomys 和 IPng 自 2026-11-19 起。

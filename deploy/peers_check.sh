@@ -97,7 +97,8 @@ for method in digest field-diff; do
       > "$envfile"
     net=(--network "$NETWORK")
     envs=(--env-file "$envfile")
-    limits=(--memory 1g --pids-limit 64)
+    # 2 GB: the peer's changes.json reached 76 MB on 2026-11-21 and parses to about 0.85 GB (histor/peer_xcheck.py).
+    limits=(--memory 2g --pids-limit 64)
     mounts+=(-v "$VOLUME:/data:ro")
     if [[ -f "$MODULES/peer_xcheck.py" ]]; then
       mounts+=(-v "$MODULES/peer_xcheck.py:/app/histor/peer_xcheck.py:ro")

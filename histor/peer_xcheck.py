@@ -49,6 +49,10 @@ PEER = {
 PEER_FIELDS = ("name", "description", "inputSchema", "outputSchema", "title", "annotations")
 SLACK = dt.timedelta(hours=7)  # HISTOR reads most endpoints every 30 minutes, some every 6 hours
 MAX_FILE = 64 * 1024 * 1024
+# The peer's changes.json keeps a varying number of days and is not cut by size: 76 MB on 2026-11-21, when one
+# day (2026-11-18, 420 changes with full old/new text) was 44 MB of it and the 64 MB cap failed the daily run.
+# Parsing it takes about 0.85 GB; the field-diff container has 2 GB (deploy/peers_check.sh).
+MAX_CHANGES = 256 * 1024 * 1024
 MISSING = object()
 
 
@@ -555,7 +559,7 @@ def run(store: Any, out: Path, *, days: int = 7, http: Any = None, peer: dict = 
             raise ValueError(f"{url} is larger than {limit} bytes")
         return body
 
-    raw_changes, raw_panel = get(peer["changes"]), get(peer["panel"])
+    raw_changes, raw_panel = get(peer["changes"], MAX_CHANGES), get(peer["panel"])
     doc = json.loads(raw_changes)
     panel = [
         line.strip()
