@@ -1,0 +1,17 @@
+[Unit]
+Description=HISTOR money-tool changes feed (histor/money_changes.py) into /datasets/feeds/
+After=network-online.target
+
+[Service]
+Type=oneshot
+# A copy of histor/money_changes.py (standard library only): it reads the public change feed like any
+# client, so it needs no database, container or key.
+ExecStart=/usr/bin/python3 /opt/histor-money-changes/money_changes.py --state /var/lib/histor-money-changes --out /var/lib/histor-datasets/feeds/money-tool-changes.json
+TimeoutStartSec=1500
+Nice=10
+StateDirectory=histor-money-changes
+ReadWritePaths=/var/lib/histor-datasets/feeds /var/lib/histor-money-changes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes

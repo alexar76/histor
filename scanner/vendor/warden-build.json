@@ -1,14 +1,14 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.37.0",
-  "sourceCommit": "0b57e7c4d",
+  "version": "0.37.1",
+  "sourceCommit": "6f2963a4b",
   "registryGitHead": null,
-  "buildDigest": "2f358b17d431a8638b1e90f3a24d68c74b4df86200667541d835ea8d610d2bac",
-  "tarball": "aimarket-warden-0.37.0.tgz",
-  "sha256": "ef9ae648e1b3511321dbb0ba59f6993702d2162ca356716657609a046e6b68cc",
-  "integrity": "sha512-AlWZ8hRzFtOlUjE7B9CJ02gpLmpt0qzBqeogJfKqtHX7a6XfZAMDLzmGLQFzC3Oc+Yf8hJzDRDSU/Yo/oL6FSg==",
-  "distribution": "Release archive of 0.37.0 (npm shasum dcd3ac17\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.37.0-2026-11-22/, built from 0b57e7c4d; its build digest is the one MOMUS accepted (run 20261122T100420). Production HISTOR has run this build since 2026-11-22 10:25:00Z as an overlay image (histor-histor:warden-0.37.0-prod, FROM warden-0.36.0-prod); this pin brings ordinary builds from main to the same build. Not yet on npm when pinned.",
-  "qualityRun": "20261122T100420",
+  "buildDigest": "1672b95c79bf83f9364fcf1c1e3dcc6346387d631dcf2a1e2509473b93ab3e20",
+  "tarball": "aimarket-warden-0.37.1.tgz",
+  "sha256": "f413cdd216c6b8100fafd8874e72ed147b43454738be219ee2d73c9949e7d703",
+  "integrity": "sha512-VKoNP5y0i/FoAYlfI8G7qa7PPoypf3dO1QcZ/7rpkbvp8DlYcn9fa0mwGIOVBNAyoUO4L73zsQ9oh5ZH8QaPYw==",
+  "distribution": "Release archive of 0.37.1 (npm shasum d47542b9\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.37.1-2026-11-22/, built from 6f2963a4b; its build digest is the one MOMUS accepted (run 20261122T145708). Production HISTOR has run this build since 2026-11-22 15:06:05Z as an overlay image (histor-histor:warden-0.37.1-prod, FROM faq-20261122); this pin keeps the repository equal to production.",
+  "qualityRun": "20261122T145708",
   "changes": [
     "0.28.0\u20130.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
     "0.30.0: warden-mcp gateway (OpenWebUI), checks of every package a launch line installs, key-name rule of the flow guard, blockAtSeverity in verdicts; ruleset unchanged (23)",
@@ -18,7 +18,8 @@
     "0.34.0: the re-approval text and the scan --lock report name a behaviour hint that moved and its direction; rulesets (23), malware list and verdicts unchanged",
     "0.35.0: warden-mcp scan reports a tool whose readOnlyHint true / destructiveHint false its own description contradicts (TOOL_HINT_CONTRADICTS_DESCRIPTION, advisory); rulesets (23), malware list and verdicts unchanged",
     "0.36.0: TOOL_HINT_CONTRADICTS_DESCRIPTION carries evidence { claim, matchedPhrase, quotedSentence } in --json; rulesets (23), malware list and verdicts unchanged",
-    "0.37.0: masking \u2014 credentials in tool results replaced by placeholders in wrap and the gateway (default on), personal data by profile (off by default), agent-guard and plugins for Hermes and OpenClaw; rulesets (23), malware list and scan verdicts unchanged"
+    "0.37.0: masking \u2014 credentials in tool results replaced by placeholders in wrap and the gateway (default on), personal data by profile (off by default), agent-guard and plugins for Hermes and OpenClaw; rulesets (23), malware list and scan verdicts unchanged",
+    "0.37.1: scan without --histor ends with a line saying how many servers the log could be asked about (nothing sent; historAvailable in --json); rulesets (23), malware list and scan verdicts unchanged"
   ],
-  "packageJsonSha256": "fe05443ec1954672a287fa55c2ccc9419f2376e28629add4e54c2730d16049ca"
+  "packageJsonSha256": "47b06fdae099855e7f0ca3ec68b72ef32e9c318c30f255e989b21d8be719a0a4"
 }

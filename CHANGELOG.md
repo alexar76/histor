@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Money-tool changes feed.** `python -m histor.money_changes --state DIR --out FILE` reads the public change feed
+  after its cursor and keeps the changes that touch tools which move value or hold keys, by fixed rules
+  (`money-tools/v1`, on tool names and the text of description edits): a value-moving, wallet or key tool added,
+  modified or removed; an EVM or bech32 address added to or replaced in a description (well-known token contracts
+  such as USDC excluded); a new mention of private keys or seed phrases. Each item gets the server's name and
+  endpoint and a severity (high: address added or replaced, key tool added). The feed keeps seven days, at most
+  200 kB, so one agent-sandbox fetch reads it. Standard library only; `deploy/histor-money-changes.{service,timer}`
+  and `deploy/install_money_changes.sh` run it on the host every hour at :17 UTC into `/datasets/feeds/`. On
+  2026-11-22 a day of changes (6,502) gave 26 items.
 - **Subregistry.** With `HISTOR_SUBREGISTRY=1` an instance serves registry entries in the MCP registry's v0.1 API
   (`GET /v0.1/servers`, `/v0.1/servers/{serverName}/versions`, `/v0.1/servers/{serverName}/versions/{version}`, with the
   CORS headers a host application needs), as the MCP documentation describes a subregistry: the upstream entry
