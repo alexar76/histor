@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 — 2026-11-22
 
 - **New outside addresses: a field of an object is no longer listed as a host.** `newAddresses` in a change
   record listed any dotted word, so `versions.kitVersion`, `data.company` or `tfa.messages.search` appeared beside
@@ -11,7 +11,7 @@
   `company`, `search`) unless a registry or service label comes with them (`toko.co.id`, `api.met.no`); never when
   the name continues as a path or a call (`markets.HK.quote_l1`, `client.send(`); `co.uk` alone is a suffix; `.tf`
   and `.cf` are files. A host written with a scheme is listed as before, under any domain. E-mail addresses need a
-  real top-level domain too. On the current tools of 253 servers the detector now names 3,415 addresses where it
+  real top-level domain too. On the current tools of 253 servers the detector now names 3,414 addresses where it
   named 6,164. `python -m histor.recount_addresses status|apply --backup FILE` rewrites the list in records
   already stored, by id in small pages; nothing signed changes.
 - **Money-tool changes feed.** `python -m histor.money_changes --state DIR --out FILE` reads the public change feed
