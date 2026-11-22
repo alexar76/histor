@@ -38,6 +38,28 @@ curl -s 'https://<instance>/v0.1/servers/io.github.acme%2Fbilling/versions/lates
 The `server` object is what the upstream sent. The observation is of an unauthenticated read from HISTOR's address: a
 server behind sign-in has no digest, and a server can answer another client differently.
 
+## Look up a server in MCPProxy or Microsoft APM
+
+Use the public base URL `https://histor.modelmarket.dev` as a registry source. In MCPProxy, add the source while the daemon is running, then search that source explicitly.
+
+```bash
+mcpproxy registry add-source https://histor.modelmarket.dev --id histor --name HISTOR
+mcpproxy catalog search io.github.alexar76/warden --source histor --limit 5
+```
+
+Microsoft APM uses `MCP_REGISTRY_URL` for a single command. To use HISTOR for subsequent lookups, run `apm config set mcp-registry-url https://histor.modelmarket.dev`.
+
+```bash
+MCP_REGISTRY_URL=https://histor.modelmarket.dev apm mcp show io.github.alexar76/warden
+```
+
+Search and lookup were verified with MCPProxy 0.75.0 and APM 0.37.0. Those CLI versions display the registry listing. Read the observation block directly for tool counts and dates.
+
+```bash
+curl -fsS 'https://histor.modelmarket.dev/v0.1/servers/io.github.alexar76%2Fwarden/versions/latest' \
+  | jq '._meta["dev.modelmarket.histor/observed"].targets[] | {lastObserved, unchangedSince, toolCount, changes, page}'
+```
+
 ## A registry for one organisation
 
 A host that restricts MCP servers to a registry (GitHub Copilot's organisation or enterprise registry is one: it asks
