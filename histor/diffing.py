@@ -11,6 +11,7 @@ from __future__ import annotations
 import difflib
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 MAX_OPS_TEXT = 20000
@@ -38,8 +39,50 @@ _FILE_EXTENSIONS = frozenset(
     "json jsonl txt csv tsv md rst pdf png jpg jpeg gif svg webp ico yaml yml xml html htm log py js mjs cjs ts "
     "tsx jsx sh bash zsh ps1 bat exe dll so zip tar gz tgz bz2 xz 7z rar docx doc xlsx xls pptx ppt mp3 mp4 wav "
     "avi mov mkv env toml ini cfg conf lock sql db sqlite parquet ipynb rb go rs java jar kt swift c h cpp hpp cs "
-    "php pl css scss less vue svelte wasm bin dat bak tmp pem crt key pub".split()
+    "php pl css scss less vue svelte wasm bin dat bak tmp pem crt key pub tf cf".split()
 )
+
+
+# A name written without a scheme counts as a host only under a real top-level domain: "tiles.example.com"
+# is one, "versions.kitVersion" and "asm.part" are fields of an object. The list is IANA's, vendored with its
+# version line (histor/tlds.txt); refresh it from the URL in its header.
+TLDS = frozenset(
+    line.strip() for line in Path(__file__).with_name("tlds.txt").read_text(encoding="ascii").splitlines()
+    if line.strip() and not line.startswith("#")
+)
+# A dotted name without a scheme ("data.company", "tfa.messages.search", "translation.id") is how a field of
+# an object is written too, and most of the newer top-level domains are ordinary words. Such a name is listed
+# only under a top-level domain where a bare name is nearly always a host: the original generic ones, the
+# widely used newer ones, and country codes. A country code that is also a common field name ("id", "to", "by")
+# counts only after a registry label ("shop.co.id") or behind a service label ("api.met.no"). Any other host is
+# listed when it is written with a scheme ("https://data.company").
+_BARE_GENERIC_TLDS = frozenset(
+    "com org net edu gov mil int biz info pro mobi dev app xyz tech cloud online site store shop fun space live "
+    "blog".split()
+)
+_FIELD_WORD_COUNTRY_CODES = frozenset("id to in at by as do it no my so be am".split())
+# "co.uk", "gov.cn", "com.al" on their own are a registry suffix, not a host.
+_SUFFIX_LABELS = frozenset("co com gov org net ac edu go or web sch".split())
+
+
+# A first label that names a service ("api.met.no", "www.bull.family") marks a host under any top-level domain.
+_HOST_FIRST_LABELS = frozenset("www api cdn mcp".split())
+
+
+def _bare_host(labels: list[str], tld: str) -> bool:
+    """Whether ``labels`` + ``tld``, written without a scheme, reads as a host."""
+    if len(labels) >= 2 and (labels[0] in _HOST_FIRST_LABELS or labels[-1] in _SUFFIX_LABELS):
+        return True
+    if len(tld) != 2:
+        return tld in _BARE_GENERIC_TLDS
+    if tld in _FIELD_WORD_COUNTRY_CODES:
+        return False
+    return not (len(labels) == 1 and labels[0] in _SUFFIX_LABELS)
+
+
+# What follows a host in prose is a space, punctuation or the end. A dot or bracket followed by more name is a
+# path through an object ("markets.HK.quote_l1") or a call ("client.send(…)").
+_PATH_CONTINUES = re.compile(r"\.[A-Za-z0-9_]|[(\[]")
 
 
 def _addresses_in(text: str) -> set[str]:
@@ -52,11 +95,16 @@ def _addresses_in(text: str) -> set[str]:
     # Hosts inside URLs are counted once, and URL userinfo is never read as an e-mail address.
     rest = _URL.sub(" ", text)
     for m in _EMAIL.finditer(rest):
-        found.add(m.group(0).lower())
+        if m.group(1).rsplit(".", 1)[-1].lower() in TLDS:
+            found.add(m.group(0).lower())
     rest = _EMAIL.sub(" ", rest)
     for m in _DOMAIN.finditer(rest):
         name, ext = m.group(1).lower(), m.group(2).lower()
         if ext in _FILE_EXTENSIONS and name.count(".") == 1:
+            continue
+        if ext not in TLDS or not _bare_host(name.split(".")[:-1], ext):
+            continue
+        if _PATH_CONTINUES.match(rest, m.end()):
             continue
         found.add(name)
     for m in _IPV4.finditer(rest):

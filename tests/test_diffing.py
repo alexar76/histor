@@ -101,6 +101,49 @@ def test_ip_literals_userinfo_and_files():
     assert diffing._addresses_in("Writes result.json; mirror at upload.example.pl") == {"upload.example.pl"}
 
 
+def test_a_field_of_an_object_is_not_an_address():
+    # Seen in the log on 2026-11-22: each of these was listed as a new outside address.
+    for text in (
+        "Returns versions.kitVersion and versions.rulesVersion.",
+        "Fills supplierAlert.emailDraft, asm.part and resume.rooms.",
+        "Translation id (translation.id inside blocks in document_content_get, format json).",
+        "Also returns data.company: the company's project links.",
+        "Counts prep.done of prep.total; followers.new since the last call; cast.pictures per film.",
+        "Use markets.HK.quote_l1 for Hong Kong quotes.",
+        "Call client.send(message) or rows.map[0].",
+        "Write to ops@build.internal or to nobody@host.localdomain.",
+        "Reads memory.read, result.data, agents.claims and assistant.stream; sort.by, range.to, created.at.",
+        "Terraform files infra.tf and module.tf, Postfix main.cf; suffixes co.uk, gov.cn and com.al.",
+        "Paths tfa.messages.search, photos.reactions.total, breeds.health.name, order.items.id, range.date.to.",
+        "Java package app.tests.builders and com.example.test.builders.",
+    ):
+        assert diffing._addresses_in(text) == set(), text
+
+
+def test_hosts_without_a_scheme_are_still_found():
+    cases = {
+        "Radar tiles from tiles.example.com.": {"tiles.example.com"},
+        "Short link: bit.ly, source on github.com and deps.dev; docs at legal.egonex.ai": {"bit.ly", "github.com", "deps.dev", "legal.egonex.ai"},
+        "Lookups via ipwho.is, paypal.me and zippopotam.us; BBC at bbc.co.uk": {"ipwho.is", "paypal.me", "zippopotam.us", "bbc.co.uk"},
+        "官方来源：impots.gouv.fr、courts.go.jp。": {"impots.gouv.fr", "courts.go.jp"},
+        # With a scheme a host is listed under any top-level domain.
+        "Posts to https://data.company/in and https://agents.claims": {"data.company", "agents.claims"},
+        "Indonesian shop at toko.co.id, Italian one at https://negozio.it": {"toko.co.id", "negozio.it"},
+        "Weather from api.met.no, quotes from api.kanye.rest, law at laws.gov.taipei, www.bull.family": {"api.met.no", "api.kanye.rest", "laws.gov.taipei", "www.bull.family"},
+        "Mail help@example.net; see WWW.Example.ORG": {"help@example.net", "www.example.org"},
+        "Ends a sentence at example.org. Next sentence.": {"example.org"},
+    }
+    for text, expected in cases.items():
+        assert diffing._addresses_in(text) == expected, text
+
+
+def test_the_tld_list_is_the_vendored_iana_snapshot():
+    assert {"com", "org", "fr", "jp", "ai", "dev", "company"} <= diffing.TLDS
+    assert not {"kitversion", "part", "rooms", "emaildraft", "internal", "localdomain", "json"} & diffing.TLDS
+    assert len(diffing.TLDS) > 1200 and all(t.isascii() and t.isalpha() and t == t.lower() for t in diffing.TLDS)
+    assert diffing._BARE_GENERIC_TLDS <= diffing.TLDS and diffing._FIELD_WORD_COUNTRY_CODES <= diffing.TLDS
+
+
 def test_schema_strings_are_scanned_one_by_one():
     old = [{"name": "a", "description": "Docs: example.org, help@example.net", "inputSchema": {}}]
     new = [{"name": "a", "description": "", "inputSchema": {"properties": {"x": {"description": "Docs:\nexample.org\n\thelp@example.net"}}}}]

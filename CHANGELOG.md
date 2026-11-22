@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **New outside addresses: a field of an object is no longer listed as a host.** `newAddresses` in a change
+  record listed any dotted word, so `versions.kitVersion`, `data.company` or `tfa.messages.search` appeared beside
+  real hosts: in 2,000 changes of 2026-11-22, 36 of the 94 records with an address named no address at all. A name
+  written without a scheme now counts only under a real top-level domain (IANA's list, vendored as
+  `histor/tlds.txt`) where a bare name is nearly always a host: the original generic domains, the widely used newer
+  ones and country codes, not the country codes and newer domains that are everyday field names (`id`, `to`,
+  `company`, `search`) unless a registry or service label comes with them (`toko.co.id`, `api.met.no`); never when
+  the name continues as a path or a call (`markets.HK.quote_l1`, `client.send(`); `co.uk` alone is a suffix; `.tf`
+  and `.cf` are files. A host written with a scheme is listed as before, under any domain. E-mail addresses need a
+  real top-level domain too. On the current tools of 253 servers the detector now names 3,415 addresses where it
+  named 6,164. `python -m histor.recount_addresses status|apply --backup FILE` rewrites the list in records
+  already stored, by id in small pages; nothing signed changes.
 - **Money-tool changes feed.** `python -m histor.money_changes --state DIR --out FILE` reads the public change feed
   after its cursor and keeps the changes that touch tools which move value or hold keys, by fixed rules
   (`money-tools/v1`, on tool names and the text of description edits): a value-moving, wallet or key tool added,
