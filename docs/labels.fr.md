@@ -46,7 +46,10 @@ pas plus qu’un ensemble vide ou qui répète un nom ; ce jour-là, 5 159 serve
 étaient dans ce cas, dont 4 941 à cause d’une fraction. Désormais seule une entrée sans nom
 (`MTL-SUBJ-001`) ou un nombre sans double (`1e400`, `MTL-NUM-001`) laisse un ensemble sans empreinte,
 et un ensemble qui ne contient que des entiers garde les mêmes octets et la même empreinte qu’avant.
-Un ensemble qui reçoit sa première empreinte n’est pas compté comme un changement.
+Un ensemble qui reçoit sa première empreinte n’est pas compté comme un changement. Depuis le
+22 novembre 2026, un troisième cas s’y ajoute : un schéma imbriqué sur plus de 512 niveaux, le tableau
+des outils comptant pour le niveau 1 (`mcp-tool-set-digest/1`, section 12 ; `MTL-SUBJ-005`) ;
+auparavant HISTOR refusait comme erreur de protocole toute réponse imbriquée sur plus de 128 niveaux.
 
 ## Les quatre méthodes
 

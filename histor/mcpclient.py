@@ -38,7 +38,7 @@ import httpx
 
 from histor import __version__
 from histor.netguard import BlockedAddress, PinnedTarget, resolve_public
-from histor.untrusted import TooDeep, loads_limited
+from histor.untrusted import TooDeep, loads_cut
 
 PROTOCOL_VERSION = "2025-06-18"
 MODERN_PROTOCOL_VERSIONS = ("2026-07-28",)
@@ -156,7 +156,8 @@ def _strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def parse_json(text: str | bytes) -> Any:
-    return loads_limited(text, object_pairs_hook=_strict_object)
+    # A server's answer is read as mcp-tool-set-digest/1 section 12 reads a tool list (untrusted.py).
+    return loads_cut(text, object_pairs_hook=_strict_object)
 
 
 class _Deadline:

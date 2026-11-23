@@ -355,9 +355,14 @@ def test_malformed_input_is_a_400_not_a_500(api):
     client, _ = api
     assert client.get("/api/v1/servers", params={"q": "weather\x00"}).status_code == 200
     assert client.get("/api/v1/servers", params={"offset": 10**12}).status_code == 422
-    deep = "[" * 500 + "]" * 500
+    # A /check body is read as mcp-tool-set-digest/1 section 12 reads a tool list: at any depth,
+    # without a crash (tests/test_tool_set_depth.py); this one is still not an object.
+    deep = "[" * 100_000 + "]" * 100_000
     r = client.post("/api/v1/check", content=deep, headers={"content-type": "application/json"})
-    assert r.status_code == 400 and "deeper" in r.json()["detail"]
+    assert r.status_code == 400 and r.json()["detail"] == "body must be a JSON object"
+    bad = "[" * 600 + "}" + "]" * 599
+    r = client.post("/api/v1/check", content=bad, headers={"content-type": "application/json"})
+    assert r.status_code == 400 and r.json()["detail"] == "body is not JSON"
     assert check(client, endpoint="https://x\x00y").status_code == 400
     r = client.post("/ai-market/v2/invoke", json={"capability_id": "histor.server@v1", "input": {"endpoint": 5}})
     assert r.status_code == 400

@@ -45,6 +45,9 @@ vacío ni uno con nombres repetidos; ese día 5.159 servidores leídos por HISTO
 por una fracción. Ahora solo una entrada sin nombre (`MTL-SUBJ-001`) o un número sin doble (`1e400`,
 `MTL-NUM-001`) deja un conjunto sin resumen, y un conjunto con solo enteros conserva los mismos bytes
 y el mismo resumen que antes. Un conjunto que recibe su primer resumen no cuenta como cambio.
+Desde el 22 de noviembre de 2026 hay un tercer caso: un esquema anidado a más de 512 niveles, contando
+el array de herramientas como nivel 1 (`mcp-tool-set-digest/1`, sección 12; `MTL-SUBJ-005`); antes
+HISTOR rechazaba como error de protocolo toda respuesta anidada a más de 128 niveles.
 
 ## Los cuatro métodos
 

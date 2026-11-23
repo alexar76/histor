@@ -44,6 +44,9 @@ one that repeats a name; on that day 5,159 servers HISTOR had read were in that 
 for a fraction. Now only an entry with no name (`MTL-SUBJ-001`) or a number with no double
 (`1e400`, `MTL-NUM-001`) leaves a set without a digest, and a set with integers only gets the same
 bytes, and digest, as before. A set that gains its first digest is not counted as a change.
+Since 22 November 2026 a schema nested deeper than 512 levels, counting the tools array as level 1
+(`mcp-tool-set-digest/1` section 12), is a third such case (`MTL-SUBJ-005`); before that HISTOR
+refused any answer nested deeper than 128 levels as a protocol error.
 
 ## The four methods
 

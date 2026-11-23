@@ -49,7 +49,7 @@ from histor.receipts import AnchorRefused
 from histor.server_page_text import CARD_TEXT, WATCH_TEXT
 from histor.service import Services, crawl_in_background, scheduler
 from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
-from histor.untrusted import TooDeep, loads_limited
+from histor.untrusted import TooDeep, loads_cut, loads_limited
 
 #: Largest id the store can be asked for: SQLite and Postgres both keep ids in a signed 64-bit
 #: integer, and a bigger value in a query parameter overflowed the SQLite driver (a 500).
@@ -1150,10 +1150,12 @@ def create_app(services: Services) -> FastAPI:
 
     # -- check ----------------------------------------------------------------------
 
-    async def read_json(request: Request) -> dict[str, Any]:
+    async def read_json(request: Request, tool_list: bool = False) -> dict[str, Any]:
         raw = await read_bounded_body(request, MAX_CHECK_BYTES)
+        # A body that can carry a tool list is read as mcp-tool-set-digest/1 section 12 reads one
+        # (every level up to 512); every other body keeps the 128-level limit (untrusted.py).
         try:
-            body = await run_in_threadpool(loads_limited, raw or b"{}")
+            body = await run_in_threadpool(loads_cut if tool_list else loads_limited, raw or b"{}")
         except TooDeep as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except ValueError as exc:
@@ -1227,7 +1229,7 @@ def create_app(services: Services) -> FastAPI:
 
     @app.post("/api/v1/check")
     async def check(request: Request) -> dict[str, Any]:
-        body = await read_json(request)
+        body = await read_json(request, tool_list=True)
         return await run_in_threadpool(run_check, body, limit_key(request))
 
     CHECK_QUERY_FIELDS = ("endpoint", "url", "package", "name", "toolSetDigest")
@@ -1548,7 +1550,7 @@ def create_app(services: Services) -> FastAPI:
 
     @app.post("/ai-market/v2/invoke")
     async def invoke(request: Request) -> dict[str, Any]:
-        payload = await read_json(request)
+        payload = await read_json(request, tool_list=True)
         # Digesting, the WARDEN subprocess and the ML-DSA receipt signature all block: threadpool.
         return await run_in_threadpool(do_invoke, payload, limit_key(request))
 

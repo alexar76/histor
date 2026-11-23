@@ -66,21 +66,39 @@ def observe(transport, url="https://127.0.0.1/mcp", **kw):
 # -- the reader never raises ------------------------------------------------------------
 
 def test_json_nested_fifty_thousand_deep_is_a_protocol_status_not_a_crash():
+    # Read as mcp-tool-set-digest/1 section 12 reads a tool list: past 514 levels of the text an array
+    # is an empty one, so the parser never recurses that far, and this result is simply not one.
     bomb = '{"jsonrpc":"2.0","id":1,"result":' + "[" * 50000 + "]" * 50000 + "}"
     obs = observe(server(init=lambda b: httpx.Response(200, text=bomb, headers={"content-type": "application/json"})))
-    assert obs.status == "protocol" and "deeper" in obs.detail
+    assert obs.status == "protocol" and "no result" in obs.detail
+
+
+def nested_schema(levels: int) -> dict:
+    deep: dict = {}
+    node = deep
+    for _ in range(levels):
+        node["x"] = {}
+        node = node["x"]
+    return deep
 
 
 def test_a_schema_deeper_than_the_limit_is_refused_before_the_canonicalizer():
-    deep: dict = {}
-    node = deep
-    for _ in range(200):
-        node["x"] = {}
-        node = node["x"]
-    reply = lambda b: httpx.Response(200, json={"jsonrpc": "2.0", "id": b["id"], "result": {  # noqa: E731
-        "tools": [{"name": "t", "inputSchema": deep}]}})
-    obs = observe(server(tools_reply=reply))
-    assert obs.status == "protocol" and "deeper" in obs.detail
+    # mcp-tool-set-digest/1 section 12: 512 levels counted from the tools array are read and
+    # digested; past that the set is observed and its contract digest is MTL-SUBJ-005 (TSD-DEPTH).
+    from histor.subject import MTL_SUBJ_005, MtlError, tool_set_digest
+
+    for levels, digestible in ((200, True), (509, True), (510, False), (5000, False)):
+        schema = nested_schema(levels)        # inputSchema is level 3, its deepest object 3 + levels
+        reply = lambda b, schema=schema: httpx.Response(200, json={  # noqa: E731
+            "jsonrpc": "2.0", "id": b["id"], "result": {"tools": [{"name": "t", "inputSchema": schema}]}})
+        obs = observe(server(tools_reply=reply))
+        assert obs.status == "ok" and len(obs.tools) == 1, levels
+        if digestible:
+            assert tool_set_digest(obs.tools)[0].startswith("sha256-"), levels
+        else:
+            with pytest.raises(MtlError) as refused:
+                tool_set_digest(obs.tools)
+            assert refused.value.code == MTL_SUBJ_005, levels
 
 
 def test_values_echoed_into_headers_are_checked_first():
@@ -247,7 +265,7 @@ def test_poisoned_endpoints_in_the_middle_cannot_stop_the_crawl(world):
     by_path = {t["endpoint"].rsplit("/", 1)[-1] or t["endpoint"]: t for t in s.store.all_targets()}
     assert by_path["a"]["current_toolset"] and by_path["z"]["current_toolset"]
     assert by_path["nul-name"]["current_toolset"] and by_path["odd-protocol"]["current_toolset"]
-    assert by_path["deep"]["last_status"] == "protocol"
+    assert by_path["deep"]["last_status"] == "undigestible"      # its tools are arrays, not tools
     assert by_path["surrogate"]["last_status"] == "undigestible"
     assert "internal_errors" not in stats
 

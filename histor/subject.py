@@ -33,6 +33,10 @@ MTL_SUBJ_001 = "MTL-SUBJ-001"  # tool entry is not an object, or name missing/em
 MTL_SUBJ_002 = "MTL-SUBJ-002"
 MTL_SUBJ_003 = "MTL-SUBJ-003"
 MTL_NUM_001 = "MTL-NUM-001"  # a number with no IEEE 754 double (1e400): not digestible
+# An array or object in a contract entry deeper than level 512, counting the tools array as 1
+# (mcp-tool-set-digest/1 section 12, TSD-DEPTH): not digestible.
+MTL_SUBJ_005 = "MTL-SUBJ-005"
+MAX_LEVEL = 512
 
 MAX_SAFE_INTEGER = 2**53 - 1
 
@@ -171,9 +175,28 @@ def canonical_tool_set(tools: list[Any]) -> list[dict[str, Any]]:
     return entries
 
 
+def deeper_than(value: Any, level: int, limit: int = MAX_LEVEL) -> bool:
+    """Whether an array or object inside ``value`` (itself an array or object at ``level``) sits
+    deeper than ``limit``. Only arrays and objects count (mcp-tool-set-digest/1 section 12); the walk
+    keeps its own stack, so a hostile value cannot exhaust the interpreter's."""
+    stack = [(value, level)]
+    while stack:
+        item, at = stack.pop()
+        if at > limit:
+            return True
+        for child in (item.values() if isinstance(item, dict) else item):
+            if isinstance(child, (dict, list)):
+                stack.append((child, at + 1))
+    return False
+
+
 def tool_set_digest(tools: list[Any]) -> tuple[str, list[dict[str, Any]]]:
     """``(sri, canonical_entries)``. ``MTL-NUM-001`` only for a number with no double (1e400)."""
     entries = canonical_tool_set(tools)
+    for entry in entries:
+        if deeper_than(entry, 2):             # a tool is level 2, its schemas level 3
+            raise MtlError(MTL_SUBJ_005, f"a tool schema in tool {entry['name']!r} nests deeper than level "
+                                         f"{MAX_LEVEL} (mcp-tool-set-digest/1 section 12)")
     try:
         canonical = canonical_tool_bytes(entries)
     except (ValueError, OverflowError) as exc:
