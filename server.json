@@ -7,20 +7,21 @@
     "url": "https://github.com/alexar76/histor",
     "source": "github"
   },
-  "version": "0.11.0",
+  "version": "0.12.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "aimarket-histor",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "HISTOR_MCP_REMOTE",
-          "description": "Public HISTOR instance to query (default https://histor.modelmarket.dev). Pass --local to serve your own log from HISTOR_DATA_DIR instead.",
+          "description": "Public HISTOR instance to query. Pass --local to serve your own log from HISTOR_DATA_DIR instead.",
+          "default": "https://histor.modelmarket.dev",
           "isRequired": false,
           "isSecret": false
         }

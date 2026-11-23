@@ -218,17 +218,27 @@ function currentRoute() {
   const raw = SERVED ? location.pathname : (location.hash.replace(/^#/, "") || "/");
   return raw.replace(/\/+$/, "") || "/";
 }
+function localizedDeskRoute(route) {
+  return route === "/changes" || route.startsWith("/s/");
+}
 function href(route) {
   if (!SERVED) return `#${route}`;
-  return route.startsWith("/s/") && lang !== "en" ? `${route}?lang=${lang}` : route;
+  return localizedDeskRoute(route) && lang !== "en" ? `${route}?lang=${lang}` : route;
 }
-function cardLanguage() {
-  if (!SERVED || !currentRoute().startsWith("/s/")) return null;
+function deskRouteLanguage() {
+  const route = currentRoute();
+  if (!SERVED || !localizedDeskRoute(route)) return null;
   const requested = new URLSearchParams(location.search).get("lang");
-  return LANGS.includes(requested) ? requested : "en";
+  if (LANGS.includes(requested)) return requested;
+  return route.startsWith("/s/") ? "en" : null;
+}
+function approvalFilterRequested() {
+  const value = new URLSearchParams(location.search).getAll("approval_relaxing").at(-1);
+  return /^(1|on|t|true|y|yes)$/i.test(value || "");
 }
 function deskFirst(route) {
-  return route === "/watch" || route === "/check" || route.startsWith("/s/");
+  return route === "/watch" || route === "/check" || route.startsWith("/s/") ||
+    (route === "/changes" && approvalFilterRequested());
 }
 function go(route, push = true) {
   if (push) {
@@ -236,7 +246,10 @@ function go(route, push = true) {
       const url = new URL(route + location.search, location.origin);
       // A recorded example belongs to its direct link, not the general Check navigation.
       url.searchParams.delete("sample");
-      if (route.startsWith("/s/")) {
+      // A cursor or event belongs to the filtered history that supplied it.
+      if (approvalFilterRequested()) url.searchParams.delete(currentRoute() === "/changes" ? "before" : "event");
+      url.searchParams.delete("approval_relaxing");
+      if (localizedDeskRoute(route)) {
         if (lang === "en") url.searchParams.delete("lang");
         else url.searchParams.set("lang", lang);
       }
@@ -256,7 +269,7 @@ document.addEventListener("click", (e) => {
   go(a.dataset.route);
 });
 window.addEventListener("popstate", () => {
-  const selected = cardLanguage();
+  const selected = deskRouteLanguage();
   if (selected && selected !== lang) applyLang(selected, false);
   else render();
 });
@@ -282,8 +295,8 @@ function render() {
   const token = ++renderToken;
   const done = (node) => { if (token === renderToken) view.replaceChildren(node); };
   if (!keepPrerender) view.replaceChildren(el("p", { class: "muted", text: t("js_loading") }));
-  if (route.startsWith("/s/")) return serverView(route.slice(3), done);
-  if (route === "/changes") return changesView(done);
+  if (route.startsWith("/s/")) return approvalFilterRequested() ? approvalRelaxingView(route.slice(3), done) : serverView(route.slice(3), done);
+  if (route === "/changes") return approvalFilterRequested() ? globalApprovalChangesView(done) : changesView(done);
   if (route === "/log") return logView(done);
   if (route === "/check") return checkView(done);
   if (route === "/stats") return statsView(done);
@@ -473,6 +486,58 @@ function summaryLine(s) {
   return el("div", { class: `verdict-line ${cls}` }, el("div", { text }), advice ? el("div", { class: "advice", text: advice }) : "");
 }
 
+function serverRecordHref(id, approvalRelaxing = false, event = null) {
+  const params = new URLSearchParams();
+  if (approvalRelaxing) params.set("approval_relaxing", "true");
+  if (event !== null) params.set("event", event);
+  if (lang !== "en") params.set("lang", lang);
+  const query = params.toString();
+  const anchor = event !== null ? `#approval-change-${encodeURIComponent(event)}` : "";
+  return `${DESK}/s/${encodeURIComponent(id)}${query ? `?${query}` : ""}${anchor}`;
+}
+
+function approvalChangeCard(change, server = null) {
+  const card = el("article", { class: "tool approval-change", id: `approval-change-${change.id}` },
+    server,
+    el("time", { class: "mono muted", datetime: change.observedAt, text: `${fmt(change.observedAt)} UTC` }));
+  const tools = Object.entries(change.summary.tools);
+  for (const [name, tool] of tools) {
+    card.append(el("p", { class: "tn" }, ...visible(name).nodes));
+    for (const [hint, [before, after]] of Object.entries(tool.annotations)) {
+      card.append(el("div", { class: "match" }, el("b", { text: hint }), ` · ${before} → ${after}`));
+    }
+  }
+  if (change.summary.truncated) {
+    card.append(el("p", { class: "muted", text: t("js_approval_more", { n: num(change.summary.changedTools - tools.length) }) }));
+  }
+  return card;
+}
+
+async function approvalRelaxingView(id, done) {
+  const params = new URLSearchParams({ approval_relaxing: "true" });
+  const event = new URLSearchParams(location.search).getAll("event").at(-1);
+  if (event !== undefined) params.set("event", event);
+  let data;
+  try { data = await api(`/api/v1/servers/${encodeURIComponent(id)}?${params}`); }
+  catch (err) { return unreachable(done, err); }
+  const s = data.server;
+  const root = el("div", { class: "detail desk-entry" },
+    el("h2", { class: "desk-heading" }, ...visible(s.title || s.name).nodes),
+    el("p", { class: "mono muted" }, ...visible(s.name).nodes, " · ", ...visible(s.endpoint).nodes),
+    el("h3", { class: "block-h", text: t("js_approval_filter") }),
+    el("p", { class: "muted", text: t("js_approval_note") }),
+    el("div", { class: "cta" },
+      el("a", { class: "btn btn-primary", href: `${API}/feed.xml?watch=${encodeURIComponent(s.id)}&approval_relaxing=true`,
+        type: "application/atom+xml", "data-journey": "watch_feed_clicked", text: t("js_approval_atom") }),
+      el("a", { class: "btn btn-ghost", href: serverRecordHref(s.id), text: t("js_approval_back") })));
+  const changes = (data.extrasChanges || []).filter((change) => change.summary.approvalRelaxing?.length);
+  if (!changes.length) root.append(el("p", { class: "empty", text: t("js_approval_none") }));
+  for (const change of changes) root.append(approvalChangeCard(change));
+  done(root);
+  const anchor = location.hash.slice(1);
+  if (root.isConnected && anchor.startsWith("approval-change-")) document.getElementById(anchor)?.scrollIntoView();
+}
+
 async function serverView(id, done) {
   let data, issuer;
   try { [data, issuer] = await Promise.all([api(`/api/v1/servers/${encodeURIComponent(id)}`), api("/api/v1/issuer")]); }
@@ -491,7 +556,8 @@ async function serverView(id, done) {
     el("time", { datetime: latest.observed_at, text: `${fmt(latest.observed_at)} UTC` }), versions(latest)));
   const actions = el("div", { class: "cta" },
     el("a", { class: "btn btn-primary", href: `${API}/feed.xml?watch=${encodeURIComponent(s.id)}`,
-      "data-journey": "watch_feed_clicked", text: t("js_server_atom") }));
+      "data-journey": "watch_feed_clicked", text: t("js_server_atom") }),
+    el("a", { class: "btn btn-ghost", href: serverRecordHref(s.id, true), text: t("js_approval_filter") }));
   if (s.toolSetDigest) actions.append(el("a", { class: "btn btn-ghost",
     href: `${DESK}/check?sample=${encodeURIComponent(s.id)}&lang=${lang}`, text: t("js_server_check") }));
   if (labelId) actions.append(el("a", { class: "btn btn-ghost",
@@ -697,10 +763,48 @@ async function serverView(id, done) {
   done(root);
 }
 
+function changesHref(approvalRelaxing = false, before = null) {
+  const params = new URLSearchParams();
+  if (approvalRelaxing) params.set("approval_relaxing", "true");
+  if (before !== null) params.set("before", before);
+  if (lang !== "en") params.set("lang", lang);
+  const query = params.toString();
+  return `${DESK}/changes${query ? `?${query}` : ""}`;
+}
+
+async function globalApprovalChangesView(done) {
+  const params = new URLSearchParams({ approval_relaxing: "true", limit: "60" });
+  const before = new URLSearchParams(location.search).getAll("before").at(-1);
+  if (before !== undefined) params.set("before", before);
+  let data;
+  try { data = await api(`/api/v1/changes?${params}`); } catch (err) { return unreachable(done, err); }
+  const root = el("div", { class: "detail desk-entry" },
+    el("h2", { class: "desk-heading", text: t("js_approval_filter") }),
+    el("p", { class: "muted", text: t("js_approval_note") }),
+    el("div", { class: "cta" },
+      el("a", { class: "btn btn-primary", href: `${API}/feed.xml?approval_relaxing=true`,
+        type: "application/atom+xml", "data-journey": "watch_feed_clicked", text: t("js_approval_global_atom") }),
+      el("a", { class: "btn btn-ghost", href: changesHref(), text: t("js_changes_definitions") })));
+  if (!data.changes.length) root.append(el("p", { class: "empty", text: t("js_approval_none") }));
+  for (const change of data.changes) {
+    const server = el("p", {}, el("a", { href: serverRecordHref(change.targetId, true, change.id) },
+      ...visible(change.targetTitle || change.targetName || change.targetId).nodes));
+    root.append(approvalChangeCard(change, server));
+  }
+  if (data.nextCursor != null) {
+    root.append(el("div", { class: "cta" },
+      el("a", { class: "btn btn-ghost", href: changesHref(true, data.nextCursor), text: t("js_more") })));
+  }
+  done(root);
+}
+
 async function changesView(done) {
   let data;
   try { data = await api("/api/v1/changes?limit=60"); } catch (err) { return unreachable(done, err); }
-  const root = el("div", {}, el("p", { class: "muted" }, t("js_changes_intro"), " ", el("a", { href: `${API || ""}/feed.xml`, text: "Atom" })));
+  const root = el("div", {},
+    el("p", { class: "muted" }, t("js_changes_intro"), " ", el("a", { href: `${API}/feed.xml`, text: "Atom" })),
+    el("div", { class: "cta" },
+      el("a", { class: "btn btn-ghost", href: changesHref(true), text: t("js_approval_filter") })));
   if (!data.changes.length) root.append(el("div", { class: "empty", text: t("js_no_changes") }));
   for (const c of data.changes) {
     const s = c.summary;
@@ -1138,7 +1242,7 @@ document.getElementById("burger").addEventListener("click", () => {
 });
 document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => {
   const next = b.dataset.lang;
-  if (SERVED && currentRoute().startsWith("/s/") && next !== lang) {
+  if (SERVED && localizedDeskRoute(currentRoute()) && next !== lang) {
     const url = new URL(location.href);
     if (next === "en") url.searchParams.delete("lang");
     else url.searchParams.set("lang", next);
@@ -1192,7 +1296,7 @@ async function startLoom() {
 }
 
 let initial = "en";
-try { initial = cardLanguage() || new URLSearchParams(location.search).get("lang") || localStorage.getItem("histor-lang") || (navigator.language || "en").slice(0, 2); } catch { /* storage blocked */ }
+try { initial = deskRouteLanguage() || new URLSearchParams(location.search).get("lang") || localStorage.getItem("histor-lang") || (navigator.language || "en").slice(0, 2); } catch { /* storage blocked */ }
 applyLang(initial, false);
 if (currentRoute() !== "/" && !deskFirst(currentRoute())) {
   // A deep link (/s/<id>, /log …) lands on the desk, not on the hero above it.

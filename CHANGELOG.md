@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.12.0 — 2026-11-23
+
+- **Changes that may remove confirmation** (54b7e5ba9, live 2026-11-23 18:47Z, across servers 19:10Z). The changes
+  page, a server's card, `/api/v1/changes` and the Atom feed take `approval_relaxing=true` and then show only
+  observations in which `readOnlyHint` went from `false` to `true` or `destructiveHint` from `true` to `false`
+  (docs/watch.md); flips hidden by the summary's display cap are recovered from the stored bodies.
+  `deploy/approval-changes-index.sql` is an optional PostgreSQL index for it.
+- **Extras changes name the tools that now claim less (`relaxations`).** A change summary named only `escalations`:
+  tools that stopped saying `readOnlyHint: true` or started saying `destructiveHint: true`, the direction in which a
+  client asks more. The direction that lets a call through without a prompt was not named. `relaxations` now lists
+  the tools the server already listed that started saying `readOnlyHint: true` or `destructiveHint: false` (absent
+  means not read-only and destructive); a new tool is in neither list. Whether a tool was listed before comes from
+  the target's previous tool set, not only from the earlier extras body, which holds just the tools that carried an
+  extra member: otherwise a tool with no hints that starts saying it is read-only would look new. The upgrade brief
+  gives each tool `extras.relaxation` beside `extras.escalation`. Pointed out by a reader of the registry-copy
+  article (DEV.to, 2026-11-23), who noticed that our own count had the two directions the wrong way round.
+  `python -m histor.extras_relaxations count|fill` gives the changes recorded before this their list from the stored
+  bodies, in pages by `seq`; it only adds the key. On production (2026-11-23): RELAX_NUMBERS.
+- The rfc8785 vector test names the four vectors added to mcp-tool-set-digest on 2026-11-23 that HISTOR's bounded
+  form changes (extras 510 and 511 levels deep, `1e400` outside the contract, a repeated `name` whose last value is
+  empty), as `scripts/cross_check_histor.py` already did.
+
 ## 0.11.0 — 2026-11-22
 
 - **New outside addresses: a field of an object is no longer listed as a host.** `newAddresses` in a change

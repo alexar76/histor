@@ -56,23 +56,25 @@ def test_an_unknown_scheme_is_refused():
 @pytest.mark.skipif(not VECTORS.is_file(), reason="mcp-tool-set-digest vectors not in this checkout")
 def test_rfc8785_agrees_with_the_specification_where_the_bounded_form_does_not_apply():
     """mcp-tool-set-digest/1 section 8: under rfc8785 HISTOR's extras digest is the specification's on every
-    vector except the 13 that the limits of section 8.1 change. Where the specification gives no digest
+    vector except the 17 that the limits of section 8.1 change. Where the specification gives no digest
     (TSD-NAME, TSD-TOOL, TSD-TEXT, TSD-NUMBER), HISTOR's bounded form still writes a value or None; that is a
     difference, not agreement.
 
     The list is the specification's own count (Appendix A: "agrees on 60 and differs on the 13 vectors its
-    limits of section 8.1 change"; the same 13 as KNOWN in scripts/cross_check_histor.py, minus the three
-    serialiser cases). Both directions are checked, so a vector added to the specification that touches a
+    limits of section 8.1 change" for the 73 vectors of 2026-11-13; with the 92 of 2026-11-23 they are 17, the same
+    as KNOWN in scripts/cross_check_histor.py minus the three serialiser cases). Both directions are checked, so a vector added to the specification that touches a
     limit fails here until it is named, and a named vector that starts to agree fails too."""
     bounded = {
         # a number with no double is stored as null, a lone surrogate as U+FFFD
-        "number-overflow-in-extras", "lone-surrogate-in-extras",
+        "number-overflow-in-extras", "extras-number-overflow-1e400", "lone-surrogate-in-extras",
+        # extras are stored at most MAX_DEPTH levels deep (the spec gives a digest at 510, TSD-DEPTH at 511)
+        "depth-extras-510", "depth-extras-511",
         # of two tools with one name the one listed last is kept (the spec says TSD-NAME)
         "duplicate-names-both-with-extras", "duplicate-names-before-lone-surrogate",
         "duplicate-names-before-number-overflow",
         # an entry that is not a tool is passed over (the spec says TSD-TOOL)
         "one-bad-among-good", "lone-surrogate-before-bad-entry", "tool-is-string", "tool-is-null",
-        "tool-is-array", "name-missing", "name-empty", "name-not-string",
+        "tool-is-array", "name-missing", "name-empty", "name-not-string", "repeated-member-name-last-empty",
     }
     vectors = json.loads(VECTORS.read_text("utf-8"))["vectors"]
     assert bounded < {vector["id"] for vector in vectors}

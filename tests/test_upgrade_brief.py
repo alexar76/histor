@@ -106,7 +106,7 @@ def test_typed_json_extra_change_and_invalid_boolean_hint_are_explicit(tmp_path)
     assert row["status"] == "changed" and row["workflows"][0]["status"] == "retest"
     assert extras["members"] == {"vendorValue": "changed"}
     assert extras["annotationFieldsChanged"] == ["readOnlyHint"]
-    assert extras["annotationHints"] == {} and extras["escalation"] is True
+    assert extras["annotationHints"] == {} and extras["escalation"] is True and extras["relaxation"] is False
 
 
 def test_description_and_annotation_escalation_are_both_observed(tmp_path):
@@ -388,3 +388,12 @@ def test_unknown_extras_alone_cannot_mean_added_removed_or_unchanged_and_coverag
     (tmp_path / "after.json").write_text(json.dumps(value))
     with pytest.raises(InvalidInput, match="extrasCoverage"):
         build_report(path)
+
+
+def test_a_tool_that_starts_claiming_read_only_is_a_relaxation(tmp_path):
+    before = observation([tool(annotations={"destructiveHint": True})])
+    after = observation([tool(annotations={"readOnlyHint": True, "destructiveHint": False})],
+                        observedAt="2026-10-27T10:00:00Z")
+    row = first(write_bundle(tmp_path, before=before, after=after))["selectedTools"][0]
+    assert row["extras"]["relaxation"] is True and row["extras"]["escalation"] is False
+    assert row["extras"]["annotationHints"] == {"destructiveHint": [True, False], "readOnlyHint": [None, True]}

@@ -28,6 +28,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from collections.abc import Collection
 from typing import Any
 
 from awr import AwrError
@@ -145,18 +146,57 @@ def _annotation_flips(old: Any, new: Any) -> dict[str, list[Any]]:
     return out
 
 
-def extras_diff(old: dict[str, Any] | None, new: dict[str, Any] | None) -> dict[str, Any]:
+def approval_relaxing_hints(flips: dict[str, list[Any]]) -> dict[str, list[bool]]:
+    """Explicit boolean transitions that can reduce approvals in clients that trust these hints."""
+    matches = {}
+    for key, before in (("readOnlyHint", False), ("destructiveHint", True)):
+        values = flips.get(key)
+        if values and values[0] is before and values[1] is (not before):
+            matches[key] = values
+    return matches
+
+
+def approval_relaxing_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Recover matching flips omitted by the change summary's display cap."""
+    before, after = old["tools"], new["tools"]
+    matches = {}
+    for name in sorted(before.keys() & after.keys()):
+        flips = _annotation_flips(before[name].get("annotations"), after[name].get("annotations"))
+        if hints := approval_relaxing_hints(flips):
+            matches[name] = {"annotations": hints}
+    return matches
+
+
+def tool_names(toolset_text: str | None) -> set[str]:
+    """The tool names in a stored tool set (a ``toolset`` blob: the JSON array of contract entries)."""
+    try:
+        tools = json.loads(toolset_text) if toolset_text else []
+    except ValueError:
+        return set()
+    return {t["name"] for t in tools if isinstance(t, dict) and isinstance(t.get("name"), str)} \
+        if isinstance(tools, list) else set()
+
+
+def extras_diff(old: dict[str, Any] | None, new: dict[str, Any] | None,
+                listed: Collection[str] | None = None) -> dict[str, Any]:
     """What moved between two extras bodies, tool by tool.
 
     ``annotations`` changes are spelled out value by value (they are small and they decide what a
     client asks the user); every other member is named when it appeared, disappeared or changed.
     ``escalations`` lists the tools that stopped saying they are read-only or started saying they
-    are destructive: the flips a client that auto-approves on hints should hear about first.
+    are destructive: a client that asks on those hints now asks more. ``relaxations`` lists the
+    tools already present before that started saying ``readOnlyHint: true`` or ``destructiveHint:
+    false`` (absent means not read-only and destructive): a client that skips the prompt on those
+    hints stops asking, so these are the ones to alarm on. ``listed`` names the tools the server
+    listed in the previous read (its tool set): an extras body holds only the tools that carried an
+    extra member, so without it a tool that had no hints and now says it is read-only would look new.
+    A tool that is new is not a relaxation; its hints are its first word, not a change of it.
     """
     old_tools = (old or {}).get("tools") or {}
     new_tools = (new or {}).get("tools") or {}
     tools: dict[str, Any] = {}
     escalations: list[str] = []
+    relaxations: list[str] = []
     for name in sorted(set(old_tools) | set(new_tools)):
         before, after = old_tools.get(name) or {}, new_tools.get(name) or {}
         if before == after:
@@ -168,6 +208,9 @@ def extras_diff(old: dict[str, Any] | None, new: dict[str, Any] | None) -> dict[
             ro, de = flips.get("readOnlyHint"), flips.get("destructiveHint")
             if (ro and ro[0] is True and ro[1] is not True) or (de and de[1] is True and de[0] is not True):
                 escalations.append(name)
+            if (name in old_tools or (listed is not None and name in listed)) and (
+                    (ro and ro[1] is True and ro[0] is not True) or (de and de[1] is False and de[0] is not False)):
+                relaxations.append(name)
         members = sorted((set(before) | set(after)) - {"annotations"})
         moved = {m: ("added" if m not in before else "removed" if m not in after else "changed")
                  for m in members if before.get(m) != after.get(m)}
@@ -181,4 +224,6 @@ def extras_diff(old: dict[str, Any] | None, new: dict[str, Any] | None) -> dict[
         summary["truncated"] = True
     if escalations:
         summary["escalations"] = escalations
+    if relaxations:
+        summary["relaxations"] = relaxations
     return summary

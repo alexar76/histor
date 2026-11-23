@@ -31,6 +31,34 @@ curl -s "https://histor.modelmarket.dev/api/v1/changes?watch=<id>,<id>&after=<ne
 
 Nothing is stored on HISTOR's side: the list is in your URL.
 
+### Changes that may remove confirmation
+
+Open **Changes that may remove confirmation** from the Changes page to see observations
+across all servers HISTOR tracks. The filter shows explicit flips from `false` to `true` for
+`readOnlyHint`, or from `true` to `false` for `destructiveHint`. It includes changes confined to
+annotations. The effect on approval depends on how a client uses hints from that server.
+
+```text
+https://histor.modelmarket.dev/changes?approval_relaxing=true
+https://histor.modelmarket.dev/feed.xml?approval_relaxing=true
+```
+
+The global Atom feed carries the latest 50 matching observations. Each observation has one
+entry, even if multiple hints or tools changed, with a link to that exact observation.
+For one server, open its filtered card at `/s/<id>?approval_relaxing=true` or subscribe to
+`/feed.xml?watch=<id>&approval_relaxing=true`.
+
+For a program, request the same confirmation-hint history with its own sequence cursor:
+
+```bash
+curl -s 'https://histor.modelmarket.dev/api/v1/changes?approval_relaxing=true&limit=50'
+curl -s 'https://histor.modelmarket.dev/api/v1/changes?approval_relaxing=true&after=0&limit=200'
+```
+
+For the newest-first response, pass `nextCursor` as `before` to read older matches.
+For an incremental read, pass `nextCursor` as `after`. The same request can take one
+`watch=<id>` to restrict it to a server.
+
 ## For teams: changes pushed to your systems — $29 for 30 days
 
 HISTOR Watch for teams sends each change of the servers on your list to your HTTPS endpoint as

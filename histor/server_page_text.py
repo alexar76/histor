@@ -1,5 +1,13 @@
 """Server-rendered copy for public MCP server cards."""
 
+APPROVAL_GLOBAL_TEXT = {
+    "en": ("Subscribe across all servers (Atom)", "Tool-definition changes", "Load more"),
+    "ru": ("Подписаться на изменения всех серверов (Atom)", "Изменения определений инструментов", "Показать ещё"),
+    "es": ("Suscribirse a los cambios de todos los servidores (Atom)", "Cambios en las definiciones de herramientas", "Cargar más"),
+    "fr": ("S’abonner aux changements de tous les serveurs (Atom)", "Changements des définitions d’outils", "Charger plus"),
+    "zh": ("订阅所有服务器的这些变更（Atom）", "工具定义变更", "加载更多"),
+}
+
 CARD_TEXT = {
     "en": {
         "remote": "MCP server record",
@@ -13,6 +21,12 @@ CARD_TEXT = {
         "diff": "Read the change record",
         "proof": "Inclusion proof",
         "follow": "Follow changes (Atom)",
+        "approval_filter": "Changes that may remove confirmation",
+        "approval_note": ("Clients that rely on these annotations may ask for fewer confirmations. The filter shows "
+                          "explicit changes from false to true for readOnlyHint and from true to false for destructiveHint."),
+        "approval_atom": "Subscribe to these changes (Atom)",
+        "approval_back": "Full server record",
+        "approval_none": "No matching changes recorded.",
         "check": "Check a recorded tool set",
         "details": "For signed observations, earlier tool sets and diffs, use the interactive record or {api}.",
     },
@@ -28,6 +42,12 @@ CARD_TEXT = {
         "diff": "Открыть запись об изменении",
         "proof": "Доказательство включения",
         "follow": "Следить за изменениями (Atom)",
+        "approval_filter": "Изменения, которые могут убрать подтверждение",
+        "approval_note": ("Клиенты, которые учитывают эти аннотации, могут реже запрашивать подтверждение. "
+                          "Фильтр показывает явные переходы readOnlyHint из false в true и destructiveHint из true в false."),
+        "approval_atom": "Подписаться на эти изменения (Atom)",
+        "approval_back": "Полная карточка сервера",
+        "approval_none": "Подходящих изменений в журнале пока нет.",
         "check": "Проверить сохранённый набор",
         "details": "Подписанные наблюдения, прежние наборы инструментов и сравнения доступны в интерактивной карточке и через {api}.",
     },
@@ -43,6 +63,12 @@ CARD_TEXT = {
         "diff": "Consultar el registro del cambio",
         "proof": "Prueba de inclusión",
         "follow": "Seguir cambios (Atom)",
+        "approval_filter": "Cambios que podrían suprimir una confirmación",
+        "approval_note": ("Los clientes que se basan en estas anotaciones pueden pedir menos confirmaciones. "
+                          "El filtro muestra cambios explícitos de readOnlyHint de false a true y de destructiveHint de true a false."),
+        "approval_atom": "Suscribirse a estos cambios (Atom)",
+        "approval_back": "Registro completo del servidor",
+        "approval_none": "No se han registrado cambios que coincidan.",
         "check": "Verificar un conjunto de herramientas registrado",
         "details": "Consulta las observaciones firmadas, los conjuntos de herramientas anteriores y sus diferencias en el registro interactivo o en {api}.",
     },
@@ -58,6 +84,12 @@ CARD_TEXT = {
         "diff": "Consulter la fiche du changement",
         "proof": "Preuve d’inclusion",
         "follow": "Suivre les changements (Atom)",
+        "approval_filter": "Changements pouvant supprimer une confirmation",
+        "approval_note": ("Les clients qui se fient à ces annotations peuvent demander moins de confirmations. "
+                          "Le filtre affiche les passages de readOnlyHint de false à true et de destructiveHint de true à false."),
+        "approval_atom": "S’abonner à ces changements (Atom)",
+        "approval_back": "Fiche complète du serveur",
+        "approval_none": "Aucun changement correspondant n’a été enregistré.",
         "check": "Vérifier un ensemble d’outils enregistré",
         "details": "Consultez les observations signées, les ensembles d’outils antérieurs et leurs différences dans la fiche interactive ou via {api}.",
     },
@@ -73,6 +105,11 @@ CARD_TEXT = {
         "diff": "查看变更记录",
         "proof": "包含证明",
         "follow": "订阅变更（Atom）",
+        "approval_filter": "可能跳过确认的变更",
+        "approval_note": "依赖这些注解的客户端可能减少确认提示。此筛选仅显示 readOnlyHint 从 false 变为 true，以及 destructiveHint 从 true 变为 false 的记录。",
+        "approval_atom": "订阅这些变更（Atom）",
+        "approval_back": "完整的服务器记录",
+        "approval_none": "没有符合条件的变更记录。",
         "check": "检查已记录的工具集",
         "details": "签名观测、以往的工具集和变更对比可在交互式记录或 {api} 中查看。",
     },

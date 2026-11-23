@@ -46,7 +46,7 @@ from histor.labels import SHORT
 from histor.lookalike import default_index
 from histor.packages import package_key
 from histor.receipts import AnchorRefused
-from histor.server_page_text import CARD_TEXT, WATCH_TEXT
+from histor.server_page_text import APPROVAL_GLOBAL_TEXT, CARD_TEXT, WATCH_TEXT
 from histor.service import Services, crawl_in_background, scheduler
 from histor.tiles import TileError, TileIntegrityError, parse_tile_path, read_tile
 from histor.untrusted import TooDeep, loads_cut, loads_limited
@@ -135,6 +135,10 @@ PRERENDER_TOOLS = 100
 PRERENDER_CHARS = 400
 WATCH_SAMPLE = "236eb5f0481cc99c"
 WATCH_CONTACT = "mailto:qwezzy721@gmail.com?subject=HISTOR%20Watch%20team%20pilot"
+APPROVAL_FILTER = "approval_relaxing=true"
+APPROVAL_CHANGES_PATH = f"/changes?{APPROVAL_FILTER}"
+APPROVAL_FEED_PATH = f"/feed.xml?{APPROVAL_FILTER}"
+APPROVAL_PAGE_SIZE = 60
 
 
 def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
@@ -142,6 +146,78 @@ def _shown(text: Any, limit: int = PRERENDER_CHARS) -> str:
     s = str(text or "")
     s = s if len(s) <= limit else s[:limit].rstrip() + " …"
     return xml_escape(_INVISIBLE.sub(lambda m: f"⟨U+{ord(m.group()):04X}⟩", s))
+
+
+def _approval_transitions(change: dict[str, Any], limit: int) -> list[str]:
+    tools = list(change["summary"]["tools"].items())
+    return [
+        f"{name}: " + ", ".join(f"{hint} {str(before).lower()} → {str(after).lower()}"
+                               for hint, (before, after) in tool["annotations"].items())
+        for name, tool in tools[:limit]
+    ]
+
+
+def _approval_event_path(target_id: str, event_id: int, *, lang: str = "en", exact: bool = True) -> str:
+    event_query = f"&event={event_id}" if exact else ""
+    lang_query = "" if lang == "en" else f"&lang={lang}"
+    return f"/s/{target_id}?{APPROVAL_FILTER}{event_query}{lang_query}#approval-change-{event_id}"
+
+
+def _approval_card(change: dict[str, Any], lang: str, *, global_view: bool = False) -> str:
+    event_id = change["id"]
+    observed = _shown(change["observedAt"])
+    out = [f'<article class="tool approval-change" id="approval-change-{event_id}">']
+    if global_view:
+        href = xml_escape(_approval_event_path(change["targetId"], event_id, lang=lang))
+        name = _shown(change["targetTitle"] or change["targetName"], 200)
+        out.append(f'<h3 class="tn"><a href="{href}">{name}</a></h3>')
+    out.append(f'<time class="mono muted" datetime="{observed}">{observed}</time><ul>')
+    out.extend(f'<li>{_shown(text)}</li>' for text in _approval_transitions(change, PRERENDER_TOOLS))
+    more = change["summary"]["changedTools"] - PRERENDER_TOOLS
+    if more > 0:
+        out.append(f'<li>{CARD_TEXT[lang]["more"].format(count=more)}</li>')
+    out.append('</ul></article>')
+    return "".join(out)
+
+
+def _approval_global_prerender(changes: list[dict[str, Any]], lang: str, cursor: int | None) -> str:
+    copy = CARD_TEXT[lang]
+    atom, definitions, more = APPROVAL_GLOBAL_TEXT[lang]
+    lang_suffix = "" if lang == "en" else f"?lang={lang}"
+    out = [
+        f'<div class="detail desk-entry"><h2 class="desk-heading">{copy["approval_filter"]}</h2>',
+        f'<p class="muted">{copy["approval_note"]}</p>',
+        f'<div class="cta"><a class="btn btn-primary" data-journey="watch_feed_clicked" '
+        f'type="application/atom+xml" href="{APPROVAL_FEED_PATH}">{atom}</a>',
+        f'<a class="btn btn-ghost" href="/changes{lang_suffix}">{definitions}</a></div>',
+    ]
+    out.extend(_approval_card(change, lang, global_view=True) for change in changes)
+    if not changes:
+        out.append(f'<p class="empty">{copy["approval_none"]}</p>')
+    if cursor is not None:
+        lang_query = "" if lang == "en" else f"&amp;lang={lang}"
+        out.append(f'<a class="btn btn-ghost" href="{APPROVAL_CHANGES_PATH}&amp;before={cursor}{lang_query}">{more}</a>')
+    out.append('</div>')
+    return "".join(out)
+
+
+def _approval_prerender(t: dict[str, Any], lang: str, changes: list[dict[str, Any]]) -> str:
+    copy = CARD_TEXT[lang]
+    target_id = t["id"]
+    lang_query = "" if lang == "en" else f"?lang={lang}"
+    out = [
+        f'<div class="detail desk-entry"><h2 class="desk-heading">{_shown(t["title"] or t["name"], 200)}</h2>',
+        f'<p class="mono muted">{_shown(t["name"], 200)} · {_shown(t["endpoint"], 300)}</p>',
+        f'<h3 class="block-h">{copy["approval_filter"]}</h3><p class="muted">{copy["approval_note"]}</p>',
+        f'<div class="cta"><a class="btn btn-primary" data-journey="watch_feed_clicked" '
+        f'href="/feed.xml?watch={target_id}&amp;{APPROVAL_FILTER}">{copy["approval_atom"]}</a>',
+        f'<a class="btn btn-ghost" href="/s/{target_id}{lang_query}">{copy["approval_back"]}</a></div>',
+    ]
+    out.extend(_approval_card(change, lang) for change in changes)
+    if not changes:
+        out.append(f'<p class="empty">{copy["approval_none"]}</p>')
+    out.append('</div>')
+    return "".join(out)
 
 
 def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str, change: dict[str, Any] | None) -> str:
@@ -166,6 +242,8 @@ def _server_prerender(t: dict[str, Any], tools_json: str | None, lang: str, chan
     out.append('<div class="cta">')
     out.append(f'<a class="btn btn-primary" data-journey="watch_feed_clicked" href="/feed.xml?watch={target_id}">'
                f'{copy["follow"]}</a>')
+    out.append(f'<a class="btn btn-ghost" href="/s/{target_id}?{APPROVAL_FILTER}&amp;lang={lang}">'
+               f'{copy["approval_filter"]}</a>')
     if t["current_toolset"]:
         out.append(f'<a class="btn btn-ghost" href="/check?sample={target_id}&amp;lang={lang}">{copy["check"]}</a>')
     if change:
@@ -372,14 +450,14 @@ def create_app(services: Services) -> FastAPI:
 
     index_file = settings.landing_dir / "index.html"
 
-    def spa(request: Request) -> Response:
+    def _desk_shell(request: Request, *, desk_first: bool = False) -> Response:
         """The desk. One file serves both the service and GitHub Pages: relative asset paths
         work under /histor/ on Pages, and here a <base href="/"> makes them resolve from /s/<id>."""
         if not index_file.is_file():
             raise HTTPException(status_code=404, detail="landing missing")
         page = index_file.read_text(encoding="utf-8").replace("<!--HISTOR:BASE-->", '<base href="/">', 1)
         path = request.url.path
-        if path in ("/watch", "/check") or path.startswith("/s/"):
+        if desk_first or path in ("/watch", "/check") or path.startswith("/s/"):
             before, start, rest = page.partition("<!--HISTOR:DESK-START-->")
             desk, end, after = rest.partition("<!--HISTOR:DESK-END-->")
             if start and end:
@@ -398,9 +476,58 @@ def create_app(services: Services) -> FastAPI:
                                 f'<div id="view" aria-live="polite">{card}</div>', 1)
         return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
+    def spa(request: Request) -> Response:
+        return _desk_shell(request)
+
+    def _approval_page(limit: int, before: int | None, watch: str | None = None) -> tuple[list[dict[str, Any]], int | None]:
+        rows = store.approval_relaxing_changes(limit=limit + 1, before_id=before, target_id=watch)
+        return rows[:limit], rows[limit - 1]["id"] if len(rows) > limit else None
+
+    def _approval_record(target_id: str, event: int | None) -> list[dict[str, Any]]:
+        if event is None:
+            return store.extras_changes(target_id, approval_relaxing=True)
+        row = store.approval_relaxing_change(target_id, event)
+        if row is None:
+            raise HTTPException(status_code=404, detail="unknown confirmation hint change")
+        return [row]
+
+    def _approval_atom_discovery(html: str, feed_path: str) -> str:
+        feed_url = xml_escape(settings.public_base + feed_path)
+        return re.sub(r'<link rel="alternate" type="application/atom\+xml"[^>]*/>',
+                      lambda _: f'<link rel="alternate" type="application/atom+xml" href="{feed_url}"/>',
+                      html, count=1)
+
     for route in SPA_ROUTES:
         # HEAD too: link checkers and card fetchers probe with HEAD, and 405 reads as "down".
-        app.add_api_route(route, spa, methods=["GET", "HEAD"], include_in_schema=False)
+        if route != "/changes":
+            app.add_api_route(route, spa, methods=["GET", "HEAD"], include_in_schema=False)
+
+    @app.api_route("/changes", methods=["GET", "HEAD"], include_in_schema=False)
+    def changes_page(request: Request, lang: str = "en", approval_relaxing: bool = False,
+                     before: int | None = Query(None, ge=1, le=_ID_MAX)) -> Response:
+        lang = lang if lang in CARD_TEXT else "en"
+        label = CARD_TEXT[lang]["approval_filter"]
+        page = _desk_shell(request, desk_first=approval_relaxing).body.decode("utf-8")
+        page = page.replace('<html lang="en">', f'<html lang="{lang}">', 1)
+        lang_query = "" if lang == "en" else f"&amp;lang={lang}"
+        record = f'<a class="btn btn-ghost" href="{APPROVAL_CHANGES_PATH}{lang_query}">{label}</a>'
+        if approval_relaxing:
+            rows, cursor = _approval_page(APPROVAL_PAGE_SIZE, before)
+            record = _approval_global_prerender(rows, lang, cursor)
+            page = _approval_atom_discovery(page, APPROVAL_FEED_PATH)
+            page = re.sub(r"<title>.*?</title>", lambda _: f"<title>{xml_escape(label)} · HISTOR</title>",
+                          page, count=1, flags=re.S)
+            base_url = settings.public_base + APPROVAL_CHANGES_PATH
+            alternates = {code: base_url if code == "en" else f"{base_url}&lang={code}" for code in CARD_TEXT}
+            alternates["x-default"] = base_url
+            page = re.sub(r'<link rel="alternate" hreflang="([^"]+)" href="[^"]*"/>',
+                          lambda m: f'<link rel="alternate" hreflang="{m[1]}" href="{xml_escape(alternates[m[1]])}"/>',
+                          page)
+            page = re.sub(r'<link rel="canonical" href="[^"]*"/>',
+                          lambda _: f'<link rel="canonical" href="{xml_escape(alternates[lang])}"/>', page, count=1)
+        page = page.replace('<div id="view" aria-live="polite"></div>',
+                            f'<div id="view" aria-live="polite">{record}</div>', 1)
+        return Response(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     mongodb_guide = settings.landing_dir / MONGODB_GUIDE.lstrip("/")
 
@@ -411,12 +538,15 @@ def create_app(services: Services) -> FastAPI:
         return Response(mongodb_guide.read_text(encoding="utf-8"), media_type="text/html")
 
     @app.get("/s/{target_id}", include_in_schema=False)
-    def server_page(request: Request, target_id: str, lang: str = "en") -> Response:
+    def server_page(request: Request, target_id: str, lang: str = "en", approval_relaxing: bool = False,
+                    event: int | None = Query(None, ge=1, le=_ID_MAX)) -> Response:
         """The desk, with this server's own title and description in the HTML: what a search engine
         and a link preview read. Facts only — HISTOR never calls a server safe."""
         page = spa(request)
         t = store.target(target_id) if re.fullmatch(r"[0-9a-f]{16}", target_id) else None
         if t is None:
+            if approval_relaxing and event is not None:
+                raise HTTPException(status_code=404, detail="unknown server")
             return page
         lang = lang if lang in CARD_TEXT else "en"
         copy = CARD_TEXT[lang]
@@ -450,10 +580,15 @@ def create_app(services: Services) -> FastAPI:
                 lambda _, tag=tag: tag,
                 html, count=1,
             )
-        tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
-        latest = store.changes(limit=1, target_id=target_id) if t["changes"] else []
+        if approval_relaxing:
+            record = _approval_prerender(t, lang, _approval_record(target_id, event))
+            html = _approval_atom_discovery(html, f"/feed.xml?watch={target_id}&{APPROVAL_FILTER}")
+        else:
+            tools = store.blob_text(t["current_toolset"], "toolset") if t["current_toolset"] else None
+            latest = store.changes(limit=1, target_id=target_id) if t["changes"] else []
+            record = _server_prerender(t, tools, lang, latest[0] if latest else None)
         html = html.replace('<div id="view" aria-live="polite"></div>',
-                            f'<div id="view" aria-live="polite">{_server_prerender(t, tools, lang, latest[0] if latest else None)}</div>', 1)
+                            f'<div id="view" aria-live="polite">{record}</div>', 1)
         return Response(html, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
 
     SITEMAP_PAGE = 40_000
@@ -689,7 +824,14 @@ def create_app(services: Services) -> FastAPI:
         return {"total": total, "offset": offset, "limit": limit, "servers": [target_summary(r) for r in rows]}
 
     @app.get("/api/v1/servers/{target_id}")
-    def server(target_id: str) -> Response:
+    def server(target_id: str, approval_relaxing: bool = False,
+               event: int | None = Query(None, ge=1, le=_ID_MAX)) -> Response:
+        if approval_relaxing:
+            watched = store.target(target_id)
+            if watched is None:
+                raise HTTPException(status_code=404, detail="unknown server")
+            return JSONResponse({"server": target_summary(watched),
+                                 "extrasChanges": _approval_record(target_id, event)})
         t = store.target_with_extras(target_id)
         if t is None:
             raise HTTPException(status_code=404, detail="unknown server")
@@ -857,15 +999,34 @@ def create_app(services: Services) -> FastAPI:
             raise HTTPException(status_code=400, detail="watch takes up to 100 server ids (16 hex characters)")
         return ids
 
+    def _approval_target(watch: str | None) -> dict[str, Any] | None:
+        if watch is None:
+            return None
+        if not re.fullmatch(r"[0-9a-f]{16}", watch):
+            raise HTTPException(status_code=400, detail="approval_relaxing accepts one server id in watch")
+        target = store.target(watch)
+        if target is None:
+            raise HTTPException(status_code=404, detail="unknown server")
+        return target
+
     @app.get("/api/v1/changes")
     def changes(limit: int = Query(50, ge=1, le=200), before: int | None = Query(None, ge=1, le=_ID_MAX),
                 after: int | None = Query(None, ge=0, le=_ID_MAX),
-                watch: str | None = Query(None, max_length=1800)) -> dict[str, Any]:
+                watch: str | None = Query(None, max_length=1800), approval_relaxing: bool = False) -> dict[str, Any]:
         """Newest first, paged back with `before`; or, with `after`, oldest first from that id,
         with `nextCursor` to resume — the incremental read a mirror or a feed consumer needs.
-        `watch` limits either to the listed servers."""
+        `watch` limits either to the listed servers. With `approval_relaxing`, use cursors from
+        the confirmation-hint history, optionally restricted to one server."""
         if before is not None and after is not None:
             raise HTTPException(status_code=400, detail="use before or after, not both")
+        if approval_relaxing:
+            _approval_target(watch)
+            if after is None:
+                rows, cursor = _approval_page(limit, before, watch)
+            else:
+                rows = store.approval_relaxing_changes(limit=limit, after_id=after, target_id=watch)
+                cursor = rows[-1]["id"] if rows else after
+            return {"changes": rows, "nextCursor": cursor}
         rows = store.changes(limit=limit, before_id=before, after_id=after, target_ids=_watch_ids(watch))
         if after is None:
             return {"changes": rows}
@@ -959,10 +1120,55 @@ def create_app(services: Services) -> FastAPI:
                 # Tools whose extra members exceeded the storage caps: no fingerprint rather than a wrong one.
                 "incomplete": over_caps}
 
+    def approval_feed(watch: str | None) -> Response:
+        target = _approval_target(watch)
+        if target is None:
+            items = store.approval_relaxing_changes(limit=50)
+            fallback_updated = "1970-01-01T00:00:00Z"
+            feed_path = APPROVAL_FEED_PATH
+            scope = "all servers"
+        else:
+            items = store.extras_changes(target["id"], approval_relaxing=True)
+            fallback_updated = target["first_listed"]
+            feed_path = f'/feed.xml?watch={target["id"]}&{APPROVAL_FILTER}'
+            scope = target["name"]
+        updated = max((change["observedAt"] for change in items), default=fallback_updated)
+        self_url = xml_escape(settings.public_base + feed_path)
+        entries = []
+        for change in items:
+            target_id = target["id"] if target is not None else change["targetId"]
+            event_id = change["id"]
+            identity = xml_escape(settings.public_base + _approval_event_path(target_id, event_id, exact=False))
+            link = identity
+            title = "MCP hints that may remove confirmation"
+            if target is None:
+                link = xml_escape(settings.public_base + _approval_event_path(target_id, event_id))
+                title = f'{change["targetTitle"] or change["targetName"]}: {title}'
+            transitions = _approval_transitions(change, 10)
+            remaining = change["summary"]["changedTools"] - len(transitions)
+            if remaining:
+                transitions.append(f"{remaining} more tools")
+            summary = _xml_text("; ".join(transitions))
+            entries.append(
+                f'<entry><id>{identity}</id><title>{_xml_text(title)}</title>'
+                f'<updated>{change["observedAt"]}</updated><link href="{link}"/>'
+                f'<summary>{summary}. Applies to clients that trust these hints.</summary></entry>'
+            )
+        body = (
+            '<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom">'
+            f'<id>{self_url}</id><title>HISTOR — confirmation hints · {_xml_text(scope)}</title>'
+            f'<updated>{updated}</updated><author><name>HISTOR</name></author>'
+            f'<link rel="self" href="{self_url}"/>' + "".join(entries) + "</feed>"
+        )
+        return Response(body, media_type="application/atom+xml")
+
     @app.get("/feed.xml")
-    def feed(watch: str | None = Query(None, max_length=1800)) -> Response:
+    def feed(watch: str | None = Query(None, max_length=1800), approval_relaxing: bool = False) -> Response:
         """All changes, or with ``watch=<id>,<id>,…`` (up to 100 target ids, as /check and the server
-        pages give them) only those servers' and packages': subscribe in any feed reader."""
+        pages give them) only those servers' and packages'. With ``approval_relaxing``, follow
+        explicit confirmation-hint flips across all servers or for one watched server."""
+        if approval_relaxing:
+            return approval_feed(watch)
         watched: list[str] | None = None
         if watch is not None:
             watched = sorted({w for w in watch.split(",") if re.fullmatch(r"[0-9a-f]{16}", w)})[:100]

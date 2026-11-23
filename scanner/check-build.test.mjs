@@ -17,10 +17,10 @@ function fixture(t) {
   return directory;
 }
 
-test('the installed local scanner is the pinned accepted 0.37.2 build', () => {
+test('the installed local scanner is the pinned accepted 0.38.0 build', () => {
   const metadata = verifyBuild();
-  assert.equal(metadata.version, '0.37.2');
-  assert.equal(metadata.buildDigest, '721354e0c143ae39a2500a216c671b6668d574ffb0e767f0bf4bf9d47bec5738');
+  assert.equal(metadata.version, '0.38.0');
+  assert.equal(metadata.buildDigest, 'cbb3a54fa345fca64aff9c2d54349c3fe9dee2b4e1b429fd6df161efd29c110b');
 });
 
 test('rejects an older installed version even when the source lock is current', (t) => {

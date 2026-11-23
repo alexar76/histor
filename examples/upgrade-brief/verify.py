@@ -84,6 +84,7 @@ def project(report: dict[str, Any]) -> dict[str, Any]:
                         "inputTypeChangedPaths": tool.get("inputTypeChangedPaths", []),
                         "annotationHints": tool.get("extras", {}).get("annotationHints"),
                         "annotationEscalation": tool.get("extras", {}).get("escalation"),
+                        "annotationRelaxation": tool.get("extras", {}).get("relaxation"),
                     }
                     for tool in dep["selectedTools"]
                 },

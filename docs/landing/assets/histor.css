@@ -140,6 +140,7 @@ pre{background:var(--panel-2);border:1px solid var(--line-2);border-radius:var(-
 .desk-entry .cta .btn{padding:8px 14px}
 .desk-entry .result{margin-top:12px}
 .desk-entry time{white-space:nowrap}
+.approval-change{scroll-margin-top:75px;overflow-wrap:anywhere}
 @media (max-width:520px){.desk:first-child .tabs{gap:2px}.desk:first-child .tabs a{padding:6px 8px;font-size:14px}}
 .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
 .toolbar input{flex:1 1 260px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);padding:10px 12px;font:15px var(--body)}

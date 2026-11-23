@@ -1676,6 +1676,15 @@ class Crawler:
         )
 
     @staticmethod
+    def _previous_tool_names(tx, state: dict[str, Any]) -> set[str] | None:
+        """The tool names of the target's previous tool set; None when it had no digested set."""
+        digest = state.get("current_toolset")
+        if not digest:
+            return None
+        row = tx.one("SELECT body FROM blobs WHERE digest=? AND kind='toolset'", (digest,))
+        return extras_mod.tool_names(row["body"]) if row else None
+
+    @staticmethod
     def _settle_extras(tx, target_id: str, state: dict[str, Any], digest: str | None, body: dict[str, Any] | None,
                        observed_at: str, update: dict[str, Any]) -> None:
         """Point the target at this observation's extras and record a change when they moved.
@@ -1704,7 +1713,8 @@ class Crawler:
                 return
         tx.execute(
             "INSERT INTO extras_changes(target_id, observed_at, from_extras, to_extras, summary) VALUES(?, ?, ?, ?, ?)",
-            (target_id, observed_at, previous or None, digest or None, dumps(extras_diff(old_body, body))),
+            (target_id, observed_at, previous or None, digest or None,
+             dumps(extras_diff(old_body, body, Crawler._previous_tool_names(tx, state)))),
         )
 
     @staticmethod

@@ -310,11 +310,14 @@ def _selected_change(name: str, old: dict[str, Any] | None, new: dict[str, Any] 
                  for key in annotation_fields if key in _HINTS}
         escalation = ((annotations_before.get("readOnlyHint") is True and annotations_after.get("readOnlyHint") is not True)
                       or (annotations_after.get("destructiveHint") is True and annotations_before.get("destructiveHint") is not True))
+        relaxation = ((annotations_after.get("readOnlyHint") is True and annotations_before.get("readOnlyHint") is not True)
+                      or (annotations_after.get("destructiveHint") is False and annotations_before.get("destructiveHint") is not False))
         row["extras"] = {"members": members, "annotationsPresenceChanged": ("annotations" in old) != ("annotations" in new),
                          "annotationFieldsChanged": annotation_fields,
                          "annotationHints": {k: values for k, values in hints.items()
                                              if all(v is None or type(v) is bool for v in values)},
-                         "escalation": escalation}
+                         "escalation": escalation,
+                         "relaxation": relaxation}
         row["retest"].append(message(lang, "check_extras"))
     if not compare_extras:
         row["extrasCompared"] = False

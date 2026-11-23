@@ -1,26 +1,28 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.37.2",
-  "sourceCommit": "7bfcbfa95",
+  "version": "0.38.0",
+  "sourceCommit": "9443d42e6",
   "registryGitHead": null,
-  "buildDigest": "721354e0c143ae39a2500a216c671b6668d574ffb0e767f0bf4bf9d47bec5738",
-  "tarball": "aimarket-warden-0.37.2.tgz",
-  "sha256": "510f299c0e8e620bd3d0545d432181730b2a6d80485efd97c97927d11521d2d6",
-  "integrity": "sha512-aS+94deVd28YzkGYZUJhijWTtjsw5uAu3byF7UyxM5kSke/weXPBcWtRa5c96kjtobuw85DYeFUmTqNvmOGG7g==",
-  "distribution": "Release archive of 0.37.2 (npm shasum 5ee5d293…), byte for byte the tarball in warden/docs/evidence/warden-release-0.37.2-2026-11-22/, built from 7bfcbfa95; its build digest is the one MOMUS will accept for this release.",
+  "buildDigest": "cbb3a54fa345fca64aff9c2d54349c3fe9dee2b4e1b429fd6df161efd29c110b",
+  "tarball": "aimarket-warden-0.38.0.tgz",
+  "sha256": "b4b647989dc28ba480c2fa17d55072e3bc27026528f8543f286f22386d06c8f6",
+  "integrity": "sha512-nHYGuPswlVY7/7wvSCskyKY9h8x3UZHjksypQnWbAMk8pwHgLX6mvOU58bmsNPdi6+AX9ZzdTfkvp2FnSfIj0g==",
+  "distribution": "Release archive of 0.38.0 (npm shasum 0ed5248a\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.38.0-2026-11-23/, built from 9443d42e6; its build digest is the one MOMUS will accept for this release.",
   "qualityRun": null,
   "changes": [
-    "0.28.0–0.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
+    "0.28.0\u20130.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
     "0.30.0: warden-mcp gateway (OpenWebUI), checks of every package a launch line installs, key-name rule of the flow guard, blockAtSeverity in verdicts; ruleset unchanged (23)",
     "0.31.0: warden-mcp openwebui setup|check|undo, wouldRefuse in the gateway's audit answers; rulesets (23), malware list and verdicts unchanged",
-    "0.32.0: flow guard — after outside text, shell code that reads a credential from the environment is a credential send; rulesets (23), malware list and scan verdicts unchanged",
+    "0.32.0: flow guard \u2014 after outside text, shell code that reads a credential from the environment is a credential send; rulesets (23), malware list and scan verdicts unchanged",
     "0.33.0: OpenWebUI Filter checks model calls to Open Terminal connections through the gateway; rulesets (23), malware list and scan verdicts unchanged",
     "0.34.0: the re-approval text and the scan --lock report name a behaviour hint that moved and its direction; rulesets (23), malware list and verdicts unchanged",
     "0.35.0: warden-mcp scan reports a tool whose readOnlyHint true / destructiveHint false its own description contradicts (TOOL_HINT_CONTRADICTS_DESCRIPTION, advisory); rulesets (23), malware list and verdicts unchanged",
     "0.36.0: TOOL_HINT_CONTRADICTS_DESCRIPTION carries evidence { claim, matchedPhrase, quotedSentence } in --json; rulesets (23), malware list and verdicts unchanged",
-    "0.37.0: masking — credentials in tool results replaced by placeholders in wrap and the gateway (default on), personal data by profile (off by default), agent-guard and plugins for Hermes and OpenClaw; rulesets (23), malware list and scan verdicts unchanged",
+    "0.37.0: masking \u2014 credentials in tool results replaced by placeholders in wrap and the gateway (default on), personal data by profile (off by default), agent-guard and plugins for Hermes and OpenClaw; rulesets (23), malware list and scan verdicts unchanged",
     "0.37.1: scan without --histor ends with a line saying how many servers the log could be asked about (nothing sent; historAvailable in --json); rulesets (23), malware list and scan verdicts unchanged",
-    "0.37.2: tool-set digests follow mcp-tool-set-digest/1 section 12 (512 levels; TSD-DEPTH / MTL-SUBJ-005 past that); rulesets (23), malware list and scan verdicts unchanged"
+    "0.37.2: tool-set digests follow mcp-tool-set-digest/1 section 12 (512 levels; TSD-DEPTH / MTL-SUBJ-005 past that); rulesets (23), malware list and scan verdicts unchanged",
+    "0.37.3: Open Terminal structured results and rootless Docker UID mapping; rulesets (23), malware list and scan verdicts unchanged",
+    "0.38.0: issuer ask for a token sent home (secret_issuer); interceptor refuses tools next to result (TSD-TOOL); terminal egress red team; rulesets (23), malware list and scan verdicts unchanged"
   ],
-  "packageJsonSha256": "a4e1f2f247c2c2576e95850a750339c9690ed1c156f311c73d1da6c6ac0a85e6"
+  "packageJsonSha256": "5db98cd9fc8260978bec5fccccd8684e96ecad9b2c84fe877c31fc42946736e4"
 }

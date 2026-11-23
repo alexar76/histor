@@ -35,6 +35,8 @@ flowchart LR
 
 服务器详情中的 `server.toolExtrasDigestScheme` 取值为 `legacy`（按键排序的 JSON）或 `rfc8785`，表示计算 `server.toolExtrasDigest` 时采用的编码方式。两种方案都使用受存储限制的 `toolExtras`。没有摘要，或无法根据已保存的数据验证编码方式时，该字段为 `null`。如果两种方案都能重现该摘要，API 会返回日志当前使用的方案。`oversized` 和 `omitted` 列出因大小限制而跳过的工具。因此，相同的 `extras` 摘要可能掩盖注解变更，无法据此验证先前的批准。MTL/1 标签和 `/check` 覆盖的是合约摘要。
 
+`extrasChanges` 列出该主体最近 20 次变化，最新的在前。`summary.tools` 以 `[之前, 之后]` 给出每个变化的注解（`null` 表示不存在）。`summary.escalations` 列出不再声明 `readOnlyHint: true` 或开始声明 `destructiveHint: true` 的工具：按这些提示询问的客户端现在会询问得更多。`summary.relaxations` 列出服务器此前已列出、现在开始声明 `readOnlyHint: true` 或 `destructiveHint: false` 的工具（缺省即视为非只读且具破坏性）：按这些提示跳过确认的客户端将不再询问，因此这些才是需要告警的变化。新工具不会出现在任何一个列表中。提示只是服务器的说法，不能证明调用实际做什么。`relaxations` 自 HISTOR 0.12.0（2026-11-23）起提供；更早的变化已于同日根据保存的主体补上。`approval_relaxing=true` 过滤器（docs/watch.md）范围更窄：只显示显式翻转，即 `readOnlyHint` 从 `false` 变为 `true`、`destructiveHint` 从 `true` 变为 `false`；已列出工具上新出现的提示会出现在 `relaxations` 中，但不在过滤器中。
+
 对于软件包，`timeline` 的每一行都带有 `packageVersion`，即该次观测运行的版本（`serverVersion` 是服务器在 `initialize` 中报告的版本，往往不是软件包版本）；两个版本即使提供同一份列表，也是两行。自 2026-10-26 起记录；更早的行为 `null`。`launch` 说明该次运行如何启动：`observer`、`image`、`entry`、`network`（`no route out`），以及 HISTOR 提供配置时的 `supplied`：环境变量名（从不包含值）、参数和 pins。同一版本在不同启动参数下或有网络时，可能列出不同的工具。
 
 `/fingerprints` 让客户端以自己的格式比较它收到的定义与 HISTOR 观察到的定义。使用 Vercel AI SDK：`detectToolDrift(await fingerprintTools(await mcpClient.tools()), (await (await fetch(url)).json()).fingerprints)`；出现在 `changed` 或 `added` 中的工具与公开观察不同。各格式覆盖的成员不同（Vercel 的不含 `outputSchema` 和注解提示），而且服务器可能向另一个客户端提供不同的定义：协议版本、启动环境或配置不同时都会如此。`lastObserved` 表示 HISTOR 最后一次看到该集合的时间。

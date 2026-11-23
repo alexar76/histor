@@ -12,6 +12,7 @@ from typing import Any
 
 from histor import merkle
 from histor.db import Backend, Tx
+from histor.extras import MAX_DIFF_TOOLS, approval_relaxing_diff, approval_relaxing_hints
 
 UNLISTED_RETENTION_DAYS = 90
 UNLISTED_HOSTS_PER_DAY = 5000
@@ -399,14 +400,117 @@ class Store:
         with self.db.read() as tx:
             return [self._change_row(r) for r in tx.execute(sql, args)]
 
-    def extras_changes(self, target_id: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Newest first: when a target's annotations, _meta or other extra members moved (histor.extras)."""
+    @staticmethod
+    def _extras_change_row(row: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
+        return {"id": row["seq"], "observedAt": row["observed_at"], "fromExtrasDigest": row["from_extras"],
+                "toExtrasDigest": row["to_extras"], "summary": summary}
+
+    def extras_changes(self, target_id: str, limit: int = 20, *,
+                       approval_relaxing: bool = False) -> list[dict[str, Any]]:
+        """Newest first. Filter a single target's history before limiting results."""
+        if approval_relaxing:
+            return self._select_approval_changes(limit, target_id=target_id)
         with self.db.read() as tx:
             rows = tx.execute(
                 "SELECT seq, observed_at, from_extras, to_extras, summary FROM extras_changes "
                 "WHERE target_id=? ORDER BY seq DESC LIMIT ?", (target_id, limit))
-        return [{"id": r["seq"], "observedAt": r["observed_at"], "fromExtrasDigest": r["from_extras"],
-                 "toExtrasDigest": r["to_extras"], "summary": json.loads(r["summary"])} for r in rows]
+        return [self._extras_change_row(r, json.loads(r["summary"])) for r in rows]
+
+    @classmethod
+    def _approval_change_row(cls, tx: Tx, row: dict[str, Any]) -> dict[str, Any] | None:
+        summary = json.loads(row["summary"])
+        matches = {
+            name: {"annotations": hints}
+            for name, tool in summary["tools"].items()
+            if (hints := approval_relaxing_hints(tool.get("annotations", {})))
+        }
+        if summary.get("truncated"):
+            blobs = tx.execute(
+                "SELECT digest, body FROM blobs WHERE digest IN (?, ?) AND kind='toolextras'",
+                (row["from_extras"], row["to_extras"]))
+            by_digest = {b["digest"]: json.loads(b["body"]) for b in blobs}
+            if row["from_extras"] in by_digest and row["to_extras"] in by_digest:
+                matches = approval_relaxing_diff(by_digest[row["from_extras"]], by_digest[row["to_extras"]])
+        if not matches:
+            return None
+        names = list(matches)[:MAX_DIFF_TOOLS]
+        filtered = {"tools": {name: matches[name] for name in names},
+                    "changedTools": len(matches), "approvalRelaxing": names}
+        if len(matches) > len(names):
+            filtered["truncated"] = True
+        return cls._extras_change_row(row, filtered)
+
+    def approval_relaxing_change(self, target_id: str, event_id: int) -> dict[str, Any] | None:
+        """Resolve an exact event even after it moves beyond the latest page of results."""
+        with self.db.read() as tx:
+            row = tx.one(
+                "SELECT seq, observed_at, from_extras, to_extras, summary FROM extras_changes "
+                "WHERE target_id=? AND seq=? AND from_extras IS NOT NULL AND to_extras IS NOT NULL",
+                (target_id, event_id))
+            return self._approval_change_row(tx, row) if row else None
+
+    def approval_relaxing_changes(
+        self, limit: int = 50, before_id: int | None = None, after_id: int | None = None,
+        *, target_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Filter extras changes across servers with exclusive sequence cursors.
+
+        Results are newest first unless resuming with ``after_id``, which reads forward.
+        """
+        return self._select_approval_changes(limit, before_id=before_id, after_id=after_id,
+                                             target_id=target_id, include_target=True)
+
+    def _select_approval_changes(
+        self, limit: int, *, before_id: int | None = None, after_id: int | None = None,
+        target_id: str | None = None, include_target: bool = False,
+    ) -> list[dict[str, Any]]:
+        # Stored summaries use literal ASCII keys. This cheap prefilter only finds possible
+        # matches. Reuse the exact boolean test above and recover hints from truncated summaries.
+        # Keep the PostgreSQL predicate in sync with deploy/approval-changes-index.sql.
+        find = "strpos" if self.backend_type == "postgresql" else "instr"
+        sql = "SELECT c.seq, c.observed_at, c.from_extras, c.to_extras, c.summary"
+        if include_target:
+            sql += ", t.id AS target_id, t.name AS target_name, t.title AS target_title"
+        sql += " FROM extras_changes c"
+        if include_target:
+            sql += " JOIN targets t ON t.id=c.target_id"
+        sql += (
+            " WHERE c.from_extras IS NOT NULL AND c.to_extras IS NOT NULL"
+            f""" AND ({find}(c.summary, '"readOnlyHint"') > 0"""
+            f""" OR {find}(c.summary, '"destructiveHint"') > 0"""
+            f""" OR {find}(c.summary, '"truncated"') > 0)"""
+        )
+        args: list[Any] = []
+        if target_id is not None:
+            sql += " AND c.target_id=?"
+            args.append(target_id)
+        if before_id is not None and after_id is not None:
+            sql += " AND c.seq < ?"
+            args.append(before_id)
+        forward = after_id is not None
+        comparison, order = (">", "ASC") if forward else ("<", "DESC")
+        cursor = after_id if forward else before_id
+        batch_size = 100
+        items = []
+        with self.db.read() as tx:
+            while len(items) < limit:
+                bound = f" AND c.seq {comparison} ?" if cursor is not None else ""
+                params = (*args, cursor, batch_size) if cursor is not None else (*args, batch_size)
+                rows = tx.execute(f"{sql}{bound} ORDER BY c.seq {order} LIMIT ?", params)
+                for row in rows:
+                    change = self._approval_change_row(tx, row)
+                    if change is None:
+                        continue
+                    if include_target:
+                        change.update(targetId=row["target_id"], targetName=row["target_name"],
+                                      targetTitle=row["target_title"])
+                    items.append(change)
+                    if len(items) == limit:
+                        return items
+                if len(rows) < batch_size:
+                    break
+                cursor = rows[-1]["seq"]
+        return items
 
     def change(self, change_id: int) -> dict[str, Any] | None:
         with self.db.read() as tx:

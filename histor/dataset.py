@@ -365,7 +365,9 @@ def _extras_fields(f: dict[str, Any], scheme: str = "legacy") -> str:
 - **extras_changes** — `serverId`, `observedAt`, `fromExtrasDigest` → `toExtrasDigest`, `summaryJson`:
   per tool, every annotation that moved (`[before, after]`) and every other member added, removed or
   changed; `escalations` names tools that stopped saying `readOnlyHint: true` or started saying
-  `destructiveHint: true`."""
+  `destructiveHint: true` (a client asks more); `relaxations` (from 2026-11-23) names tools already
+  present that started saying `readOnlyHint: true` or `destructiveHint: false` (a client that skips
+  the prompt on those hints stops asking)."""
 
 
 def _package_change_fields(f: dict[str, Any]) -> str:
