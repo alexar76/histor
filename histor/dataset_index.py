@@ -200,7 +200,9 @@ def page(snaps: list[dict[str, Any]], dois: dict[str, str] | None = None) -> str
     older = "".join(
         (f'<li><a href="{esc(d)}/">{esc(d)}</a> · {here[d]["manifest"]["counts"]["listed"]:,} servers · '
          f'{here[d]["manifest"]["files"]["changes.jsonl.gz"]["rows"]:,} changes{doi_of(d)}</li>') if d in here else
-        f'<li>{esc(d)} · files on Zenodo only{doi_of(d)}</li>'  # older than the snapshots kept here
+        # Older than the snapshots kept here (four since 2026-11-24): the same files under the Hugging Face tag,
+        # where nginx also sends /datasets/<date>/… links.
+        f'<li>{esc(d)} · <a href="{HF_DATASET}/tree/snapshot-{esc(d)}">files on Hugging Face</a>{doi_of(d)}</li>'
         for d in sorted(set(here) | set(dois), reverse=True)
     )
     ld = json.dumps(json_ld(snaps), ensure_ascii=False, indent=1).replace("</", "<\\/")

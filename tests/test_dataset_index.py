@@ -76,8 +76,9 @@ def test_the_citation_names_the_snapshots_own_doi_not_the_concept_doi(tmp_path):
     assert cite.count(dataset_index.ZENODO_CONCEPT_DOI) == 2 and "stands for all of them" in cite
     listed = page[page.index("<h2>All snapshots</h2>"):]
     assert 'href="2026-10-20/">2026-10-20</a>' in listed and "doi:10.5281/zenodo.23512760" in listed
-    # archived here no longer (pruned after eight weeks): still listed, with its DOI
-    assert "2026-10-26 · files on Zenodo only" in listed and "doi:10.5281/zenodo.23884119" in listed
+    # kept here no longer (pruned after four weeks): still listed, linked to its Hugging Face tag, with its DOI
+    hf = f'2026-10-26 · <a href="{dataset_index.HF_DATASET}/tree/snapshot-2026-10-26">files on Hugging Face</a>'
+    assert hf in listed and "doi:10.5281/zenodo.23884119" in listed
 
 
 def test_a_snapshot_not_yet_on_zenodo_points_to_the_newest_archived_one(tmp_path):

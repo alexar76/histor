@@ -28,11 +28,14 @@
 # $MODULE (installed next to this script; the image carries it from the next deploy on).
 #
 # Output: $DIR/<YYYY-MM-DD>/ (written under $DIR/.staging first, so nginx never serves half a
-# snapshot), $DIR/latest → newest, and the $KEEP newest snapshots kept (8: two months of weeks).
+# snapshot), $DIR/latest → newest, and the $KEEP newest snapshots kept (4: a month of weeks). Until 2026-11-24
+# it was 8; the snapshots had grown to ~6 GB a week (one publisher's live counter in its tool descriptions
+# rewrites ~1,850 tool lists every few hours), and every snapshot stays on Hugging Face under its tag
+# snapshot-<date>, byte for byte. nginx sends /datasets/<date>/… of a snapshot no longer kept there.
 set -euo pipefail
 
 DIR="${HISTOR_DATASET_DIR:-/var/lib/histor-datasets}"
-KEEP="${HISTOR_DATASET_KEEP:-8}"
+KEEP="${HISTOR_DATASET_KEEP:-4}"
 PERIOD="${HISTOR_DATASET_PERIOD:-week}"
 APP="${HISTOR_APP_CONTAINER:-histor-histor-1}"
 VOLUME="${HISTOR_DATA_VOLUME:-histor_histor-data}"

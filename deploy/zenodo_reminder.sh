@@ -52,7 +52,9 @@ if [[ -z "$archived" ]]; then
   echo "Zenodo did not say which snapshot it has; nothing sent"
   exit 0
 fi
-if [[ ! "$monthly" > "$archived" ]]; then
+# Zenodo already has a snapshot of this month: done. (With four snapshots kept, the month's first one is
+# gone from $DIR when its fifth week is written; the oldest one left is not the one to archive.)
+if [[ "${archived:0:7}" == "$month" || ! "$monthly" > "$archived" ]]; then
   echo "Zenodo has $archived; the month's snapshot is $monthly: nothing to do"
   exit 0
 fi
