@@ -7,18 +7,18 @@
   <a href="https://github.com/alexar76/histor/actions/workflows/ci.yml"><img src="https://github.com/alexar76/histor/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://glama.ai/mcp/servers/alexar76/histor"><img src="https://glama.ai/mcp/servers/alexar76/histor/badges/score.svg" alt="alexar76/histor MCP server" /></a>
   <a href="https://github.com/alexar76/histor/actions/workflows/pages.yml"><img src="https://github.com/alexar76/histor/actions/workflows/pages.yml/badge.svg" alt="Pages" /></a>
-  <a href="https://histor.modelmarket.dev/"><img src="https://img.shields.io/website?url=https%3A%2F%2Fhistor.modelmarket.dev%2Fhealth&label=live&up_message=up&down_message=down" alt="Live service" /></a>
-  <a href="https://histor.modelmarket.dev/log"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fhistor.modelmarket.dev%2Fapi%2Fv1%2Fbadges%2Flog" alt="Labels in the log (live)" /></a>
-  <a href="https://histor.modelmarket.dev/servers"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fhistor.modelmarket.dev%2Fapi%2Fv1%2Fbadges%2Fpinned" alt="Tool sets pinned (live)" /></a>
-  <a href="https://histor.modelmarket.dev/changes"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fhistor.modelmarket.dev%2Fapi%2Fv1%2Fbadges%2Fchanges" alt="Changes in the last 7 days (live)" /></a>
-  <a href="https://histor.modelmarket.dev/log"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fhistor.modelmarket.dev%2Fapi%2Fv1%2Fbadges%2Fsth" alt="Age of the last signed tree head (live)" /></a>
-  <a href="https://github.com/alexar76/histor/actions/workflows/pages.yml"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Falexar76.github.io%2Fhistor%2Fbadges%2Ftests.json" alt="Tests (measured by CI)" /></a>
-  <a href="https://github.com/alexar76/histor/actions/workflows/pages.yml"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Falexar76.github.io%2Fhistor%2Fbadges%2Fcoverage.json" alt="Branch coverage (measured by CI)" /></a>
-  <img src="https://img.shields.io/badge/python-%3E%3D3.11-3776AB" alt="Python >=3.11" />
-  <img src="https://img.shields.io/badge/store-Postgres%20%C2%B7%20SQLite%20dev-336791" alt="Postgres in production, SQLite for development" />
-  <img src="https://img.shields.io/badge/labels-MTL%2F1%20on%20AWR%2F2-8d83ff" alt="MTL/1 labels on AWR/2" />
-  <img src="https://img.shields.io/badge/log-RFC%209162-5fe3ff" alt="RFC 9162 Merkle log" />
-  <img src="https://img.shields.io/badge/docs-EN%20RU%20ES%20FR%20ZH-9c70ff" alt="Documentation in 5 languages" />
+  <a href="https://histor.modelmarket.dev/"><img src="https://histor.modelmarket.dev/api/v1/badges/live.svg" alt="Live service" /></a>
+  <a href="https://histor.modelmarket.dev/log"><img src="https://histor.modelmarket.dev/api/v1/badges/log.svg" alt="Labels in the log (live)" /></a>
+  <a href="https://histor.modelmarket.dev/servers"><img src="https://histor.modelmarket.dev/api/v1/badges/pinned.svg" alt="Tool sets pinned (live)" /></a>
+  <a href="https://histor.modelmarket.dev/changes"><img src="https://histor.modelmarket.dev/api/v1/badges/changes.svg" alt="Changes in the last 7 days (live)" /></a>
+  <a href="https://histor.modelmarket.dev/log"><img src="https://histor.modelmarket.dev/api/v1/badges/sth.svg" alt="Age of the last signed tree head (live)" /></a>
+  <a href="https://github.com/alexar76/histor/actions/workflows/pages.yml"><img src="https://alexar76.github.io/histor/badges/tests.svg" alt="Tests (measured by CI)" /></a>
+  <a href="https://github.com/alexar76/histor/actions/workflows/pages.yml"><img src="https://alexar76.github.io/histor/badges/coverage.svg" alt="Branch coverage (measured by CI)" /></a>
+  <img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/python.svg" alt="Python >=3.11" />
+  <img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/store.svg" alt="Postgres in production, SQLite for development" />
+  <img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/labels.svg" alt="MTL/1 labels on AWR/2" />
+  <img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/merkle.svg" alt="RFC 9162 Merkle log" />
+  <img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/docs.svg" alt="Documentation in 5 languages" />
   <a href="https://github.com/alexar76/histor/blob/main/LICENSE"><img src="https://raw.githubusercontent.com/alexar76/histor/refs/heads/main/docs/badges/license.svg" alt="License: MIT" /></a>
 </p>
 <!-- /aicom-readme-badges -->

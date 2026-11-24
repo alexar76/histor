@@ -73,26 +73,32 @@ def test_json_nested_fifty_thousand_deep_is_a_protocol_status_not_a_crash():
     assert obs.status == "protocol" and "no result" in obs.detail
 
 
-def nested_schema(levels: int) -> dict:
-    deep: dict = {}
-    node = deep
-    for _ in range(levels):
-        node["x"] = {}
-        node = node["x"]
-    return deep
+def nested_schema_text(levels: int) -> str:
+    """JSON text of an ``inputSchema`` nested ``levels`` objects deep, built without ``json.dumps``.
+
+    CPython 3.11's encoder recurses and raises ``RecursionError`` a little past 900 levels, so
+    ``httpx.Response(json=...)`` never puts a 5000-deep schema on the wire there. A hostile server
+    sends bytes; the reader is what this test is about.
+    """
+    return '{"x":' * levels + "{}" + "}" * levels
 
 
 def test_a_schema_deeper_than_the_limit_is_refused_before_the_canonicalizer():
     # mcp-tool-set-digest/1 section 12: 512 levels counted from the tools array are read and
     # digested; past that the set is observed and its contract digest is MTL-SUBJ-005 (TSD-DEPTH).
+    # inputSchema is level 3, so its deepest object is level 3 + levels.
     from histor.subject import MTL_SUBJ_005, MtlError, tool_set_digest
 
     for levels, digestible in ((200, True), (509, True), (510, False), (5000, False)):
-        schema = nested_schema(levels)        # inputSchema is level 3, its deepest object 3 + levels
-        reply = lambda b, schema=schema: httpx.Response(200, json={  # noqa: E731
-            "jsonrpc": "2.0", "id": b["id"], "result": {"tools": [{"name": "t", "inputSchema": schema}]}})
+        schema = nested_schema_text(levels)
+
+        def reply(body, schema=schema):
+            text = ('{"jsonrpc":"2.0","id":' + json.dumps(body["id"])
+                    + ',"result":{"tools":[{"name":"t","inputSchema":' + schema + "}]}}")
+            return httpx.Response(200, text=text, headers={"content-type": "application/json"})
+
         obs = observe(server(tools_reply=reply))
-        assert obs.status == "ok" and len(obs.tools) == 1, levels
+        assert obs.status == "ok" and len(obs.tools) == 1, (levels, obs.status, obs.detail)
         if digestible:
             assert tool_set_digest(obs.tools)[0].startswith("sha256-"), levels
         else:

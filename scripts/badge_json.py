@@ -1,4 +1,7 @@
-"""Write shields.io endpoint JSON for the tests and coverage badges from one CI run.
+"""Write the tests and coverage badges from one CI run.
+
+JSON keeps the shields.io endpoint shape. The SVG is what the README embeds: GitHub's image
+proxy times out when shields.io has to fetch the JSON first.
 
     python scripts/badge_json.py junit.xml coverage.json docs/landing/badges
 """
@@ -9,6 +12,8 @@ import json
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from histor.badge import shield_svg
 
 
 def main(junit: str, coverage: str, out: str) -> int:
@@ -37,6 +42,8 @@ def main(junit: str, coverage: str, out: str) -> int:
         cov_badge = {"message": "unknown", "color": "9f9f9f"}
     Path(out, "tests.json").write_text(json.dumps({"schemaVersion": 1, "label": "tests", **tests_badge}))
     Path(out, "coverage.json").write_text(json.dumps({"schemaVersion": 1, "label": "branch coverage", **cov_badge}))
+    Path(out, "tests.svg").write_text(shield_svg("tests", tests_badge["message"], tests_badge["color"]))
+    Path(out, "coverage.svg").write_text(shield_svg("branch coverage", cov_badge["message"], cov_badge["color"]))
     print(f"tests: {tests_badge['message']}; coverage: {cov_badge['message']}")
     return 0
 

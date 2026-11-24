@@ -1574,33 +1574,48 @@ def create_app(services: Services) -> FastAPI:
         return Response(badge.render(store.target(target_id)), media_type="image/svg+xml",
                         headers={"Cache-Control": "public, max-age=3600"})
 
-    # -- live README badges (shields.io endpoint schema) -----------------------------
+    # -- live README badges ----------------------------------------------------------
+    # JSON keeps the shields.io endpoint shape. ``.svg`` is what the README embeds: GitHub's
+    # image proxy times out fetching shields.io and caches that failure as an empty box.
 
     def _shield(label: str, message: str, color: str) -> JSONResponse:
         return JSONResponse({"schemaVersion": 1, "label": label, "message": message, "color": color},
                             headers={"Cache-Control": "public, max-age=300"})
 
-    @app.get("/api/v1/badges/{name}")
-    def shield(name: str) -> JSONResponse:
-        """Numbers for README badges, read live: https://img.shields.io/endpoint?url=<this>."""
+    def _readme_badge(name: str) -> tuple[str, str, str] | None:
+        if name == "live":
+            return "live", "up", "2f9e77"
         if name == "log":
             sth = store.latest_sth()
-            return _shield("labels in log", f"{sth['treeSize']:,}" if sth else "0", "5fe3ff")
+            return "labels in log", f"{sth['treeSize']:,}" if sth else "0", "5fe3ff"
         if name == "pinned":
-            return _shield("tool sets pinned", f"{store.target_counts()['pinned']:,}", "3a7bd5")
+            return "tool sets pinned", f"{store.target_counts()['pinned']:,}", "3a7bd5"
         if name == "changes":
-            return _shield("changes · 7d", f"{store.count_changes_since(_ago(7)):,}", "c98a1b")
+            return "changes · 7d", f"{store.count_changes_since(_ago(7)):,}", "c98a1b"
         if name == "sth":
             sth = store.latest_sth()
             if not sth:
-                return _shield("signed tree head", "none yet", "6b7280")
+                return "signed tree head", "none yet", "6b7280"
             then = datetime.strptime(sth["timestamp"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
             hours = (datetime.now(UTC) - then).total_seconds() / 3600
             age = f"{hours:.0f}h ago" if hours < 48 else f"{hours / 24:.0f}d ago"
             # A head older than two crawl intervals means the crawler stopped: say so in the colour.
             stale = settings.crawl_interval_s and hours * 3600 > 2 * settings.crawl_interval_s
-            return _shield("signed tree head", age, "c98a1b" if stale else "2f9e77")
-        raise HTTPException(status_code=404, detail="unknown badge")
+            return "signed tree head", age, "c98a1b" if stale else "2f9e77"
+        return None
+
+    @app.get("/api/v1/badges/{name}")
+    def shield(name: str) -> Response:
+        """Live README numbers. ``/api/v1/badges/log.svg`` is the image; without ``.svg`` it is JSON."""
+        svg = name.endswith(".svg")
+        parts = _readme_badge(name[:-4] if svg else name)
+        if parts is None:
+            raise HTTPException(status_code=404, detail="unknown badge")
+        label, message, color = parts
+        if svg:
+            return Response(badge.shield_svg(label, message, color), media_type="image/svg+xml",
+                            headers={"Cache-Control": "public, max-age=300"})
+        return _shield(label, message, color)
 
     # -- operator -------------------------------------------------------------------
 

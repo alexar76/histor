@@ -47,6 +47,42 @@ def _width(text: str) -> int:
     return int(len(text) * 6.4) + 12
 
 
+def shield_svg(label: str, message: str, color: str) -> str:
+    """A two-cell badge SVG. ``color`` is ``#rgb`` or a 3- or 6-digit hex without the hash.
+
+    The README used to ask shields.io to draw these. GitHub's image proxy times out on that
+    fetch and then caches the error, so the row shows empty boxes. Serving the SVG ourselves
+    is one request and the same picture.
+    """
+    fill = color if color.startswith("#") else f"#{color}"
+    label_text, message_text = escape(label), escape(message)
+    lw = len(label) * 6.5 + 10
+    mw = len(message) * 6.5 + 10
+    total = lw + mw
+    title = escape(f"{label}: {message}")
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{total:.0f}" height="20" role="img" aria-label="{title}">\n'
+        f"  <title>{title}</title>\n"
+        '  <linearGradient id="s" x2="0" y2="100%">\n'
+        '    <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>\n'
+        '    <stop offset="1" stop-opacity=".1"/>\n'
+        "  </linearGradient>\n"
+        f'  <clipPath id="r"><rect width="{total:.0f}" height="20" rx="3" fill="#fff"/></clipPath>\n'
+        '  <g clip-path="url(#r)">\n'
+        f'    <rect width="{lw:.0f}" height="20" fill="#555"/>\n'
+        f'    <rect x="{lw:.0f}" width="{mw:.0f}" height="20" fill="{fill}"/>\n'
+        f'    <rect width="{total:.0f}" height="20" fill="url(#s)"/>\n'
+        "  </g>\n"
+        '  <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11">\n'
+        f'    <text x="{lw / 2:.1f}" y="14" fill="#010101" fill-opacity=".3">{label_text}</text>\n'
+        f'    <text x="{lw / 2:.1f}" y="13">{label_text}</text>\n'
+        f'    <text x="{lw + mw / 2:.1f}" y="14" fill="#010101" fill-opacity=".3">{message_text}</text>\n'
+        f'    <text x="{lw + mw / 2:.1f}" y="13">{message_text}</text>\n'
+        "  </g>\n"
+        "</svg>\n"
+    )
+
+
 def render(target: dict[str, Any] | None, label: str = "MCP tool defs · histor") -> str:
     message, state = badge_state(target)
     lw, mw = _width(label), _width(message)

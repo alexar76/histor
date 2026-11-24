@@ -330,13 +330,19 @@ def test_live_badges_speak_the_shields_endpoint_schema(api):
     for name in ("log", "pinned", "changes", "sth"):
         body = client.get(f"/api/v1/badges/{name}").json()
         assert body["schemaVersion"] == 1 and body["label"] and body["message"] and body["color"]
+        svg = client.get(f"/api/v1/badges/{name}.svg")
+        assert svg.status_code == 200 and svg.headers["content-type"].startswith("image/svg+xml")
+        assert body["message"] in svg.text and body["label"] in svg.text
     assert client.get("/api/v1/badges/log").json()["message"] == str(client.get("/api/v1/log/sth").json()["treeSize"])
+    assert client.get("/api/v1/badges/live.svg").text.count(">up<") == 2
     assert client.get("/api/v1/badges/nope").status_code == 404
+    assert client.get("/api/v1/badges/nope.svg").status_code == 404
 
 
 def test_the_sth_badge_before_any_head(world):
     with TestClient(create_app(world["services"])) as client:
         assert client.get("/api/v1/badges/sth").json()["message"] == "none yet"
+        assert "none yet" in client.get("/api/v1/badges/sth.svg").text
         assert client.get("/api/v1/badges/log").json()["message"] == "0"
 
 

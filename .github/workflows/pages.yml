@@ -27,9 +27,9 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           python-version: "3.12"
-      # The tests and coverage badges in the README read these two files through
-      # shields.io/endpoint, so they show what this commit's run measured, not a number
-      # somebody typed into the README.
+      # The tests and coverage badges in the README are the SVG files this step writes,
+      # so they show what this commit's run measured, not a number typed into the README.
+      # The JSON files stay for anything still calling the old shields.io endpoint.
       - run: npm ci --prefix scanner --no-audit --no-fund
       - name: verify pinned scanner and rollback rejection
         run: npm --prefix scanner run check:build && npm --prefix scanner test
