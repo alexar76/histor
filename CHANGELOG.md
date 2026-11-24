@@ -17,7 +17,7 @@
   gives each tool `extras.relaxation` beside `extras.escalation`. Pointed out by a reader of the registry-copy
   article (DEV.to, 2026-11-23), who noticed that our own count had the two directions the wrong way round.
   `python -m histor.extras_relaxations count|fill` gives the changes recorded before this their list from the stored
-  bodies, in pages by `seq`; it only adds the key. On production (2026-11-23): RELAX_NUMBERS.
+  bodies, in pages by `seq`; it only adds the key. On production (2026-11-23, 21:05–21:39Z) it read 297,883 changes recorded since 2026-10-23 and gave 1,782 of them, on 1,643 servers, a list (6 already had one from the new crawler); none was unreadable. For 1,983 changes with a candidate the target had no earlier digested tool set, and only the earlier extras body decided what was listed.
 - The rfc8785 vector test names the four vectors added to mcp-tool-set-digest on 2026-11-23 that HISTOR's bounded
   form changes (extras 510 and 511 levels deep, `1e400` outside the contract, a repeated `name` whose last value is
   empty), as `scripts/cross_check_histor.py` already did.
