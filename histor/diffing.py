@@ -158,6 +158,41 @@ def new_addresses(old: list[dict[str, Any]], new: list[dict[str, Any]]) -> tuple
     return fresh[:MAX_NEW_ADDRESSES], len(fresh)
 
 
+# Link shorteners. The name hides where the link goes, so a new one in a tool definition is the address to read
+# first. On 2026-11-22, 58 of 2,000 recorded changes named a new address; dropping the server's own domain, code
+# hosts and registries, example names and private IPs still left 34, while this list matched exactly one (a bit.ly).
+# Matched on the whole host (or the host under www.), never on a suffix: "t.co" is not "microsoft.com".
+LINK_SHORTENERS = frozenset({
+    "bit.ly", "bitly.com", "j.mp", "tinyurl.com", "t.co", "goo.gl", "is.gd", "v.gd", "ow.ly", "buff.ly", "cutt.ly",
+    "rebrand.ly", "rb.gy", "shorturl.at", "tiny.cc", "t.ly", "s.id", "lnkd.in", "bl.ink", "x.gd", "qr.ae", "shorte.st",
+    "adf.ly", "clck.ru", "u.to", "zip1.io", "tr.im", "soo.gd", "short.gy", "tiny.one", "linktr.ee",
+})
+
+
+def short_links(addresses: list[str] | set[str]) -> list[str]:
+    """The addresses among these that are link-shortener hosts (``LINK_SHORTENERS``), sorted."""
+    out = set()
+    for a in addresses:
+        if "@" in a:
+            continue
+        host = a[4:] if a.startswith("www.") else a
+        if host in LINK_SHORTENERS:
+            out.add(a)
+    return sorted(out)
+
+
+def changed_short_links(summary: Any) -> list[str]:
+    """The link shorteners a recorded change newly names: its ``newShortLinks``, or, for a change recorded before
+    that field existed (2026-11-24), the shorteners among its stored ``newAddresses``."""
+    if not isinstance(summary, dict):
+        return []
+    stored = summary.get("newShortLinks")
+    if isinstance(stored, list):
+        return [a for a in stored if isinstance(a, str)]
+    listed = summary.get("newAddresses")
+    return short_links([a for a in listed if isinstance(a, str)]) if isinstance(listed, list) else []
+
+
 def word_diff(old: str, new: str) -> list[list[str]]:
     """``[[op, text], …]`` with op in ``=``, ``-``, ``+``."""
     a, b = _TOKEN.findall(old), _TOKEN.findall(new)
@@ -220,7 +255,11 @@ def tool_set_diff(old: list[dict[str, Any]] | None, new: list[dict[str, Any]] | 
     }
     if old is None or new is None:
         return summary
-    summary["newAddresses"], summary["newAddressesTotal"] = new_addresses(old, new)
+    fresh = sorted(_all_addresses(new) - _all_addresses(old))
+    summary["newAddresses"], summary["newAddressesTotal"] = fresh[:MAX_NEW_ADDRESSES], len(fresh)
+    # Only when there is one, so the many changes without a shortener keep their summary as it was.
+    if shorts := short_links(fresh):
+        summary["newShortLinks"] = shorts
     by_old = {t["name"]: t for t in old}
     by_new = {t["name"]: t for t in new}
     for name in sorted(old_set & new_set):

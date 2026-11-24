@@ -172,6 +172,7 @@ export default {
   js_added: "ajoutés",
   js_removed: "retirés",
   js_names_only: "Un des côtés de ce changement n’avait pas d’ensemble d’outils dont on puisse calculer l’empreinte ; seuls les noms d’outils sont donc comparés.",
+  js_new_short_links: "Nouveau raccourcisseur de liens (le nom cache où il mène)",
   js_new_addresses: "Nouvelles adresses externes",
   js_new_addresses_hint: "Hôtes, adresses e-mail ou IP que ces outils mentionnent désormais et ne mentionnaient pas avant. La langue n’y change rien : une adresse s’écrit partout de la même façon. Un nouveau lien vers la documentation est normal ; un hôte inconnu dans une description qui n’en avait jamais mérite un coup d’œil.",
   js_h_classifier: "Classifieur IA (indicatif)",

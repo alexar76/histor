@@ -172,6 +172,7 @@ export default {
   js_added: "新增",
   js_removed: "移除",
   js_names_only: "此次变更的一方没有可计算摘要的工具集，因此只比较工具名称。",
+  js_new_short_links: "新的短链接服务（名称隐藏了实际去向）",
   js_new_addresses: "新的外部地址",
   js_new_addresses_hint: "这些工具现在提到、而之前没有提到的主机、电子邮件地址或 IP。与语言无关：地址在任何语言里写法都一样。新增文档链接很正常；原本没有地址的描述里出现陌生主机，值得看一看。",
   js_h_classifier: "AI 分类器（仅供参考）",

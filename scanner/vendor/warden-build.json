@@ -1,13 +1,13 @@
 {
   "package": "@aimarket/warden",
-  "version": "0.38.0",
-  "sourceCommit": "9443d42e6",
+  "version": "0.39.0",
+  "sourceCommit": "23fcfe28d",
   "registryGitHead": null,
-  "buildDigest": "cbb3a54fa345fca64aff9c2d54349c3fe9dee2b4e1b429fd6df161efd29c110b",
-  "tarball": "aimarket-warden-0.38.0.tgz",
-  "sha256": "b4b647989dc28ba480c2fa17d55072e3bc27026528f8543f286f22386d06c8f6",
-  "integrity": "sha512-nHYGuPswlVY7/7wvSCskyKY9h8x3UZHjksypQnWbAMk8pwHgLX6mvOU58bmsNPdi6+AX9ZzdTfkvp2FnSfIj0g==",
-  "distribution": "Release archive of 0.38.0 (npm shasum 0ed5248a\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.38.0-2026-11-23/, built from 9443d42e6; its build digest is the one MOMUS will accept for this release.",
+  "buildDigest": "18221b0084f1f800d0ef916b9613d0ebfd61853d35b1726cc05106ab03c88c0c",
+  "tarball": "aimarket-warden-0.39.0.tgz",
+  "sha256": "e87e2adbdbcf9e08654353b3ba8a4301f6d73157dc1806022597b2d294b32d2b",
+  "integrity": "sha512-qJX2PRldr+XA2hmTsG6VtNldCsD2jTRjN+SRdkUdX3T8atQNlXuc2070BOISeO5sq1+hR8bATN75I0Znvui0kg==",
+  "distribution": "Release archive of 0.39.0 (npm shasum 28b8ff87\u2026), byte for byte the tarball in warden/docs/evidence/warden-release-0.39.0-2026-11-24/, built from 23fcfe28d; its build digest is the one MOMUS will accept for this release.",
   "qualityRun": null,
   "changes": [
     "0.28.0\u20130.29.0: rulesets 22 and 23 (instruction polarity), bundled known-malicious package list (OpenSSF + OSM)",
@@ -22,7 +22,9 @@
     "0.37.1: scan without --histor ends with a line saying how many servers the log could be asked about (nothing sent; historAvailable in --json); rulesets (23), malware list and scan verdicts unchanged",
     "0.37.2: tool-set digests follow mcp-tool-set-digest/1 section 12 (512 levels; TSD-DEPTH / MTL-SUBJ-005 past that); rulesets (23), malware list and scan verdicts unchanged",
     "0.37.3: Open Terminal structured results and rootless Docker UID mapping; rulesets (23), malware list and scan verdicts unchanged",
-    "0.38.0: issuer ask for a token sent home (secret_issuer); interceptor refuses tools next to result (TSD-TOOL); terminal egress red team; rulesets (23), malware list and scan verdicts unchanged"
+    "0.38.0: issuer ask for a token sent home (secret_issuer); interceptor refuses tools next to result (TSD-TOOL); terminal egress red team; rulesets (23), malware list and scan verdicts unchanged",
+    "0.38.1: Open WebUI setup upgrades the default gateway; Open Terminal file destinations relative to home; rulesets (23), malware list and scan verdicts unchanged",
+    "0.39.0: static scan ruleset 24 \u2014 TOOL_DEF_SHORT_LINK (advisory, low) for URL shorteners in tool prose; no blocking rule changed; digest sha256-Zopy0S98\u2026"
   ],
-  "packageJsonSha256": "5db98cd9fc8260978bec5fccccd8684e96ecad9b2c84fe877c31fc42946736e4"
+  "packageJsonSha256": "b850aba2f0c7bd6028d2adadb48f5af7b190cac386a34cfcc9a29389a4141fe5"
 }

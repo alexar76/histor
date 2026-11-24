@@ -34,6 +34,7 @@ export const JS_EN = {
   js_added: "added",
   js_removed: "removed",
   js_names_only: "One side of this change had no digestible tool set, so only tool names are compared.",
+  js_new_short_links: "New link shortener (the name hides where it goes)",
   js_new_addresses: "New outside addresses",
   js_new_addresses_hint: "Hosts, e-mail addresses or IPs these tools now mention and did not before. Language does not matter: an address is spelled the same everywhere. A new docs link is normal; an unknown host in a description that never had one is worth a look.",
   js_h_classifier: "AI classifier (advisory)",

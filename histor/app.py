@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge, fingerprint_profiles, fingerprints, subregistry, toolcost, watch_paid
+from histor import __version__, badge, diffing, fingerprint_profiles, fingerprints, subregistry, toolcost, watch_paid
 from histor import instructions as instructions_mod
 from histor import signed_revisions as signed_revisions_mod
 from histor.check import MAX_MATCHES, CheckError
@@ -81,8 +81,8 @@ CAPS = (
         "name": "Recent MCP tool-definition changes",
         "description": (
             "The newest tool-definition changes HISTOR observed at remote MCP endpoints in the official registry: "
-            "which tools were added, removed or modified, any outside address (host, e-mail, IP) that newly appeared, "
-            "and a link to each full diff."
+            "which tools were added, removed or modified, any outside address (host, e-mail, IP) that newly appeared "
+            "(link shorteners among them listed apart), and a link to each full diff."
         ),
         "price_per_call_usd": 0.0,
         "input_schema": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50}}},
@@ -1180,6 +1180,8 @@ def create_app(services: Services) -> FastAPI:
         for c in items:
             s = c["summary"]
             parts = []
+            if shorts := diffing.changed_short_links(s):
+                parts.append(f"NEW LINK SHORTENER: {', '.join(shorts[:10])}")
             if s.get("newAddresses"):
                 total = s.get("newAddressesTotal", len(s["newAddresses"]))
                 more = f" (+{total - 10} more)" if total > 10 else ""
@@ -1743,6 +1745,7 @@ def create_app(services: Services) -> FastAPI:
             "modified": [m["tool"] for m in s["modified"][:20]],
             "newAddresses": s.get("newAddresses", [])[:20],
             "newAddressesTotal": s.get("newAddressesTotal", len(s.get("newAddresses", []))),
+            "newShortLinks": diffing.changed_short_links(s),
             "detail": s.get("detail"), "label": c.get("label_id"),
             "page": f"{settings.public_base}/s/{c['target_id']}",
         }

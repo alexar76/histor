@@ -407,6 +407,10 @@ function serversView(done) {
 
 function renderDiff(summary) {
   const box = el("div", {});
+  if (summary.newShortLinks?.length) {
+    box.append(el("p", {}, el("b", { class: "bad-t", text: `⚠ ${t("js_new_short_links")}: ` }),
+      ...visible(summary.newShortLinks.join(", ")).nodes));
+  }
   if (summary.newAddresses?.length) {
     box.append(el("p", {}, el("b", { class: "bad-t", text: `⚠ ${t("js_new_addresses")}: ` }),
       ...visible(summary.newAddresses.join(", ")).nodes,

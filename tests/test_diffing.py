@@ -87,6 +87,36 @@ def test_new_addresses_only_with_full_detail_and_capped():
     assert len(capped["newAddresses"]) == diffing.MAX_NEW_ADDRESSES and capped["newAddressesTotal"] == 80
 
 
+def test_link_shorteners_are_listed_apart():
+    old = [{"name": "a", "description": "See https://docs.example.org/a", "inputSchema": {}}]
+    new = [{"name": "a", "description": "See https://bit.ly/3xYz and www.tinyurl.com/abc, or docs.example.org; "
+                                         "mail t.co@example.net. Also https://microsoft.com and t.co/q.",
+            "inputSchema": {"type": "object", "properties": {"u": {"description": "https://example.org/x"}}}}]
+    s = diffing.tool_set_diff(old, new, ["a"], ["a"])
+    # whole host or www.host only: microsoft.com is not t.co, and an e-mail address is never a short link
+    assert s["newShortLinks"] == ["bit.ly", "t.co", "www.tinyurl.com"]
+    assert set(s["newShortLinks"]) <= set(s["newAddresses"])
+    # a shortener the old tools already named is not new
+    assert "newShortLinks" not in diffing.tool_set_diff(new, new + [{"name": "b", "inputSchema": {}}], ["a"], ["a", "b"])
+    # the many changes without one keep their summary as it was
+    plain = diffing.tool_set_diff(old, [{"name": "a", "description": "https://other.example.org", "inputSchema": {}}], ["a"], ["a"])
+    assert "newShortLinks" not in plain and plain["newAddresses"] == ["other.example.org"]
+
+
+def test_short_links_are_counted_past_the_address_cap():
+    hosts = " ".join(f"https://h{i:02d}.example.org" for i in range(80))
+    s = diffing.tool_set_diff([], [{"name": "a", "description": hosts + " https://zz.bit.ly-not.example https://rb.gy/1",
+                                    "inputSchema": {}}], [], ["a"])
+    assert "rb.gy" not in s["newAddresses"] and s["newShortLinks"] == ["rb.gy"]
+
+
+def test_changed_short_links_reads_older_records_from_their_addresses():
+    assert diffing.changed_short_links({"newAddresses": ["github.com", "bit.ly", "a@bit.ly"]}) == ["bit.ly"]
+    assert diffing.changed_short_links({"newAddresses": ["bit.ly"], "newShortLinks": []}) == []
+    assert diffing.changed_short_links({"added": []}) == [] and diffing.changed_short_links(None) == []
+    assert diffing.changed_short_links({"newAddresses": [1, None, "is.gd"]}) == ["is.gd"]
+
+
 def test_addresses_flush_against_cjk_and_with_trailing_punctuation():
     got = diffing._addresses_in("详情见https://docs.example.net。数据来自tiles.example.com。联系help@example.org或 See https://example.edu! `https://example.info`")
     assert got == {"docs.example.net", "tiles.example.com", "help@example.org", "example.edu", "example.info"}

@@ -172,6 +172,7 @@ export default {
   js_added: "añadidas",
   js_removed: "eliminadas",
   js_names_only: "Uno de los lados de este cambio no tenía un conjunto de herramientas con resumen calculable, así que solo se comparan los nombres de las herramientas.",
+  js_new_short_links: "Nuevo acortador de enlaces (el nombre oculta adónde lleva)",
   js_new_addresses: "Direcciones externas nuevas",
   js_new_addresses_hint: "Hosts, correos o IP que estas herramientas mencionan ahora y antes no. El idioma no importa: una dirección se escribe igual en todas partes. Un enlace nuevo a la documentación es normal; un host desconocido en una descripción que nunca tuvo ninguno merece una revisión.",
   js_h_classifier: "Clasificador de IA (informativo)",

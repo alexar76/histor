@@ -5,17 +5,19 @@
 # What is irreplaceable: the issuer key (lose it and the log's identity is gone — a new key is a
 # new log) and the Postgres log itself. Both live in single Docker volumes on one host, so this
 # keeps local, dated copies: a pg_dump (custom format, checked with pg_restore --list) and a tar of
-# the data volume (the keys and the tree-head marker). 0600 files in a 0700 directory, 2 days (the
-# last three nights): each dump is about the size of the log (2.3 GB on 2026-11-03 and growing), and
+# the data volume (the keys and the tree-head marker). 0600 files in a 0700 directory, 1 day (the
+# last two nights): each dump is about the size of the log (2.3 GB on 2026-11-03, 9.3 GB on 2026-11-24), and
 # the dump taken by hand before a deploy lands here too, so 14 days filled the host's disk and on
-# 2026-11-03 five days (10 GB) held it above 85 %. Set HISTOR_BACKUP_KEEP_DAYS for a longer local history.
+# 2026-11-03 five days (10 GB) held it above 85 %. Three nights (26 GB) on 2026-11-24 → two: the
+# off-host backup (histor-offhost-backup) takes its own dump and keys every night as well.
+# Set HISTOR_BACKUP_KEEP_DAYS for a longer local history.
 #
 # Local copies survive a dropped volume or a botched restore, not the loss of the host. Copy
 # /var/backups/histor somewhere else too (see docs/operations.md, "Backups").
 set -euo pipefail
 
 DIR="${HISTOR_BACKUP_DIR:-/var/backups/histor}"
-KEEP_DAYS="${HISTOR_BACKUP_KEEP_DAYS:-2}"
+KEEP_DAYS="${HISTOR_BACKUP_KEEP_DAYS:-1}"
 PG="${HISTOR_PG_CONTAINER:-histor-histor-postgres-1}"
 APP="${HISTOR_APP_CONTAINER:-histor-histor-1}"
 
@@ -37,7 +39,7 @@ docker exec "$PG" pg_dump -U histor -d histor -Fc > "$dump.part"
 docker exec -i "$PG" pg_restore --list < "$dump.part" > /dev/null  # a dump that does not list is not a backup
 mv "$dump.part" "$dump"
 
-# Keep the newest KEEP_DAYS + 1 of each (the last three nights by default). By count, not age:
+# Keep the newest KEEP_DAYS + 1 of each (the last two nights by default). By count, not age:
 # `find -mtime +2` rounds down to whole days, and a run a few minutes earlier than the night
 # before kept a fourth 2.8 GB dump (2026-11-07: four, 10.7 GB, with the host at 92 %).
 for pattern in 'histor-*.dump' 'keys-*.tar'; do

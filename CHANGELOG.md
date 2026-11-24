@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Link shorteners are listed apart.** A change record's summary carries `newShortLinks` when the new tool set names
+  a link-shortener host (bit.ly, tinyurl.com, t.co, is.gd, cutt.ly and others; `diffing.LINK_SHORTENERS`) that the old
+  one did not, counted past the 50-address cap of `newAddresses`. The name hides where such a link goes, so it is the
+  address to read first: on 2026-11-22, 58 of 2,000 changes named a new address, a filter for the server's own
+  domain, code hosts and registries still left 34, and the shortener list matched exactly one. Shown first in the
+  Atom feed (`NEW LINK SHORTENER:`), on the server page, in `histor.changes@v1` and in HISTOR Watch webhooks
+  (`newShortLinks`, "link shortener …" in the chat line). Changes recorded before this read their shorteners from
+  their stored `newAddresses`; the stored records are not rewritten.
+
 ## 0.12.0 — 2026-11-23
 
 - **Changes that may remove confirmation** (54b7e5ba9, live 2026-11-23 18:47Z, across servers 19:10Z). The changes

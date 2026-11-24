@@ -320,4 +320,7 @@ def test_change_events_carry_a_chat_line_that_cannot_ping_or_link():
     assert body["text"].startswith("HISTOR: &lt;!channel&gt; evil&lt;https://x.example|click&gt; changed its tool definitions")
     assert "added a, b, c, d, e …" in body["text"] and "modified get_weather" in body["text"]
     assert "1 new outside address(es)" in body["text"] and body["text"].endswith("https://histor.example/s/" + "a" * 16)
-    assert "<" not in body["text"]
+    assert "<" not in body["text"] and body["newShortLinks"] == [] and "shortener" not in body["text"]
+    row["summary"]["newAddresses"] = ["bit.ly", "x.example"]
+    _, body = _change_event("https://histor.example", row)
+    assert body["newShortLinks"] == ["bit.ly"] and "link shortener bit.ly; 2 new outside address(es)" in body["text"]

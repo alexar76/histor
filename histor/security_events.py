@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 import httpx
 from awr import canonicalize
 
+from histor.diffing import changed_short_links
 from histor.logbook import sign_document
 from histor.netguard import resolve_public
 from histor.store import dumps
@@ -40,6 +41,7 @@ def _change_event(base_url: str, row: dict) -> tuple[str, dict]:
         "removed": summary.get("removed") or [],
         "modified": [m.get("tool") if isinstance(m, dict) else m for m in (summary.get("modified") or [])],
         "newAddresses": summary.get("newAddresses") or [],
+        "newShortLinks": changed_short_links(summary),
         "label": row.get("label_id"),
         "diff": f"{base_url}/api/v1/changes/{row['id']}" if base_url else None,
         "page": f"{base_url}/s/{row['target_id']}" if base_url else None,
@@ -61,6 +63,8 @@ def _change_text(body: dict) -> str:
         names = [_slack_safe(n) for n in body[key] if n]
         if names:
             parts.append(f"{key} {', '.join(names[:5])}{' …' if len(names) > 5 else ''}")
+    if body["newShortLinks"]:
+        parts.append(f"link shortener {', '.join(_slack_safe(a) for a in body['newShortLinks'][:3])}")
     if body["newAddresses"]:
         parts.append(f"{len(body['newAddresses'])} new outside address(es)")
     line = f"HISTOR: {_slack_safe(body['server'] or body['target'])} changed its tool definitions"
