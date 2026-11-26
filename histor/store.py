@@ -686,39 +686,45 @@ class Store:
         but the row's date."""
         from histor.cards import DECISIVE, DECLARED
         counts = {"declared": 0, "withdrawn": 0}
-        with self.db.transaction() as tx:
-            for target, verdict, digest, entries in results:
-                tid = target["id"]
-                prior = tx.one("SELECT * FROM server_cards WHERE target_id=?", (tid,)) or {}
-                found = verdict.status in DECISIVE and verdict.status != "absent"
+
+        def apply_one(tx: Any, target: dict[str, Any], verdict: Any, digest: str | None,
+                      entries: list[dict[str, Any]] | None) -> None:
+            tid = target["id"]
+            prior = tx.one("SELECT * FROM server_cards WHERE target_id=?", (tid,)) or {}
+            found = verdict.status in DECISIVE and verdict.status != "absent"
+            tx.execute(
+                "INSERT INTO server_cards(target_id, url, checked_at, status, toolset, tool_count, first_seen, last_ok, detail) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET url=excluded.url, "
+                "checked_at=excluded.checked_at, status=excluded.status, toolset=excluded.toolset, "
+                "tool_count=excluded.tool_count, first_seen=excluded.first_seen, last_ok=excluded.last_ok, detail=excluded.detail",
+                (tid, verdict.url or prior.get("url"), now, verdict.status,
+                 digest if verdict.status == DECLARED else (prior.get("toolset") if verdict.status not in DECISIVE else None),
+                 len(entries) if entries is not None else (prior.get("tool_count") if verdict.status not in DECISIVE else None),
+                 prior.get("first_seen") or (now if found else None),
+                 now if found else prior.get("last_ok"), (verdict.detail or "")[:300] or None))
+            if verdict.status not in DECISIVE:
+                return
+            if verdict.status == DECLARED and digest:
+                Store.put_blob(tx, digest, "toolset", entries)
                 tx.execute(
-                    "INSERT INTO server_cards(target_id, url, checked_at, status, toolset, tool_count, first_seen, last_ok, detail) "
-                    "VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET url=excluded.url, "
-                    "checked_at=excluded.checked_at, status=excluded.status, toolset=excluded.toolset, "
-                    "tool_count=excluded.tool_count, first_seen=excluded.first_seen, last_ok=excluded.last_ok, detail=excluded.detail",
-                    (tid, verdict.url or prior.get("url"), now, verdict.status,
-                     digest if verdict.status == DECLARED else (prior.get("toolset") if verdict.status not in DECISIVE else None),
-                     len(entries) if entries is not None else (prior.get("tool_count") if verdict.status not in DECISIVE else None),
-                     prior.get("first_seen") or (now if found else None),
-                     now if found else prior.get("last_ok"), (verdict.detail or "")[:300] or None))
-                if verdict.status not in DECISIVE:
-                    continue
-                if verdict.status == DECLARED and digest:
-                    Store.put_blob(tx, digest, "toolset", entries)
-                    tx.execute(
-                        "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
-                        "first_declared, last_declared, withdrawn_at, source) VALUES(?, ?, ?, NULL, ?, ?, ?, NULL, 'card') "
-                        "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
-                        "last_declared=excluded.last_declared, withdrawn_at=NULL, source='card' "
-                        "WHERE declared_toolsets.source = 'card' OR declared_toolsets.withdrawn_at IS NOT NULL",
-                        (tid, digest, len(entries or []), target.get("version"), now, now))
-                    counts["declared"] += 1
-                gone = tx.execute("SELECT toolset FROM declared_toolsets WHERE target_id=? AND source='card' "
-                                  "AND withdrawn_at IS NULL AND toolset<>?", (tid, digest or ""))
-                for row in gone:
-                    tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?",
-                               (now, tid, row["toolset"]))
-                counts["withdrawn"] += len(gone)
+                    "INSERT INTO declared_toolsets(target_id, toolset, tool_count, when_text, registry_version, "
+                    "first_declared, last_declared, withdrawn_at, source) VALUES(?, ?, ?, NULL, ?, ?, ?, NULL, 'card') "
+                    "ON CONFLICT(target_id, toolset) DO UPDATE SET tool_count=excluded.tool_count, "
+                    "last_declared=excluded.last_declared, withdrawn_at=NULL, source='card' "
+                    "WHERE declared_toolsets.source = 'card' OR declared_toolsets.withdrawn_at IS NOT NULL",
+                    (tid, digest, len(entries or []), target.get("version"), now, now))
+                counts["declared"] += 1
+            gone = tx.execute("SELECT toolset FROM declared_toolsets WHERE target_id=? AND source='card' "
+                              "AND withdrawn_at IS NULL AND toolset<>?", (tid, digest or ""))
+            for row in gone:
+                tx.execute("UPDATE declared_toolsets SET withdrawn_at=? WHERE target_id=? AND toolset=?",
+                           (now, tid, row["toolset"]))
+            counts["withdrawn"] += len(gone)
+
+        for i in range(0, len(results), 50):
+            with self.db.transaction() as tx:
+                for item in results[i:i + 50]:
+                    apply_one(tx, *item)
         return counts
 
     def server_card(self, target_id: str) -> dict[str, Any] | None:

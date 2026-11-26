@@ -160,7 +160,8 @@ class PostgresBackend:
         except ImportError as exc:  # pragma: no cover - exercised when the extra is missing
             raise RuntimeError('Postgres needs the postgres extra: pip install "aimarket-histor[postgres]"') from exc
         self._pool = ConnectionPool(
-            database_url, min_size=1, max_size=max_size, kwargs={"row_factory": dict_row}, open=True
+            database_url, min_size=1, max_size=max_size, timeout=30, max_lifetime=3600,
+            reconnect_timeout=5, kwargs={"row_factory": dict_row}, open=True,
         )
         with self._pool.connection() as conn:
             conn.execute("SELECT 1")
@@ -168,8 +169,12 @@ class PostgresBackend:
     @contextmanager
     def read(self) -> Iterator[Tx]:
         with self._pool.connection() as conn:
-            yield _PostgresTx(conn)
-            conn.commit()
+            try:
+                yield _PostgresTx(conn)
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
 
     @contextmanager
     def transaction(self) -> Iterator[Tx]:
