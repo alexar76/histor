@@ -37,6 +37,8 @@ def test_the_shipped_config_is_valid_and_lists_both_peers():
         "scraperwatch": "field-diff",
         "mcp-transparency-log": "digest",
     }
+    # A census of the whole registry (~51,000 rows): compared a bounded share a day, one HISTOR request per row.
+    assert {p["slug"]: p.get("max_rows") for p in peers}["mcp-transparency-log"] == 1000
 
 
 @pytest.mark.parametrize("config, message", [
@@ -56,6 +58,9 @@ def test_the_shipped_config_is_valid_and_lists_both_peers():
     (json.dumps([{**SW, "first_run": ["only one"]}]), "first_run must be two"),
     (json.dumps([{**SW, "first_run": ["yesterday", "today"]}]), "first_run must be two"),
     (json.dumps([{k: v for k, v in SW.items() if k != "first_run"}]), "first_run must be two"),
+    (json.dumps([digest_peer(max_rows=0)]), "max_rows must be a whole number"),
+    (json.dumps([digest_peer(max_rows="500")]), "max_rows must be a whole number"),
+    (json.dumps([digest_peer(max_rows=True)]), "max_rows must be a whole number"),
 ])
 def test_config_errors_are_named(config, message):
     with pytest.raises(pr.ConfigError, match=message):
@@ -172,3 +177,67 @@ def test_field_diff_summary_keeps_what_the_index_shows():
               "reverse": {"why": {"robots": 2}, "likelyMisses": [{}, {}, {}]}, "generatedAt": "x"}
     assert pr.field_diff_summary(result) == {"days": ["d"], "forward": {"seen": 1}, "reverse": {"robots": 2},
                                              "likelyMisses": 3}
+
+
+def _census(n):
+    return [{"name": f"io.example/s{i}", "endpoint": f"https://s{i}.example/mcp", "digest": A,
+             "read_at": "2026-11-02T00:00:00Z"} for i in range(n)]
+
+
+def test_a_large_source_is_compared_in_daily_parts_that_cover_every_row():
+    """MCP Transparency Log publishes a census of the whole registry (51,525 rows on 2026-11-26). The digest
+    method makes one HISTOR request per row, so a run over all of it took hours on 2026-11-27 and was stopped;
+    max_rows bounds each day's share and the parts rotate through the whole file."""
+    import datetime as dtm
+    import hashlib
+
+    rows = _census(2500)
+    assert pr.daily_share(rows, None, "2026-11-27") == (rows, None)
+    assert pr.daily_share(rows, 5000, "2026-11-27") == (rows, None)
+
+    seen: list[str] = []
+    for day in ("2026-11-27", "2026-11-28", "2026-11-29"):
+        chosen, sample = pr.daily_share(rows, 1000, day)
+        assert sample["parts"] == 3 and sample["rows_in_source"] == 2500 and sample["max_rows"] == 1000
+        assert sample["part"] == dtm.date.fromisoformat(day).toordinal() % 3
+        assert "capped" not in sample and 0 < len(chosen) <= 1000
+        assert pr.daily_share(rows, 1000, day) == (chosen, sample)             # the same day, the same rows
+        # The published rule recomputes the day's rows from outside.
+        by_rule = {r["endpoint"] for r in rows
+                   if int.from_bytes(hashlib.sha256(f"{r['name']}\n{r['endpoint']}".encode()).digest()[:8], "big")
+                   % 3 == sample["part"]}
+        assert {r["endpoint"] for r in chosen} == by_rule
+        seen += [r["endpoint"] for r in chosen]
+    assert sorted(seen) == sorted(r["endpoint"] for r in rows)                # three days: every row, once
+
+
+def test_a_part_larger_than_max_rows_is_capped_and_says_so():
+    same = _census(1) * 5                                                      # one name and endpoint: one part
+    shares = [pr.daily_share(same, 2, f"2026-11-{d}") for d in (27, 28, 29)]
+    assert all(s["parts"] == 3 for _, s in shares)
+    full = [(chosen, s) for chosen, s in shares if chosen]
+    assert len(full) == 1                                                      # its part comes round once in 3 days
+    chosen, sample = full[0]
+    assert len(chosen) == 2 and sample["capped"] is True
+
+
+def test_a_bounded_digest_peer_asks_histor_only_for_its_share(tmp_path):
+    rows = _census(2500)
+    listed = "\n".join(json.dumps(r) for r in rows) + "\n"
+    asked: list[str] = []
+
+    def get_json(url):
+        asked.append(url)
+        return {"timeline": TIMELINE}
+
+    peer = digest_peer(sources=[{"name": "list", "url": "https://obs.example/list.jsonl"}], max_rows=1000)
+    res = pr.run_peer(peer, tmp_path / "obs", histor="https://histor.test", get_text=lambda url: listed,
+                      get_json=get_json, pause=0, day="2026-11-27")
+    report = json.loads((tmp_path / "obs" / "list.report.json").read_text())
+    assert len(asked) == report["rows_in"] <= 1000
+    assert report["sample"]["rows_in_source"] == 2500 and report["sample"]["parts"] == 3
+    assert res["list"]["rows_in_source"] == 2500 and res["list"]["part"] == f"{report['sample']['part'] + 1}/3"
+    assert "Today's share of a larger file: part" in (tmp_path / "obs" / "list.report.md").read_text()
+    index = pr.build_index([peer], {"obs": res}, "2026-11-27", None, "2026-11-27T12:00:00Z")
+    assert index["peers"][0]["max_rows"] == 1000
+

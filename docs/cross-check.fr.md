@@ -14,6 +14,7 @@ https://histor.modelmarket.dev/datasets/peers/.
 |---|---|---|---|---|
 | CrawlCheck (crawlcheck.io) | empreintes (digests) d'ensembles d'outils | chaque jour, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | changements par champ | chaque jour, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
+| MCP Transparency Log (yassinht/mcp-transparency-log) | empreintes d'ensembles d'outils, 1 000 serveurs par jour | chaque jour, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
 
 La liste est un seul fichier de configuration, `/etc/histor/peers.json` sur l'hôte (`deploy/peers.json` dans ce
 dépôt). Sa forme publique est https://histor.modelmarket.dev/datasets/peers/index.json : chaque observateur, sa
@@ -42,6 +43,13 @@ dans le registre), `endpoint`, `digest` (SRI ou hex) et `read_at` (RFC 3339), en
 changements de CrawlCheck est lu tel qu'il est publié. Une ligne avec `digest` null et un champ `outcome` indique que
 l'observateur n'a pas pu lire ce serveur. `histor-peers.timer` exécute chaque jour toutes les entrées
 (`deploy/peers_check.sh`, `histor/peers.py`) ; voir [operations.fr.md](operations.fr.md). Un observateur avec un journal de changements par champ au format de ScraperWatch s'ajoute avec la méthode `field-diff` et les paramètres que montre l'entrée de ScraperWatch dans `deploy/peers.json`.
+
+Une source qui liste tout le registre, et pas seulement ses changements, est comparée par parts quotidiennes. Avec
+`"max_rows": 1000` dans son entrée, un fichier de N lignes est divisé en ceil(1,1 × N / 1000) parts selon le SHA-256 de
+`name`, d'un saut de ligne et de `endpoint` (les huit premiers octets, big-endian, modulo le nombre de parts), et
+chaque jour compare la part dont le numéro est l'ordinal du jour modulo le nombre de parts. Chaque serveur revient
+une fois sur ce nombre de jours ; le rapport indique la part comparée et chacun peut recalculer les lignes qui la
+composent. Chaque ligne comparée est une requête à l'API de HISTOR, d'où la part bornée.
 
 ## Méthode : empreintes d'ensembles d'outils
 

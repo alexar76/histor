@@ -242,6 +242,9 @@ def markdown(report: dict) -> str:
     c = report["counts"]
     lines = [f"# Tool-set digest cross-check with HISTOR, {report['generated_at']}", "",
              f"{report['rows_in']} servers; window ±{report['window_hours']:g} h around each read.", "",
+             *([f"Today's share of a larger file: part {report['sample']['part'] + 1} of {report['sample']['parts']} "
+                f"({report['rows_in']} of {report['sample']['rows_in_source']} rows; rule: {report['sample']['rule']}).", ""]
+               if report.get("sample") else []),
              "| verdict | servers |", "|---|---|"]
     lines += [f"| {v} | {c[v]} |" for v in VERDICTS]
     odd = [r for r in report["rows"] if r["verdict"] not in ("agree", "agree_nearby")]

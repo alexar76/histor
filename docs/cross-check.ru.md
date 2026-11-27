@@ -14,6 +14,7 @@ https://histor.modelmarket.dev/datasets/peers/.
 |---|---|---|---|---|
 | CrawlCheck (crawlcheck.io) | дайджесты наборов инструментов | каждый день, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | изменения по полям | каждый день, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
+| MCP Transparency Log (yassinht/mcp-transparency-log) | дайджесты наборов инструментов, 1000 серверов в день | каждый день, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
 
 Список — это один файл настроек, `/etc/histor/peers.json` на хосте (`deploy/peers.json` в этом репозитории). Его
 публичный вид — https://histor.modelmarket.dev/datasets/peers/index.json: каждый наблюдатель, его способ, источники,
@@ -41,6 +42,12 @@ https://histor.modelmarket.dev/datasets/peers/.
 реестре), `endpoint`, `digest` (SRI или hex) и `read_at` (RFC 3339), в JSON, JSON Lines или CSV. Лента изменений
 CrawlCheck читается в том виде, в каком опубликована. Строка с `digest`, равным null, и полем `outcome` значит, что
 наблюдатель не смог прочитать этот сервер. `histor-peers.timer` каждый день запускает все записи (`deploy/peers_check.sh`, `histor/peers.py`); подробнее в [operations.ru.md](operations.ru.md). Наблюдатель с журналом изменений по полям в формате ScraperWatch добавляется со способом `field-diff` и параметрами, как в записи ScraperWatch в `deploy/peers.json`.
+
+Источник, в котором весь реестр, а не только изменения, сверяется по частям. С `"max_rows": 1000` в записи файл из
+N строк делится на ceil(1,1 × N / 1000) частей по SHA-256 от `name`, перевода строки и `endpoint` (первые восемь байт,
+big-endian, по модулю числа частей), и каждый день сверяется часть с номером «порядковый номер дня по модулю числа
+частей». Каждый сервер попадает в сверку раз в столько дней; отчёт называет сверенную часть, и любой может
+пересчитать, какие строки в неё вошли. Каждая сверенная строка — один запрос к API HISTOR, поэтому доля ограничена.
 
 ## Способ: дайджесты наборов инструментов
 

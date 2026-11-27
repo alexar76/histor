@@ -12,6 +12,7 @@
 |---|---|---|---|---|
 | CrawlCheck（crawlcheck.io） | 工具集摘要 | 每天 UTC 12:00 | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch（scraperwatch.com） | 按字段的变更 | 每天 UTC 12:00 | `/datasets/peers/scraperwatch/` | 2026-11-01 |
+| MCP Transparency Log（yassinht/mcp-transparency-log） | 工具集摘要，每天 1000 台服务器 | 每天 UTC 12:00 | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
 
 这个列表是一个配置文件：主机上的 `/etc/histor/peers.json`（本仓库中的 `deploy/peers.json`）。它的公开形式是
 https://histor.modelmarket.dev/datasets/peers/index.json ：每个观察者、其方法、来源和计划，以及最近一次核对的日期。
@@ -37,6 +38,11 @@ https://histor.modelmarket.dev/datasets/peers/index.json ：每个观察者、�
 十六进制）和 `read_at`（RFC 3339），格式为 JSON、JSON Lines 或 CSV。CrawlCheck 的变更流按原样读取。`digest` 为 null 并带
 有 `outcome` 字段的行，表示观察者未能读取该服务器。`histor-peers.timer` 每天运行所有记录
 （`deploy/peers_check.sh`、`histor/peers.py`）；见 [operations.zh.md](operations.zh.md)。以 ScraperWatch 格式发布按字段变更日志的观察者，使用方法 `field-diff`，参数参照 `deploy/peers.json` 中 ScraperWatch 的记录。
+
+列出整个注册表（而不仅是变更）的来源按天分批核对。记录中写 `"max_rows": 1000` 时，N 行的文件按 `name`、换行符和
+`endpoint` 的 SHA-256（前八个字节，大端序，对份数取模）分成 ceil(1.1 × N / 1000) 份，每天核对编号等于“当天的序数对份数取模”
+的那一份。每台服务器每隔这么多天被核对一次；报告写明核对的是哪一份，任何人都能重新算出其中包含哪些行。每核对一行就是对
+HISTOR API 的一次请求，因此每天的份额有上限。
 
 ## 方法：工具集摘要
 

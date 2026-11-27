@@ -45,6 +45,7 @@
     "method": "digest",
     "schedule": "daily 12:00 UTC (histor-peers.timer)",
     "window_hours": 24,
+    "max_rows": 1000,
     "sources": [
       {
         "name": "list",

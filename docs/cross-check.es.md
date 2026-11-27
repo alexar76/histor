@@ -14,6 +14,7 @@ en https://histor.modelmarket.dev/datasets/peers/.
 |---|---|---|---|---|
 | CrawlCheck (crawlcheck.io) | resúmenes (digests) de conjuntos de herramientas | cada día, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | cambios por campo | cada día, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
+| MCP Transparency Log (yassinht/mcp-transparency-log) | resúmenes de conjuntos de herramientas, 1.000 servidores al día | cada día, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
 
 La lista es un único archivo de configuración, `/etc/histor/peers.json` en el host (`deploy/peers.json` en este
 repositorio). Su forma pública es https://histor.modelmarket.dev/datasets/peers/index.json: cada observador, su
@@ -42,6 +43,13 @@ nombre en el registro), `endpoint`, `digest` (SRI o hex) y `read_at` (RFC 3339),
 de cambios de CrawlCheck se lee tal como se publica. Una fila con `digest` null y un campo `outcome` indica que el
 observador no pudo leer ese servidor. `histor-peers.timer` ejecuta cada día todas las entradas
 (`deploy/peers_check.sh`, `histor/peers.py`); véase [operations.es.md](operations.es.md). Un observador con un registro de cambios por campo en el formato de ScraperWatch se añade con el método `field-diff` y los parámetros que muestra la entrada de ScraperWatch en `deploy/peers.json`.
+
+Una fuente que lista todo el registro, y no solo sus cambios, se compara por partes diarias. Con `"max_rows": 1000`
+en su entrada, un archivo de N filas se divide en ceil(1,1 × N / 1000) partes según el SHA-256 de `name`, un salto de línea
+y `endpoint` (los ocho primeros bytes, big-endian, módulo el número de partes), y cada día se compara la parte cuyo
+número es el ordinal del día módulo el número de partes. Cada servidor vuelve una vez en ese número de días; el
+informe indica qué parte se comparó y cualquiera puede recalcular qué filas la forman. Cada fila comparada es una
+petición a la API de HISTOR, por eso la parte está acotada.
 
 ## Método: resúmenes de conjuntos de herramientas
 

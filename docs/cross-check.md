@@ -13,6 +13,7 @@ publishes every comparison, disagreements included, under https://histor.modelma
 |---|---|---|---|---|
 | CrawlCheck (crawlcheck.io) | tool-set digests | daily, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | field-level changes | daily, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
+| MCP Transparency Log (yassinht/mcp-transparency-log) | tool-set digests, 1,000 servers a day | daily, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
 
 The list is one configuration file, `/etc/histor/peers.json` on the host (`deploy/peers.json` in this repository).
 Its public form is https://histor.modelmarket.dev/datasets/peers/index.json: every observer, its method, sources
@@ -40,6 +41,13 @@ A source is any file the observer publishes over https with one row per server r
 read as it is published. A row with `digest` null and an `outcome` says the observer could not read that server.
 `histor-peers.timer` runs every entry each day (`deploy/peers_check.sh`, `histor/peers.py`); see
 [operations.md](operations.md). An observer with a field-level change log in ScraperWatch's format is added with method `field-diff` and the settings its entry in `deploy/peers.json` shows.
+
+A source that lists the whole registry rather than its changes is compared in daily shares. With `"max_rows": 1000`
+in its entry, a file of N rows is split into ceil(1.1 × N / 1000) parts by the SHA-256 of `name`, a newline and `endpoint`
+(first eight bytes, big-endian, modulo the number of parts), and each day compares the part numbered by the day's
+ordinal modulo the number of parts. Every server comes round once in that many days, the report says which part was
+compared, and anyone can recompute which rows it held. Each compared row is one request to HISTOR's API, which is why
+the share is bounded.
 
 ## Method: tool-set digests
 
