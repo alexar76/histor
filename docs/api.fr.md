@@ -132,8 +132,14 @@ Content-Type: application/json
 }
 ```
 
-`match` vaut `same`, `different`, `previously-observed` (avec `seenBefore`), `not-observed`,
-`not-listed` ou `no-digest`. La réponse est signée comme une tête d’arbre (`type` `histor.check/v1`).
+`match` vaut `same`, `different`, `previously-observed` (avec `seenBefore`),
+`same-other-revision`, `not-observed`, `not-listed`, `no-digest` ou `undigestible`.
+`same-other-revision` : le serveur répond à MCP 2026-07-28 et à la poignée de main `initialize`, et
+liste des définitions différentes dans chacune ; l’ensemble envoyé est celui que le serveur a donné à
+HISTOR après une poignée de main. Le journal contient la lecture 2026-07-28 (`observed`) ; la lecture
+après poignée de main est conservée à côté du journal et figure dans `otherRevision`
+(`protocolVersion`, `toolSetDigest`, `toolCount`, `readAt`, `besideToolSetDigest`) chaque fois que les
+deux listes diffèrent. La réponse est signée comme une tête d’arbre (`type` `histor.check/v1`).
 Si l’ensemble n’a jamais été analysé et que votre adresse dispose encore d’un budget d’analyse, le
 sidecar WARDEN l’analyse sur-le-champ. Limites : 30 contrôles par minute et 20 nouvelles analyses par
 heure, par adresse ; les corps de plus de 2 MiB sont refusés. Avec `contribute`, rien d’autre que le

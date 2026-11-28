@@ -14,6 +14,7 @@ publishes every comparison, disagreements included, under https://histor.modelma
 | CrawlCheck (crawlcheck.io) | tool-set digests | daily, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | field-level changes | daily, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
 | MCP Transparency Log (yassinht/mcp-transparency-log) | tool-set digests, 1,000 servers a day | daily, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
+| heldfast (rufat325/heldfast-feed) | per-tool fingerprints, 1,000 servers a day | daily, 12:00 UTC | `/datasets/peers/heldfast/` | 2026-11-27 |
 
 The list is one configuration file, `/etc/histor/peers.json` on the host (`deploy/peers.json` in this repository).
 Its public form is https://histor.modelmarket.dev/datasets/peers/index.json: every observer, its method, sources
@@ -95,6 +96,42 @@ Exit status 0 means no `disagree`, 1 means at least one, 2 that the input could 
 
 First results, 2026-11-07: the shared list's first edition (sha256 `9271b8ac…`), 30 servers, 30 `agree`; the change
 feed, 16 rows with the digest, 15 `agree`, 1 `histor_no_digest`, 0 `disagree`.
+
+## Method: per-tool fingerprints
+
+heldfast (https://github.com/rufat325/heldfast) pins every tool on its own rather than the whole list. Its tool digest
+([LOCK.md](https://github.com/rufat325/heldfast/blob/main/docs/LOCK.md)) is the SHA-256 of RFC 8785 over `name`,
+`title`, `description`, `input_schema`, `annotations`, `output_schema` (left out when empty) and `icons` (left out when
+empty). Its public feed, https://github.com/rufat325/heldfast-feed, holds one file per server. For a hosted server it is
+`state/remote__<registry name>.json`, with the endpoint (`url`), the time of the read that produced the list
+(`published`), every tool's fingerprint (`tools`) and, when a later read failed, `attempted`. HISTOR computes the same
+fingerprints from what it stored, titles and annotations included (`/api/v1/servers/<id>/fingerprints?format=heldfast`),
+so the two are compared tool by tool, with no conversion on either side (`histor/fingerprint_xcheck.py`).
+
+Each run lists the folder at the commit `main` names at that moment and keeps that commit in the report. There are
+about 44,000 such files, so with `"max_rows": 1000` each day compares one share, chosen by the SHA-256 of the file name
+by the rule above: every server comes round in about 49 days. Each day's folder holds the files as read
+(`state.input.jsonl`), the comparison (`state.report.json`, `state.report.md`) and `SHA256SUMS`.
+
+The route gives HISTOR's current tool set: unchanged since `unchangedSince`, last read at `lastObserved`. Titles and
+annotations can change while the tool set stays, so a server whose fingerprints differ is looked up once more
+(`/api/v1/servers/<id>`) for its newest title or annotation change.
+
+| Verdict | Meaning |
+|---|---|
+| `agree` | every tool both sides fingerprint is the same, and both list the same tools |
+| `disagree` | different, although HISTOR read this tool set, titles and annotations included, both before and after heldfast's read |
+| `changed_after` | different, and HISTOR's current tool set or its titles and annotations date from after heldfast's read: the server changed in between |
+| `read_after` | different, and heldfast read after HISTOR's last successful read: the server may have changed since HISTOR read it |
+| `histor_no_extras` | HISTOR read this tool set before it kept titles and annotations, so it cannot compute the fingerprint |
+| `histor_no_toolset` | HISTOR lists the server but has no tool set for it |
+| `not_listed` | HISTOR does not list this name and endpoint |
+| `theirs_no_tools` | heldfast's file lists no tools; its `attempted.why` (for example HTTP 401) is kept |
+| `bad_row` | a field is missing, or the file could not be read |
+
+Tools whose titles or annotations HISTOR could not keep (over its size caps) are left out on both sides and listed.
+
+First published results, 2026-11-27 (feed at commit `0b36265b`, part 48 of 49, 897 servers): 427 `agree` (5,678 tools), 0 `disagree`, 57 `changed_after`, 37 `read_after`, 8 `histor_no_extras`, 21 `histor_no_toolset`, 10 `not_listed`, 337 `theirs_no_tools` (262 of them HTTP 401). In 33 of the 37 `read_after` rows the server's robots.txt disallows the endpoint, so HISTOR has not read it since it began to honour robots.txt (RFC 9309) on 2026-11-02, while heldfast still does.
 
 ## Method: field-level changes
 

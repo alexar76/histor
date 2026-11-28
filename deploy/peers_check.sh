@@ -7,9 +7,10 @@
 # peer's `aliases` become links $DIR/<alias> → peers/<slug>, so an address given out before the list existed keeps
 # working; a real directory of that name is left alone and reported. The $KEEP_DAYS newest days of each peer are kept.
 #
-# Two runs, each in a throw-away container from the service's own image, as export_dataset.sh and witness_push.sh
-# do, read-only, with only what its method needs:
-#   "digest" peers      host network (HISTOR's API on the loopback port, the peers' files over the network),
+# One run per method, each in a throw-away container from the service's own image, as export_dataset.sh and
+# witness_push.sh do, read-only, with only what its method needs:
+#   "digest" and "fingerprints" peers
+#                       host network (HISTOR's API on the loopback port, the peers' files over the network),
 #                       no setting of the service, no volume
 #   "field-diff" peers  the compose network, the database settings copied from the service (never printed) and the
 #                       data volume read-only, because they compare with HISTOR's records in the database
@@ -77,14 +78,14 @@ publish() {
 }
 
 status=0
-for method in digest field-diff; do
+for method in digest fingerprints field-diff; do
   [[ " $methods " == *" $method "* ]] || continue
   stage="$DIR/.staging/peer-checks-$method-$day"
   rm -rf "$stage"
   install -d -m 0700 -o "${UIDGID%%:*}" -g "${UIDGID##*:}" "$stage"
   stages+=("$stage")
   mounts=("${common[@]}" -v "$stage:/export")
-  if [[ $method == digest ]]; then
+  if [[ $method == digest || $method == fingerprints ]]; then
     net=(--network host)
     envs=()
     limits=(--memory 256m --pids-limit 32)

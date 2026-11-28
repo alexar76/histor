@@ -15,6 +15,7 @@ https://histor.modelmarket.dev/datasets/peers/.
 | CrawlCheck (crawlcheck.io) | empreintes (digests) d'ensembles d'outils | chaque jour, 12:00 UTC | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch (scraperwatch.com) | changements par champ | chaque jour, 12:00 UTC | `/datasets/peers/scraperwatch/` | 2026-11-01 |
 | MCP Transparency Log (yassinht/mcp-transparency-log) | empreintes d'ensembles d'outils, 1 000 serveurs par jour | chaque jour, 12:00 UTC | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
+| heldfast (rufat325/heldfast-feed) | empreintes par outil, 1 000 serveurs par jour | chaque jour, 12:00 UTC | `/datasets/peers/heldfast/` | 2026-11-27 |
 
 La liste est un seul fichier de configuration, `/etc/histor/peers.json` sur l'hôte (`deploy/peers.json` dans ce
 dépôt). Sa forme publique est https://histor.modelmarket.dev/datasets/peers/index.json : chaque observateur, sa
@@ -100,6 +101,46 @@ Code de sortie 0 : aucun `disagree` ; 1 : au moins un ; 2 : entrée illisible.
 
 Premiers résultats, 7 novembre 2026 : première édition de la liste partagée (sha256 `9271b8ac…`), 30 serveurs,
 30 `agree` ; flux de changements, 16 lignes avec l'empreinte, 15 `agree`, 1 `histor_no_digest`, 0 `disagree`.
+
+## Méthode : empreintes par outil
+
+heldfast (https://github.com/rufat325/heldfast) épingle chaque outil séparément plutôt que la liste entière. Son
+condensé d'outil ([LOCK.md](https://github.com/rufat325/heldfast/blob/main/docs/LOCK.md)) est le SHA-256 du RFC 8785
+de `name`, `title`, `description`, `input_schema`, `annotations`, `output_schema` (omis s'il est vide) et `icons`
+(omis s'il est vide). Son flux public, https://github.com/rufat325/heldfast-feed, contient un fichier par serveur.
+Pour un serveur hébergé, c'est `state/remote__<nom dans le registre>.json` : le point d'accès (`url`), l'heure de la
+lecture qui a produit la liste (`published`), l'empreinte de chaque outil (`tools`) et, si une lecture ultérieure a
+échoué, `attempted`. HISTOR calcule les mêmes empreintes à partir de ce qu'il a stocké, titres et annotations compris
+(`/api/v1/servers/<id>/fingerprints?format=heldfast`) : la comparaison se fait outil par outil, sans conversion d'un
+côté ni de l'autre (`histor/fingerprint_xcheck.py`).
+
+Chaque exécution liste le dossier au commit que désigne `main` à ce moment et garde ce commit dans le rapport. Il y a
+environ 44 000 fichiers ; avec `"max_rows": 1000`, chaque jour compare une part choisie par le SHA-256 du nom de
+fichier selon la règle ci-dessus : chaque serveur revient environ tous les 49 jours. Le dossier de chaque jour contient
+les fichiers tels que lus (`state.input.jsonl`), la comparaison (`state.report.json`, `state.report.md`) et
+`SHA256SUMS`.
+
+La route donne l'ensemble d'outils actuel de HISTOR : inchangé depuis `unchangedSince`, lu pour la dernière fois à
+`lastObserved`. Les titres et les annotations peuvent changer alors que l'ensemble reste le même ; pour un serveur dont
+les empreintes diffèrent, son enregistrement (`/api/v1/servers/<id>`) est donc relu une fois pour connaître son dernier
+changement de titres ou d'annotations.
+
+| Verdict | Signification |
+|---|---|
+| `agree` | toutes les empreintes calculées des deux côtés sont égales, et les deux listent les mêmes outils |
+| `disagree` | différentes, alors que HISTOR a lu cet ensemble, titres et annotations compris, avant et après la lecture de heldfast |
+| `changed_after` | différentes, et l'ensemble actuel de HISTOR ou ses titres et annotations datent d'après la lecture de heldfast : le serveur a changé entre-temps |
+| `read_after` | différentes, et heldfast a lu après la dernière lecture réussie de HISTOR : le serveur a pu changer depuis |
+| `histor_no_extras` | HISTOR a lu cet ensemble avant de conserver titres et annotations ; il ne peut pas calculer l'empreinte |
+| `histor_no_toolset` | HISTOR liste le serveur mais n'a pas d'ensemble d'outils pour lui |
+| `not_listed` | HISTOR ne liste pas ce nom et ce point d'accès |
+| `theirs_no_tools` | le fichier de heldfast ne liste aucun outil ; son `attempted.why` (par exemple HTTP 401) est conservé |
+| `bad_row` | un champ manque, ou le fichier n'a pas pu être lu |
+
+Les outils dont HISTOR n'a pas pu conserver les titres ou les annotations (au-delà de ses limites de taille) sont
+exclus des deux côtés et listés.
+
+Premiers résultats publiés, 2026-11-27 (flux au commit `0b36265b`, part 48 sur 49, 897 serveurs) : 427 `agree` (5 678 outils), 0 `disagree`, 57 `changed_after`, 37 `read_after`, 8 `histor_no_extras`, 21 `histor_no_toolset`, 10 `not_listed`, 337 `theirs_no_tools` (dont 262 HTTP 401). Dans 33 des 37 lignes `read_after`, le robots.txt du serveur interdit le point d'accès : HISTOR ne le lit plus depuis qu'il respecte robots.txt (RFC 9309), le 2026-11-02, alors que heldfast le lit encore.
 
 ## Méthode : changements par champ
 

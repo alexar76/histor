@@ -602,6 +602,26 @@ MIGRATION_026: Statements = (
     "CREATE INDEX registry_entries_latest ON registry_entries(is_latest, name)",
 )
 
+# What a server that answers MCP 2026-07-28 lists to a client that opens with ``initialize``. The log
+# holds one reading per observation, taken in the newest revision the server answers; a few servers
+# list other definitions in the handshake revisions (a wrapped outputSchema, another ``$schema``,
+# more or fewer tools: 4 of 277 in a sample of 2026-11-27). This is that second reading, one row per
+# target, kept beside the log, not in it: ``beside_toolset`` is the log's tool-set digest it was
+# taken next to, ``toolset`` its own (NULL when the read failed or the list has no digest).
+MIGRATION_027: Statements = (
+    """
+    CREATE TABLE revision_readings (
+        target_id TEXT PRIMARY KEY,
+        beside_toolset TEXT NOT NULL,
+        protocol TEXT NOT NULL DEFAULT '',
+        toolset TEXT,
+        tool_count INTEGER,
+        status TEXT NOT NULL,
+        read_at TEXT NOT NULL
+    )
+    """,
+)
+
 # (version, name, statements)
 MIGRATIONS: list[tuple[int, str, Statements]] = [
     (1, "001_initial", MIGRATION_001),
@@ -630,6 +650,7 @@ MIGRATIONS: list[tuple[int, str, Statements]] = [
     (24, "024_observation_instructions", MIGRATION_024),
     (25, "025_signed_statements", MIGRATION_025),
     (26, "026_registry_entries", MIGRATION_026),
+    (27, "027_revision_readings", MIGRATION_027),
 ]
 
 # The column contract for the table every page reads. A revision that changes it updates

@@ -72,6 +72,10 @@ class FakeMcp:
     ``status[path]`` forces an HTTP status (or a whole response); ``sse`` paths answer as event streams;
     ``server_versions[path]`` is the serverInfo version initialize reports (default "1.0");
     ``instructions[path]`` is the ``instructions`` member initialize returns (absent by default).
+    ``modern[path]`` makes the server answer MCP 2026-07-28 as well: ``server/discover``, and
+    ``tools/list`` with per-request ``_meta`` returning this list, while a handshake client still
+    gets ``tools[path]``. ``no_handshake`` paths refuse ``initialize`` the way a 2026-07-28-only
+    server does.
     """
 
     def __init__(self) -> None:
@@ -82,6 +86,8 @@ class FakeMcp:
         self.raw: dict[str, str] = {}
         self.server_versions: dict[str, str] = {}
         self.instructions: dict[str, Any] = {}
+        self.modern: dict[str, list[dict[str, Any]]] = {}
+        self.no_handshake: set[str] = set()
         self.calls: list[tuple[str, str]] = []
 
     def transport(self) -> httpx.MockTransport:
@@ -97,6 +103,23 @@ class FakeMcp:
             return forced if isinstance(forced, httpx.Response) else httpx.Response(forced)
         if method == "notifications/initialized":
             return httpx.Response(202)
+        meta = (body.get("params") or {}).get("_meta") or {}
+        if path in self.modern and (method == "server/discover" or "io.modelcontextprotocol/protocolVersion" in meta):
+            protocol = meta.get("io.modelcontextprotocol/protocolVersion", "2026-07-28")
+            server = {"io.modelcontextprotocol/serverInfo": {"name": f"fake{path}", "version": "2.0"}}
+            if method == "server/discover":
+                result = {"resultType": "complete", "supportedVersions": [protocol], "capabilities": {"tools": {}},
+                          "_meta": server, "ttlMs": 0, "cacheScope": "public"}
+            elif method == "tools/list":
+                result = {"resultType": "complete", "tools": self.modern[path], "_meta": server,
+                          "ttlMs": 0, "cacheScope": "public"}
+            else:
+                return httpx.Response(404, json={"jsonrpc": "2.0", "id": body.get("id"),
+                                                 "error": {"code": -32601, "message": "Method not found"}})
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": body["id"], "result": result})
+        if method == "initialize" and path in self.no_handshake:
+            return httpx.Response(400, json={"jsonrpc": "2.0", "id": body["id"],
+                                             "error": {"code": -32601, "message": "Method not found"}})
         if method == "initialize":
             result = {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
                       "serverInfo": {"name": f"fake{path}", "version": self.server_versions.get(path, "1.0")}}

@@ -153,8 +153,13 @@ Content-Type: application/json
 }
 ```
 
-`match` is one of `same`, `different`, `previously-observed` (with `seenBefore`), `not-observed`,
-`not-listed`, `no-digest`. The answer is signed like a tree head (`type` `histor.check/v1`). If the
+`match` is one of `same`, `different`, `previously-observed` (with `seenBefore`),
+`same-other-revision`, `not-observed`, `not-listed`, `no-digest`, `undigestible`.
+`same-other-revision`: the server answers MCP 2026-07-28 and the `initialize` handshake and lists
+other definitions in each; the set you sent is what it listed to HISTOR after a handshake. The log
+holds the 2026-07-28 reading (`observed`); the handshake reading is kept beside the log and shown in
+`otherRevision` (`protocolVersion`, `toolSetDigest`, `toolCount`, `readAt`, `besideToolSetDigest`)
+whenever the two lists differ. The answer is signed like a tree head (`type` `histor.check/v1`). If the
 set was never scanned and your address still has scan budget, the WARDEN sidecar scans it on the
 spot. Limits: 30 checks a minute and 20 fresh scans an hour per address; bodies over 2 MiB are
 refused. With `contribute`, nothing but the day's count for that digest is stored.

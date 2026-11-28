@@ -629,8 +629,12 @@ class McpReader:
             cursors.add(nxt)
             request_id += 1
 
-    def list_tools(self, url: str) -> Observation:
-        """Observe *url*. Never raises for a server's behaviour; the status says what happened."""
+    def list_tools(self, url: str, *, handshake_only: bool = False) -> Observation:
+        """Observe *url*. Never raises for a server's behaviour; the status says what happened.
+
+        *handshake_only* skips ``server/discover`` and opens with ``initialize``, the way a client of
+        the earlier revisions reads: a server that answers both ways may list other definitions there
+        (histor.crawler, the other-revision reading)."""
         obs = Observation(status="error")
         deadline = _Deadline(self.deadline)
         try:
@@ -643,7 +647,7 @@ class McpReader:
                 if not decision.allowed:
                     raise _Stop(decision.status, decision.detail)
             with self._client() as client:
-                protocol = self._discover(client, pinned, deadline, obs)
+                protocol = None if handshake_only else self._discover(client, pinned, deadline, obs)
                 tools: list[Any] | None = None
                 if protocol is not None:
                     try:

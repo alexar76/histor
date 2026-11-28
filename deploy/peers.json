@@ -52,5 +52,18 @@
         "url": "https://yassinht.github.io/mcp-transparency-log/data/peers/tool-digests-latest.jsonl"
       }
     ]
+  },
+  {
+    "slug": "heldfast",
+    "name": "heldfast",
+    "operator": "rufat325",
+    "contact": "https://github.com/rufat325/heldfast/issues",
+    "page": "https://github.com/rufat325/heldfast-feed",
+    "since": "2026-11-27",
+    "method": "fingerprints",
+    "schedule": "daily 12:00 UTC (histor-peers.timer)",
+    "format": "heldfast",
+    "github": {"repo": "rufat325/heldfast-feed", "ref": "main", "folder": "state", "prefix": "remote__"},
+    "max_rows": 1000
   }
 ]

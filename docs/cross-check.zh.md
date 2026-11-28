@@ -13,6 +13,7 @@
 | CrawlCheck（crawlcheck.io） | 工具集摘要 | 每天 UTC 12:00 | `/datasets/peers/crawlcheck/` | 2026-11-07 |
 | ScraperWatch（scraperwatch.com） | 按字段的变更 | 每天 UTC 12:00 | `/datasets/peers/scraperwatch/` | 2026-11-01 |
 | MCP Transparency Log（yassinht/mcp-transparency-log） | 工具集摘要，每天 1000 台服务器 | 每天 UTC 12:00 | `/datasets/peers/mcp-transparency-log/` | 2026-11-27 |
+| heldfast（rufat325/heldfast-feed） | 逐个工具的指纹，每天 1000 台服务器 | 每天 UTC 12:00 | `/datasets/peers/heldfast/` | 2026-11-27 |
 
 这个列表是一个配置文件：主机上的 `/etc/histor/peers.json`（本仓库中的 `deploy/peers.json`）。它的公开形式是
 https://histor.modelmarket.dev/datasets/peers/index.json ：每个观察者、其方法、来源和计划，以及最近一次核对的日期。
@@ -87,6 +88,40 @@ python3 scripts/xcheck_digests.py https://crawlcheck.io/data/xcheck/histor/lates
 
 首批结果，2026 年 11 月 7 日：共享列表第一期（sha256 `9271b8ac…`），30 台服务器，30 个 `agree`；变更流，16 行带摘要，
 15 个 `agree`，1 个 `histor_no_digest`，0 个 `disagree`。
+
+## 方法：逐个工具的指纹
+
+heldfast（https://github.com/rufat325/heldfast）对每个工具分别固定，而不是对整个列表。它的工具摘要
+（[LOCK.md](https://github.com/rufat325/heldfast/blob/main/docs/LOCK.md)）是对 `name`、`title`、`description`、
+`input_schema`、`annotations`、`output_schema`（为空时省略）和 `icons`（为空时省略）做 RFC 8785 后的 SHA-256。
+它的公开数据源 https://github.com/rufat325/heldfast-feed 每台服务器一个文件。托管服务器的文件是
+`state/remote__<注册表名称>.json`，包含端点（`url`）、产生该列表的那次读取的时间（`published`）、每个工具的指纹
+（`tools`），以及后来一次读取失败时的 `attempted`。HISTOR 用自己保存的内容（包括标题和注解）计算同样的指纹
+（`/api/v1/servers/<id>/fingerprints?format=heldfast`），因此按工具逐个比较，双方都无需转换
+（`histor/fingerprint_xcheck.py`）。
+
+每次运行读取 `main` 当时指向的提交中的该文件夹，并在报告中记录这个提交。此类文件约有 44,000 个，因此在
+`"max_rows": 1000` 下每天比较一份，按文件名的 SHA-256 依上文规则选出：每台服务器大约每 49 天轮到一次。每天的文件夹
+保存读取时的原样文件（`state.input.jsonl`）、比较结果（`state.report.json`、`state.report.md`）和 `SHA256SUMS`。
+
+该路由给出 HISTOR 当前的工具集：自 `unchangedSince` 起未变，最后一次读取在 `lastObserved`。工具集不变时标题和注解
+也可能变化，因此对指纹不同的服务器会再读一次其记录（`/api/v1/servers/<id>`），取最近一次标题或注解变化的时间。
+
+| 结论 | 含义 |
+|---|---|
+| `agree` | 双方都计算的每个工具指纹都相同，且列出的工具相同 |
+| `disagree` | 不同，尽管 HISTOR 在 heldfast 读取之前和之后都读到了这个工具集（包括标题和注解） |
+| `changed_after` | 不同，且 HISTOR 当前的工具集或其标题和注解晚于 heldfast 的读取：服务器在两次读取之间变了 |
+| `read_after` | 不同，且 heldfast 的读取晚于 HISTOR 最后一次成功读取：服务器可能在那之后变了 |
+| `histor_no_extras` | HISTOR 读取该工具集时尚未保存标题和注解，无法计算指纹 |
+| `histor_no_toolset` | HISTOR 列出该服务器但没有它的工具集 |
+| `not_listed` | HISTOR 没有列出这个名称和端点 |
+| `theirs_no_tools` | heldfast 的文件没有列出工具；保留其 `attempted.why`（例如 HTTP 401） |
+| `bad_row` | 缺少字段，或文件无法读取 |
+
+HISTOR 未能保存标题或注解的工具（超出其大小限制）在双方都被排除并列出。
+
+首次发布的结果，2026-11-27（数据源提交 `0b36265b`，第 48/49 份，897 台服务器）：427 `agree`（5,678 个工具），0 `disagree`，57 `changed_after`，37 `read_after`，8 `histor_no_extras`，21 `histor_no_toolset`，10 `not_listed`，337 `theirs_no_tools`（其中 262 个为 HTTP 401）。37 行 `read_after` 中有 33 行的服务器 robots.txt 禁止访问该端点，因此自 2026-11-02 HISTOR 开始遵守 robots.txt（RFC 9309）以来不再读取，而 heldfast 仍在读取。
 
 ## 方法：按字段的变更
 

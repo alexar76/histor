@@ -36,9 +36,12 @@ def test_the_shipped_config_is_valid_and_lists_both_peers():
         "crawlcheck": "digest",
         "scraperwatch": "field-diff",
         "mcp-transparency-log": "digest",
+        "heldfast": "fingerprints",
     }
-    # A census of the whole registry (~51,000 rows): compared a bounded share a day, one HISTOR request per row.
-    assert {p["slug"]: p.get("max_rows") for p in peers}["mcp-transparency-log"] == 1000
+    # Censuses of the whole registry (~51,000 rows, ~44,000 files): compared a bounded share a day, one HISTOR
+    # request per row.
+    rows = {p["slug"]: p.get("max_rows") for p in peers}
+    assert rows["mcp-transparency-log"] == 1000 and rows["heldfast"] == 1000
 
 
 @pytest.mark.parametrize("config, message", [

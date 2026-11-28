@@ -7,16 +7,23 @@ Every observer HISTOR compares itself with is one entry in a JSON list (deploy/p
     name       display name;  operator, contact, page, since: optional, shown in the index
     method     "digest"     — compare the observer's tool-set digests with HISTOR's timeline
                               (histor/digest_xcheck.py), run by this module every day
+               "fingerprints" — compare the observer's per-tool fingerprints, one file per server in a public
+                              GitHub folder, with the ones HISTOR computes in that format
+                              (histor/fingerprint_xcheck.py, heldfast), run by this module every day
                "field-diff" — compare the observer's field-level change log with HISTOR's records, both ways
                               (histor/peer_xcheck.py, ScraperWatch); it reads HISTOR's database
     sources    for "digest": [{"name": "feed", "url": "https://…"}, …], each a file the observer publishes in a
                format digest_xcheck reads (rows in JSON, JSON Lines or CSV, or CrawlCheck's change feed)
     window_hours  for "digest": how far from the observer's read HISTOR may have seen the same digest (24)
-    max_rows   for "digest", optional: compare at most this many rows of a source per day. A larger file (a census
-               of the whole registry rather than a change feed) is split into parts = ceil(1.1 * rows / max_rows) by
-               sha256(name + "\\n" + endpoint), and each day compares the part numbered (day's ordinal mod parts),
-               so every row comes round every `parts` days and anyone can recompute which rows a day compared.
-               Each compared row costs one HISTOR request, which is why the share is bounded.
+    max_rows   for "digest" and "fingerprints", optional: compare at most this many rows of a source per day. A larger
+               source (a census of the whole registry rather than a change feed) is split into
+               parts = ceil(1.1 * rows / max_rows) by sha256(name + "\\n" + endpoint) (for "fingerprints": by
+               sha256 of the file name), and each day compares the part numbered (day's ordinal mod parts), so every
+               row comes round every `parts` days and anyone can recompute which rows a day compared. Each compared
+               row costs one HISTOR request, which is why the share is bounded.
+    format, github  for "fingerprints": the fingerprint format (heldfast) and where the files are:
+               {"repo": "owner/name", "ref": "main", "folder": "state", "prefix": "remote__"}; the run reads the
+               folder at the commit `ref` names at that moment, and keeps the commit
     changes, panel, agent, run_start, run_minutes, first_run, days
                for "field-diff": the observer's change log and endpoint panel (https), the user agent its robots.txt
                rules name, when its daily run starts (HH:MM:SS UTC) and how long it takes, its first run (two RFC 3339
@@ -24,15 +31,17 @@ Every observer HISTOR compares itself with is one entry in a JSON list (deploy/p
     aliases    older folder names under /datasets/ that should keep pointing at /datasets/peers/<slug>/
 
     python -m histor.peers --config peers.json --out DIR [--published DIR] [--histor URL] [--day YYYY-MM-DD]
-                           [--peer SLUG] [--method digest|field-diff]
+                           [--peer SLUG] [--method digest|fingerprints|field-diff]
 
 writes DIR/<slug>/ for every peer run (a "digest" peer: per source <name>.input.*, <name>.report.json,
-<name>.report.md and SHA256SUMS; a "field-diff" peer: README.md, results.json, inputs/ and SHA256SUMS) and
+<name>.report.md and SHA256SUMS; a "fingerprints" peer the same for its folder; a "field-diff" peer: README.md,
+results.json, inputs/ and SHA256SUMS) and
 DIR/index.json, which lists every peer; for those not run now it reads the newest day and its results from
---published (the live /datasets/peers/). deploy/peers_check.sh runs the two methods in separate containers (the
-"digest" one has no database, the "field-diff" one has no host network) and moves the results into place. Exit
+--published (the live /datasets/peers/). deploy/peers_check.sh runs each method in its own container (the "digest"
+and "fingerprints" ones have no database, the "field-diff" one has no host network) and moves the results into
+place. Exit
 status: 0, or 1 when a source could not be fetched or read or a peer failed (the others are still written);
-disagreements are a result, not a failure. "digest" needs the standard library only.
+disagreements are a result, not a failure. "digest" and "fingerprints" need the standard library only.
 """
 
 from __future__ import annotations
@@ -43,6 +52,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -50,10 +60,14 @@ from typing import Any
 
 try:  # inside the package, and when mounted next to it into an older image
     from histor import digest_xcheck as dx
-except ImportError:  # pragma: no cover - a copy of both files run by path
+    from histor import fingerprint_xcheck as fx
+except ImportError:  # pragma: no cover - a copy of the files run by path
     import digest_xcheck as dx  # type: ignore[no-redef]
+    import fingerprint_xcheck as fx  # type: ignore[no-redef]
 
-METHODS = ("digest", "field-diff")
+METHODS = ("digest", "fingerprints", "field-diff")
+REPO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$")
+PATH_PART = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 MAX_SOURCE = 16 * 1024 * 1024
 UA = "histor-peers/1 (+https://histor.modelmarket.dev/)"
@@ -108,9 +122,19 @@ def load_config(text: str) -> list[dict]:
             w = p.get("window_hours", 24)
             if not isinstance(w, (int, float)) or not 0 < w <= 24 * 14:
                 raise ConfigError(f"{where}: window_hours must be between 0 and 336")
-            m = p.get("max_rows")
-            if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 100_000):
-                raise ConfigError(f"{where}: max_rows must be a whole number between 1 and 100000")
+            _check_max_rows(p, where)
+        elif p["method"] == "fingerprints":
+            if p.get("format") not in fx.FORMATS:
+                raise ConfigError(f"{where}: format must be one of {', '.join(fx.FORMATS)}")
+            g = p.get("github")
+            if not isinstance(g, dict) or not isinstance(g.get("repo"), str) or not REPO.match(g["repo"]):
+                raise ConfigError(f"{where}: a fingerprints peer needs github.repo as owner/name")
+            for key in ("ref", "folder"):
+                if not isinstance(g.get(key), str) or not PATH_PART.match(g[key]):
+                    raise ConfigError(f"{where}: github.{key} must be one plain path part")
+            if not isinstance(g.get("prefix", ""), str) or not re.fullmatch(r"[A-Za-z0-9._-]{0,100}", g.get("prefix", "")):
+                raise ConfigError(f"{where}: github.prefix must be letters, digits, '.', '_' or '-'")
+            _check_max_rows(p, where)
         else:
             for key in ("changes", "panel"):
                 if not isinstance(p.get(key), str) or not p[key].startswith("https://"):
@@ -135,6 +159,12 @@ def load_config(text: str) -> list[dict]:
     return peers
 
 
+def _check_max_rows(p: dict, where: str) -> None:
+    m = p.get("max_rows")
+    if m is not None and (isinstance(m, bool) or not isinstance(m, int) or not 1 <= m <= 100_000):
+        raise ConfigError(f"{where}: max_rows must be a whole number between 1 and 100000")
+
+
 def fetch_text(url: str, timeout: float = 120) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -150,11 +180,16 @@ def _input_name(source: dict) -> str:
     return f"{source['name']}.input{ext}"
 
 
-def daily_share(rows: list[dict], max_rows: int | None, day: str) -> tuple[list[dict], dict | None]:
+def _name_endpoint(row: dict) -> str:
+    return f"{row.get('name') or ''}\n{row.get('endpoint') or ''}"
+
+
+def daily_share(rows: list[dict], max_rows: int | None, day: str, key: Callable[[dict], str] = _name_endpoint,
+                key_rule: str = 'sha256(name + "\\n" + endpoint)') -> tuple[list[dict], dict | None]:
     """The rows of a source to compare on `day`, and how they were chosen (None when all of them are).
 
-    Split by a hash of the row's name and endpoint, so a row stays in its part from day to day while the file keeps
-    its size, and every row comes round once every `parts` days. The part is capped at max_rows in name and endpoint
+    Split by a hash of the row's name and endpoint (or of `key`), so a row stays in its part from day to day while the
+    file keeps its size, and every row comes round once every `parts` days. The part is capped at max_rows in key
     order, for the rare part a little larger than the rest."""
     if not max_rows or len(rows) <= max_rows:
         return rows, None
@@ -163,18 +198,15 @@ def daily_share(rows: list[dict], max_rows: int | None, day: str) -> tuple[list[
     part = dt.date.fromisoformat(day).toordinal() % parts
 
     def bucket(row: dict) -> int:
-        key = f"{row.get('name') or ''}\n{row.get('endpoint') or ''}".encode("utf-8")
-        return int.from_bytes(hashlib.sha256(key).digest()[:8], "big") % parts
+        return int.from_bytes(hashlib.sha256(key(row).encode()).digest()[:8], "big") % parts
 
-    chosen = sorted((r for r in rows if bucket(r) == part),
-                    key=lambda r: (str(r.get("name") or ""), str(r.get("endpoint") or "")))
+    chosen = sorted((r for r in rows if bucket(r) == part), key=key)
     capped = len(chosen) > max_rows
     chosen = chosen[:max_rows]
     return chosen, {
         "rows_in_source": len(rows), "max_rows": max_rows, "parts": parts, "part": part,
-        "rule": "parts = ceil(1.1 * rows / max_rows); a row is compared when the first 8 bytes of "
-                "sha256(name + \"\\n\" + endpoint), as a big-endian integer, mod parts equal the day's "
-                "proleptic Gregorian ordinal mod parts",
+        "rule": f"parts = ceil(1.1 * rows / max_rows); a row is compared when the first 8 bytes of "
+                f"{key_rule}, as a big-endian integer, mod parts equal the day's proleptic Gregorian ordinal mod parts",
         **({"capped": True} if capped else {}),
     }
 
@@ -211,6 +243,53 @@ def run_peer(peer: dict, out: Path, *, histor: str, get_text: Callable[[str], st
     return results
 
 
+def run_fingerprints(peer: dict, out: Path, *, histor: str, get_text: Callable[[str], str] = fetch_text,
+                     get_json: Callable[[str], Any] = fx.fetch_json, pause: float = 0.2, day: str | None = None) -> dict:
+    """Run one "fingerprints" peer into OUT: the folder listed at one commit, today's share of its files read and kept
+    as read (<name>.input.jsonl, one {"file", "url", "body"} per line), and compared. Returns the index entry's result
+    part under the source name "state"."""
+    out.mkdir(parents=True, exist_ok=True)
+    g = peer["github"]
+    name = g["folder"]
+    try:
+        listing = fx.github_listing(g["repo"], g["ref"], g["folder"], g.get("prefix", ""), get_json)
+        files, sample = daily_share([{"file": f} for f in listing["files"]], peer.get("max_rows"),
+                                    day or dt.datetime.now(dt.UTC).strftime("%Y-%m-%d"),
+                                    key=lambda r: r["file"], key_rule="sha256(file name)")
+        rows, kept = [], []
+        for f in files:
+            url = fx.raw_url(g["repo"], listing["commit"], g["folder"], f["file"])
+            try:
+                text = get_text(url)
+            except Exception as exc:  # noqa: BLE001 - one file failing is a bad row, not a failed run
+                rows.append({"file": f["file"], "name": None, "endpoint": None, "read_at": None, "tools": None,
+                             "fetch_error": f"{type(exc).__name__}: {str(exc)[:120]}"})
+                continue
+            kept.append(json.dumps({"file": f["file"], "url": url, "body": text}, ensure_ascii=False))
+            rows.append({"file": f["file"], **fx.read_state(text)})
+            if pause:
+                time.sleep(pause)
+        (out / f"{name}.input.jsonl").write_text("".join(line + "\n" for line in kept), encoding="utf-8")
+        report = fx.xcheck(rows, get_json, histor, peer["format"], pause)
+        if sample:
+            report["sample"] = sample
+    except Exception as exc:  # noqa: BLE001 - reported in the index like a digest source that failed
+        return {name: {"error": f"{type(exc).__name__}: {str(exc)[:200]}"}}
+    report["peer"] = peer["slug"]
+    report["source"] = {"name": name, "repo": g["repo"], "ref": g["ref"], "folder": g["folder"],
+                        "prefix": g.get("prefix", ""), "commit": listing["commit"],
+                        "committed_at": listing["committed_at"], "files_in_folder": listing["files_in_folder"],
+                        "files_with_prefix": len(listing["files"])}
+    (out / f"{name}.report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (out / f"{name}.report.md").write_text(fx.markdown(report), encoding="utf-8")
+    files_ = sorted(p for p in out.iterdir() if p.is_file() and p.name != "SHA256SUMS")
+    (out / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in files_),
+                                    encoding="utf-8")
+    return {name: {"rows": report["rows_in"], "counts": report["counts"], "commit": listing["commit"],
+                   **({"rows_in_source": sample["rows_in_source"], "part": f"{sample['part'] + 1}/{sample['parts']}"}
+                      if sample else {})}}
+
+
 def field_diff_summary(result: dict) -> dict:
     """The part of a field-diff result (histor/peer_xcheck.py) the index shows."""
     return {"days": result.get("days"), "forward": (result.get("forward") or {}).get("verdicts"),
@@ -241,7 +320,7 @@ def published_results(published: Path | None, peer: dict, day: str | None) -> di
         return None
     folder = published / peer["slug"] / day
     try:
-        if peer["method"] == "digest":
+        if peer["method"] in ("digest", "fingerprints"):
             out = {}
             for f in sorted(folder.glob("*.report.json")):
                 r = json.loads(f.read_text(encoding="utf-8"))
@@ -272,6 +351,13 @@ def build_index(peers: list[dict], ran: dict[str, dict], day: str, published: Pa
         if p["method"] == "digest":
             e["sources"] = [{"name": s["name"], "url": s["url"]} for s in p["sources"]]
             e["window_hours"] = p.get("window_hours", 24)
+            if p.get("max_rows"):
+                e["max_rows"] = p["max_rows"]
+        elif p["method"] == "fingerprints":
+            g = p["github"]
+            e["sources"] = [{"name": g["folder"],
+                             "url": f"https://github.com/{g['repo']}/tree/{g['ref']}/{g['folder']}"}]
+            e["format"] = p["format"]
             if p.get("max_rows"):
                 e["max_rows"] = p["max_rows"]
         if p.get("aliases"):
@@ -323,7 +409,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{p['slug']}: days {r['days']}, forward {r['forward']}, reverse {r['reverse']}, "
                   f"likely misses {r['likelyMisses']}")
             continue
-        ran[p["slug"]] = run_peer(p, out / p["slug"], histor=a.histor, pause=a.pause, day=a.day)
+        if p["method"] == "fingerprints":
+            ran[p["slug"]] = run_fingerprints(p, out / p["slug"], histor=a.histor, pause=a.pause, day=a.day)
+        else:
+            ran[p["slug"]] = run_peer(p, out / p["slug"], histor=a.histor, pause=a.pause, day=a.day)
         for src, res in ran[p["slug"]].items():
             if "error" in res:
                 failed = True
@@ -331,7 +420,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 c = res["counts"]
                 share = f" (part {res['part']} of {res['rows_in_source']})" if "part" in res else ""
-                print(f"{p['slug']}/{src}: {res['rows']} rows{share}, {c['agree']} agree, {c['agree_nearby']} nearby, "
+                nearby = f"{c['agree_nearby']} nearby, " if "agree_nearby" in c else ""
+                print(f"{p['slug']}/{src}: {res['rows']} rows{share}, {c['agree']} agree, {nearby}"
                       f"{c['disagree']} disagree")
     now = dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     index = build_index(peers, ran, a.day, Path(a.published) if a.published else None, now)

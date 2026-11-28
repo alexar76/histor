@@ -124,8 +124,12 @@ Content-Type: application/json
 }
 ```
 
-`match` 取值为 `same`、`different`、`previously-observed`（附 `seenBefore`）、`not-observed`、
-`not-listed`、`no-digest` 之一。应答像树头一样签名（`type` 为 `histor.check/v1`）。如果该工具集从未
+`match` 取值为 `same`、`different`、`previously-observed`（附 `seenBefore`）、
+`same-other-revision`、`not-observed`、`not-listed`、`no-digest`、`undigestible` 之一。
+`same-other-revision`：该服务器既应答 MCP 2026-07-28，也应答 `initialize` 握手，并在两者中列出不同的
+定义；您发送的工具集是服务器在握手之后提供给 HISTOR 的那一份。日志中保存的是 2026-07-28 的读取
+（`observed`）；握手之后的读取保存在日志之外，只要两份列表不同，就会出现在 `otherRevision`
+（`protocolVersion`、`toolSetDigest`、`toolCount`、`readAt`、`besideToolSetDigest`）中。应答像树头一样签名（`type` 为 `histor.check/v1`）。如果该工具集从未
 被扫描过，而您的地址仍有扫描预算，WARDEN 边车会当场扫描它。限制：每个地址每分钟 30 次检查、每小时
 20 次新扫描；超过 2 MiB 的请求体会被拒绝。使用 `contribute` 时，除了该摘要当天的计数之外，不存储
 任何内容。

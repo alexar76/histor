@@ -225,7 +225,7 @@
   <pre class="rv">curl -sS https://histor.modelmarket.dev/api/v1/check \
   -H 'Content-Type: application/json' \
   -d '{"endpoint":"https://example.com/mcp","tools":[ …tools/list result… ],"contribute":true}'
-# -&gt; {"type":"histor.check/v1","match":"same"|"different"|"previously-observed"|…,
+# -&gt; {"type":"histor.check/v1","match":"same"|"different"|"previously-observed"|"same-other-revision"|…,
 #     "observed":{"unchangedSince":"…","changes":0}, "patternScan":{…}, "signature":{…}}
 
 # Only looking a server up: a GET with its endpoint (writes nothing)

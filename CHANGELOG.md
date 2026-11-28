@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- **heldfast on the observer list: per-tool fingerprints.** heldfast pins each tool on its own (SHA-256 of RFC 8785
+  over name, title, description, input_schema, annotations, output_schema, icons) and publishes one state file per
+  server in rufat325/heldfast-feed. Peer method `fingerprints` (`histor/fingerprint_xcheck.py`, standard library
+  only) reads that folder at one commit and compares each file's fingerprints with the ones HISTOR computes in the
+  same format (`/api/v1/servers/<id>/fingerprints?format=heldfast`), tool by tool. Verdicts: `agree`, `disagree`,
+  `changed_after`, `read_after` (with HISTOR's status now, often `robots-disallowed`), `histor_no_extras`,
+  `histor_no_toolset`, `not_listed`, `theirs_no_tools`, `bad_row`. 1,000 of about 44,000 files a day, chosen by
+  sha256(file name) by the `max_rows` rule; `peers_check.sh` runs the method in its own container with the digest
+  run's isolation. First run 2026-11-27: 897 servers, 427 `agree` (5,678 tools), 0 `disagree`.
+
+- **What a server lists after `initialize`, kept beside the log.** HISTOR reads a server in the newest revision it
+  answers, so the log holds the MCP 2026-07-28 reading of a server that answers both ways. A few such servers list
+  other definitions to a client that opens with `initialize`: an `outputSchema` wrapped in `{result: …}`, a draft-07
+  `$schema` in place of 2020-12, two more tools, or none (4 of 277 servers on 2026-11-27, one per registrable
+  domain). A handshake client asking `/api/v1/check` about one of them was told `different`, "differs from every
+  set HISTOR has observed". The crawl now takes that second reading too (read-only, same reader and robots rules,
+  when the 2026-07-28 list changed or the stored reading is a week old; `HISTOR_REVISION_READS_PER_DAY`, default
+  1500, 0 = off; `HISTOR_REVISION_REREAD_DAYS`, default 7) and keeps it in `revision_readings` (migration 027),
+  beside the log, not in it. `/check` answers `same-other-revision` for that set and shows the second reading in
+  `otherRevision` whenever the two lists differ; when there is no such reading yet, the `different` note says so.
+  `McpReader.list_tools(url, handshake_only=True)` is the read. Migration 027 only adds a table; an image without
+  it refuses a database that has it (unknown migration), so going back means dropping the table and its row in
+  `schema_migrations`.
+
 - **Link shorteners are listed apart.** A change record's summary carries `newShortLinks` when the new tool set names
   a link-shortener host (bit.ly, tinyurl.com, t.co, is.gd, cutt.ly and others; `diffing.LINK_SHORTENERS`) that the old
   one did not, counted past the 50-address cap of `newAddresses`. The name hides where such a link goes, so it is the

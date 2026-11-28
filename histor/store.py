@@ -266,6 +266,38 @@ class Store:
             return None
         return {"first_seen": row["first_seen"], "last_seen": row["last_seen"], "observations": int(row["n"])}
 
+    # -- the other-revision reading (migration 027) ---------------------------------
+
+    def revision_reading(self, target_id: str) -> dict[str, Any] | None:
+        """What this target listed to a handshake client, as last read beside its log entry."""
+        with self.db.read() as tx:
+            return tx.one("SELECT * FROM revision_readings WHERE target_id=?", (target_id,))
+
+    def last_protocol(self, target_id: str) -> str:
+        """The protocol revision of this target's latest successful reading, or ``""``."""
+        with self.db.read() as tx:
+            row = tx.one("SELECT protocol FROM observations WHERE target_id=? AND status='ok' "
+                         "ORDER BY observed_at DESC LIMIT 1", (target_id,))
+        return str((row or {}).get("protocol") or "")
+
+    def revision_reading_index(self) -> dict[str, tuple[str, str]]:
+        """``target_id -> (beside_toolset, read_at)`` for every stored reading: what the crawl needs
+        to decide whether one is due."""
+        with self.db.read() as tx:
+            rows = tx.execute("SELECT target_id, beside_toolset, read_at FROM revision_readings")
+        return {r["target_id"]: (r["beside_toolset"], r["read_at"]) for r in rows}
+
+    def put_revision_reading(self, target_id: str, *, beside_toolset: str, protocol: str, toolset: str | None,
+                             tool_count: int | None, status: str, read_at: str) -> None:
+        with self.db.transaction() as tx:
+            tx.execute(
+                "INSERT INTO revision_readings(target_id, beside_toolset, protocol, toolset, tool_count, status, read_at) "
+                "VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target_id) DO UPDATE SET beside_toolset=excluded.beside_toolset, "
+                "protocol=excluded.protocol, toolset=excluded.toolset, tool_count=excluded.tool_count, "
+                "status=excluded.status, read_at=excluded.read_at",
+                (target_id, beside_toolset, protocol[:40], toolset, tool_count, status[:40], read_at),
+            )
+
     # -- labels + log ---------------------------------------------------------------
 
     def label(self, label_id: str) -> dict[str, Any] | None:

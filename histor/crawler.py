@@ -91,6 +91,18 @@ class CrawlInProgress(RuntimeError):
 
 
 @dataclass
+class OtherRevision:
+    """One read that opened with ``initialize``, taken beside a 2026-07-28 reading of the same server."""
+
+    beside_toolset: str        # the tool-set digest of the reading that goes into the log
+    protocol: str              # what the handshake negotiated
+    toolset: str | None        # this reading's digest; None when it failed or has none
+    tool_count: int | None
+    status: str                # the reader's status, or "undigestible"
+    read_at: str
+
+
+@dataclass
 class Prepared:
     target: Target
     obs: Observation
@@ -99,9 +111,24 @@ class Prepared:
     subject_error: MtlError | None = None
     # A package observation: the registry's facts about the version and what changed since the last one.
     signals: dict[str, Any] | None = None
+    # For a server read in MCP 2026-07-28: what it listed to a handshake client right after (_other_revision).
+    other_revision: OtherRevision | None = None
 
 
 PACKAGE_SANDBOX = "package-sandbox"
+
+
+# Revisions from this one on have no handshake: the reader asks server/discover (histor.mcpclient).
+FIRST_STATELESS_REVISION = "2026-07-28"
+
+
+def _older_than(stamp: str, now: str, days: int) -> bool:
+    """Whether *stamp* is more than *days* before *now* (both as the crawl's clock writes them)."""
+    try:
+        return datetime.fromisoformat(now.replace("Z", "+00:00")) - datetime.fromisoformat(stamp.replace("Z", "+00:00")) \
+            > timedelta(days=days)
+    except ValueError:
+        return True
 
 
 def _host_of(endpoint: str) -> str:
@@ -318,6 +345,11 @@ class Crawler:
         self._due_config: dict[str, dict[str, list[str]]] = {}
         self._due_legacy: set[str] = set()
         self._seen_versions: dict[str, str] = {}
+        # The other-revision reading: which targets have one (loaded on the crawl's own thread before
+        # the workers start), and how many were taken today.
+        self._revision_index: dict[str, tuple[str, str]] | None = None
+        self._revision_day, self._revision_done = "", 0
+        self._revision_lock = threading.Lock()
         self.harvest_fn = harvest_fn or self._harvest_with_curated
         self.clock = clock
         self._lock = threading.Lock()
@@ -1061,6 +1093,12 @@ class Crawler:
         )
         per_host[PACKAGE_SANDBOX] = threading.Semaphore(getattr(self.packages, "capacity", self.settings.sandbox_concurrency))
         guard = threading.Lock()
+        if self._revision_index is None and self.settings.revision_reads_per_day:
+            # Read here, on the crawl's thread, before any worker starts.
+            try:
+                self._revision_index = self.store.revision_reading_index()
+            except Exception:  # noqa: BLE001 - without the index no second reading is taken; the crawl goes on
+                log.exception("the other-revision index could not be read")
 
         def one(t: Target) -> Prepared:
             return self._observe_one(t, per_host, guard)
@@ -1114,7 +1152,47 @@ class Crawler:
                 item.subject_error = exc
             except Exception as exc:  # noqa: BLE001 - hostile input the canonicalizer chokes on
                 item.subject_error = MtlError(MTL_SUBJ_001, f"the tool set cannot be processed ({type(exc).__name__})")
+            if not package and item.subject is not None and item.subject.tool_set_digest:
+                try:
+                    item.other_revision = self._other_revision(t, obs, item.subject.tool_set_digest, sem)
+                except Exception:  # noqa: BLE001 - a second look must never cost the observation itself
+                    log.exception("other-revision reading failed for target %s", t.id)
         return item
+
+    def _other_revision(self, t: Target, obs: Observation, beside: str, sem: Any) -> OtherRevision | None:
+        """What a server just read in MCP 2026-07-28 lists to a client that opens with ``initialize``.
+
+        Most servers that answer 2026-07-28 still answer the handshake, and a few list other definitions
+        there: an outputSchema wrapped in ``{result: …}``, a draft-07 ``$schema``, more or fewer tools
+        (4 of 277 in a sample of 2026-11-27). A handshake client that asks /check about such a server holds
+        a set the log has never seen. So the crawl takes that second reading too: read-only, through the
+        same reader and robots rules, one at a time per host, when the server's list changed or the stored
+        reading is older than ``revision_reread_days``, and at most ``revision_reads_per_day`` a day."""
+        limit = self.settings.revision_reads_per_day
+        if not limit or self._revision_index is None or obs.protocol_version < FIRST_STATELESS_REVISION:
+            return None
+        now = self.clock()
+        with self._revision_lock:
+            known = self._revision_index.get(t.id)
+            if known and known[0] == beside and not _older_than(known[1], now, self.settings.revision_reread_days):
+                return None
+            if self._revision_day != now[:10]:
+                self._revision_day, self._revision_done = now[:10], 0
+            if self._revision_done >= limit:
+                return None
+            self._revision_done += 1
+            self._revision_index[t.id] = (beside, now)   # claimed, so no second worker reads it again
+        with sem:
+            second = self.reader.list_tools(t.endpoint, handshake_only=True)
+        out = OtherRevision(beside_toolset=beside, protocol=second.protocol_version, toolset=None, tool_count=None,
+                            status=second.status, read_at=self.clock())
+        if second.status == "ok":
+            try:
+                out.toolset, entries = tool_set_digest(second.tools or [])
+                out.tool_count = len(entries)
+            except Exception:  # noqa: BLE001 - MtlError, or hostile input the canonicalizer chokes on
+                out.status = "undigestible"
+        return out
 
     def _settle(self, item: Prepared, run_id: int, rulesets: RuleSets, scans: dict[str, dict[str, Any]],
                 scan_failed: set[str], sets: str, classifications: dict[str, dict[str, Any]], tally: _Tally) -> str:
@@ -1150,6 +1228,14 @@ class Crawler:
             tally.issued.update(result["labels"])
             tally.changes += result["changed"]
             tally.classified += result.get("classified", 0)
+        if item.other_revision is not None:
+            other = item.other_revision
+            try:
+                self.store.put_revision_reading(
+                    item.target.id, beside_toolset=other.beside_toolset, protocol=other.protocol, toolset=other.toolset,
+                    tool_count=other.tool_count, status=other.status, read_at=other.read_at)
+            except Exception:  # noqa: BLE001 - side data: never the crawl's problem
+                log.exception("storing the other-revision reading failed for target %s", item.target.id)
         return item.obs.status
 
     def _package_lane(self, targets: list[Target], run_id: int, rulesets: RuleSets, sets: str,

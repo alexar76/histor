@@ -131,7 +131,12 @@ Content-Type: application/json
 ```
 
 `match` принимает одно из значений `same`, `different`, `previously-observed` (с `seenBefore`),
-`not-observed`, `not-listed`, `no-digest`. Ответ подписан так же, как вершина дерева (`type`
+`same-other-revision`, `not-observed`, `not-listed`, `no-digest`, `undigestible`.
+`same-other-revision`: сервер отвечает и на MCP 2026-07-28, и на рукопожатие `initialize`, и в них
+перечисляет разные определения; присланный набор — тот, что сервер отдал HISTOR после рукопожатия.
+В журнале лежит чтение по 2026-07-28 (`observed`); чтение после рукопожатия хранится рядом с журналом
+и показывается в `otherRevision` (`protocolVersion`, `toolSetDigest`, `toolCount`, `readAt`,
+`besideToolSetDigest`) всегда, когда два списка различаются. Ответ подписан так же, как вершина дерева (`type`
 `histor.check/v1`). Если набор ещё ни разу не сканировался, а у вашего адреса остался бюджет
 сканирований, сайдкар WARDEN сканирует его на месте. Лимиты: 30 проверок в минуту и 20 новых
 сканирований в час на адрес; тела запросов больше 2 MiB отклоняются. С `contribute` не хранится

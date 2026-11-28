@@ -131,8 +131,13 @@ Content-Type: application/json
 }
 ```
 
-`match` es uno de `same`, `different`, `previously-observed` (con `seenBefore`), `not-observed`,
-`not-listed`, `no-digest`. La respuesta se firma igual que un encabezado de árbol (`type` `histor.check/v1`).
+`match` es uno de `same`, `different`, `previously-observed` (con `seenBefore`),
+`same-other-revision`, `not-observed`, `not-listed`, `no-digest`, `undigestible`.
+`same-other-revision`: el servidor responde a MCP 2026-07-28 y al saludo `initialize`, y enumera
+definiciones distintas en cada uno; el conjunto enviado es el que el servidor dio a HISTOR tras un
+saludo. El registro guarda la lectura de 2026-07-28 (`observed`); la lectura tras el saludo se conserva
+junto al registro y aparece en `otherRevision` (`protocolVersion`, `toolSetDigest`, `toolCount`,
+`readAt`, `besideToolSetDigest`) siempre que las dos listas difieran. La respuesta se firma igual que un encabezado de árbol (`type` `histor.check/v1`).
 Si el conjunto nunca se escaneó y su dirección aún tiene presupuesto de escaneo, el sidecar de WARDEN
 lo escanea en el acto. Límites: 30 comprobaciones por minuto y 20 escaneos nuevos por hora por
 dirección; los cuerpos de más de 2 MiB se rechazan. Con `contribute` no se guarda nada salvo el

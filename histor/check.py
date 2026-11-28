@@ -74,6 +74,15 @@ NOTES = {
         "the server changed after HISTOR's last observation, its definitions vary per account, or it shows different "
         "clients different definitions. Read the definitions again before approving them."
     ),
+    # A server that answers MCP 2026-07-28 and the handshake revisions may list other definitions in each
+    # (a wrapped outputSchema, another $schema, more or fewer tools). The log holds the 2026-07-28 reading;
+    # the crawl keeps what the server listed after ``initialize`` beside it (histor.crawler).
+    "same-other-revision": (
+        "The tool definitions you sent are what this endpoint listed to HISTOR after an initialize handshake "
+        "(protocol {protocol}, read {day}). The endpoint also answers MCP 2026-07-28 and lists other definitions "
+        "there; that reading is the one in HISTOR's log (observed.toolSetDigest). The handshake reading is kept "
+        "beside the log, not in it (otherRevision)."
+    ),
     "no-digest": "No tool set was sent, so only HISTOR's own observations are reported.",
     # A package runs on the client's machine, not at one endpoint: what it lists can depend on what that
     # machine has. A launcher hands stdio to a locally installed program and offers only an "install me"
@@ -89,6 +98,17 @@ NOTES = {
         "with HISTOR's record. HISTOR's own observations are reported."
     ),
 }
+NOTE_OTHER_REVISION_STALE = (
+    " The 2026-07-28 list has changed since that handshake reading was taken; HISTOR reads the handshake list "
+    "again on its next crawl."
+)
+NOTE_NO_HANDSHAKE_READING = (
+    " HISTOR read this endpoint in MCP 2026-07-28 and has no reading of what it lists after an initialize "
+    "handshake. A server may list other definitions to a handshake client, so this can be a difference of "
+    "revision, not a change."
+)
+# Revisions from this one on are read without a handshake (histor.mcpclient).
+FIRST_STATELESS_REVISION = "2026-07-28"
 MAX_CLASSIFIER_FINDINGS = 50
 NOTE_CLASSIFIER = (
     "One model's advisory opinion, read over the tool text in any language. It is not a log label and is "
@@ -217,6 +237,8 @@ class Checker:
         if digest_error:
             result["query"]["digestError"] = digest_error
 
+        handshake_reading: dict[str, Any] | None = None
+        other_revision: dict[str, Any] | None = None
         if target is None:
             state = "not-listed"
             host = unlisted_host(endpoint) if endpoint and not package else None
@@ -256,6 +278,22 @@ class Checker:
                         ("changes", target["changes"]),
                     ) if v is not None
                 }
+            # What the endpoint listed after ``initialize``, when that is another set than the log's.
+            handshake_reading = self.store.revision_reading(target["id"])
+            other_revision = handshake_reading
+            if not (other_revision and other_revision["status"] == "ok" and other_revision["toolset"]
+                    and other_revision["toolset"] != other_revision["beside_toolset"]):
+                other_revision = None
+            if other_revision:
+                result["otherRevision"] = {
+                    k: v for k, v in (
+                        ("protocolVersion", other_revision["protocol"]),
+                        ("toolSetDigest", other_revision["toolset"]),
+                        ("toolCount", other_revision["tool_count"]),
+                        ("readAt", other_revision["read_at"]),
+                        ("besideToolSetDigest", other_revision["beside_toolset"]),
+                    ) if v not in (None, "")
+                }
             if not target["current_subject"]:
                 state = "not-observed"
             elif digest_error:
@@ -269,6 +307,8 @@ class Checker:
                 if seen:
                     state = "previously-observed"
                     result["seenBefore"] = seen
+                elif other_revision and other_revision["toolset"] == client_digest:
+                    state = "same-other-revision"
                 else:
                     state = "different"
             if client_digest and state != "same":
@@ -314,6 +354,14 @@ class Checker:
             if lookalike:
                 result["packageLookalike"] = lookalike
         note = NOTES["different-package" if package and state == "different" else state]
+        if state == "same-other-revision":
+            note = note.format(protocol=other_revision["protocol"] or "unknown", day=str(other_revision["read_at"])[:10])
+            if other_revision["beside_toolset"] != target["current_toolset"]:
+                note += NOTE_OTHER_REVISION_STALE
+        elif (state == "different" and not package
+              and (handshake_reading is None or handshake_reading["status"] != "ok")
+              and self.store.last_protocol(target["id"]) >= FIRST_STATELESS_REVISION):
+            note += NOTE_NO_HANDSHAKE_READING
         if result.get("declared") and state in ("different", "not-observed"):
             declared = result["declared"]
             where = (f"in the declaration file its registry entry points at ({declared['url']})"

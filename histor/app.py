@@ -26,7 +26,16 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
-from histor import __version__, badge, diffing, fingerprint_profiles, fingerprints, subregistry, toolcost, watch_paid
+from histor import (
+    __version__,
+    badge,
+    diffing,
+    fingerprint_profiles,
+    fingerprints,
+    subregistry,
+    toolcost,
+    watch_paid,
+)
 from histor import instructions as instructions_mod
 from histor import signed_revisions as signed_revisions_mod
 from histor.check import MAX_MATCHES, CheckError

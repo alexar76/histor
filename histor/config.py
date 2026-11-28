@@ -101,6 +101,11 @@ class Settings:
     sandbox_token: str = field(default="", repr=False)
     sandbox_cert_sha256: str = ""
     sandbox_max_per_crawl: int = 300
+    # The other-revision reading (histor.crawler): for a server read in MCP 2026-07-28, one more
+    # read-only read that opens with ``initialize``, taken when the list changed or the stored one is
+    # older than revision_reread_days. At most this many a day (HISTOR_REVISION_READS_PER_DAY; 0 = off).
+    revision_reads_per_day: int = 1500
+    revision_reread_days: int = 7
     # Observations in flight at once; match HISTOR_SANDBOX_SLOTS on the sandbox host.
     sandbox_concurrency: int = 2
     # Current sandbox generation (histor/sandbox/histor_observe.py VERSION): 5 adds modern MCP
@@ -241,6 +246,8 @@ def load_settings() -> Settings:
         crawl_timeout_s=_int("HISTOR_CRAWL_TIMEOUT_S", 20, minimum=1),
         crawl_limit=_int("HISTOR_CRAWL_LIMIT", 0, minimum=0),
         crawl_batch=_int("HISTOR_CRAWL_BATCH", 400, minimum=1),
+        revision_reads_per_day=_int("HISTOR_REVISION_READS_PER_DAY", 1500, minimum=0),
+        revision_reread_days=_int("HISTOR_REVISION_REREAD_DAYS", 7, minimum=1),
         opt_out=os.environ.get("HISTOR_OPT_OUT", ""),
         scanner_dir=Path(os.environ.get("HISTOR_SCANNER_DIR", str(PACKAGE_ROOT / "scanner"))),
         node_bin=os.environ.get("HISTOR_NODE_BIN", "node").strip() or "node",
